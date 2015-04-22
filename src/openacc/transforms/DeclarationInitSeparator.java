@@ -1,0 +1,139 @@
+/**
+ * 
+ */
+package openacc.transforms;
+
+import cetus.transforms.TransformPass;
+import cetus.hir.*;
+import java.util.*;
+
+/**
+ * This pass assumes that SingleDeclarator pass is executed before this.
+ * 
+ * @author f6l
+ *
+ */
+public class DeclarationInitSeparator extends TransformPass {
+
+	private static String pass_name = "[DeclarationInitSeparator]";
+	private static Statement insertedInitStmt = null;
+	
+	public DeclarationInitSeparator(Program program) {
+		super(program);
+	}
+	
+	/* (non-Javadoc)
+	 * @see cetus.transforms.TransformPass#getPassName()
+	 */
+	@Override
+	public String getPassName() {
+		return pass_name;
+	}
+	
+    private void separateDeclInitialization(VariableDeclaration decl) {
+    	//This pass assumes each declaration contains only one declarator, which can be enforced by SingleDeclarator pass.
+    	if ( decl.getNumDeclarators() != 1 ) {
+			return;
+		}
+    	Declarator declr = decl.getDeclarator(0);
+    	if( !(declr instanceof Symbol) || (declr instanceof ProcedureDeclarator) ) {
+    		return;
+    	}
+		Initializer lsm_init = null;
+    	if( declr instanceof VariableDeclarator ) {
+    		lsm_init = ((VariableDeclarator)declr).getInitializer();
+    	} else if( declr instanceof NestedDeclarator ) {
+    		lsm_init = ((NestedDeclarator)declr).getInitializer();
+    	}
+		if( lsm_init == null ) {
+			return;
+		}
+        PrintTools.printlnStatus(4, pass_name, "separating the initialization of declaration, ",decl);
+        CompoundStatement cStmt = null;
+        Statement declStmt = null;
+        Traversable parent = decl.getParent();
+        if (parent instanceof SymbolTable) {
+        	//This declaration is for a global variable; the initialization of a global variable is not separated.
+        	return;
+        } else if (parent instanceof DeclarationStatement) {
+            declStmt = (Statement)parent;
+            cStmt = (CompoundStatement)parent.getParent();
+        } else {
+            return;
+        }
+        /* now parent is a symbol table and child is either decl or declstmt. */
+		List lspecs = new ChainedList();
+		lspecs.addAll(decl.getSpecifiers());
+		List declrSpecs = new ChainedList();
+    	declrSpecs.addAll(declr.getSpecifiers());
+		if( declrSpecs.contains(PointerSpecifier.CONST) || declrSpecs.contains(PointerSpecifier.CONST_RESTRICT) || 
+				declrSpecs.contains(PointerSpecifier.CONST_RESTRICT_VOLATILE) || declrSpecs.contains(PointerSpecifier.CONST_VOLATILE) ||
+				(lspecs.contains(Specifier.CONST)&&!SymbolTools.isPointer((Symbol)declr)) || (lspecs.contains(Specifier.STATIC)) ) {
+			//Initialization of constant/static variable/pointer should not be separated.
+			//System.err.println("Found constant/static variable/pointer: " + decl);
+			return;
+		} else {
+			int listSize = lsm_init.getChildren().size();
+			if( listSize == 1 ) {
+				Object initObj = lsm_init.getChildren().get(0);
+				if( initObj instanceof Expression ) {
+					Expression initValue = (Expression)initObj;
+					if( initValue instanceof Literal ) {
+						//We don't separate initialization if its value is constant.
+						return;
+					} else {
+						if( declr instanceof VariableDeclarator ) {
+							((VariableDeclarator)declr).setInitializer(null);
+						} else if( declr instanceof NestedDeclarator ) {
+							((NestedDeclarator)declr).setInitializer(null);
+						} else {
+							Tools.exit("[ERROR in DeclarationInitSeparator] unexpected type of declarator: " + declr);
+						}
+						initValue.setParent(null);
+						AssignmentExpression lAssignExp = new AssignmentExpression(new Identifier((Symbol)declr),AssignmentOperator.NORMAL,
+								initValue);
+						Statement lAssignStmt = new ExpressionStatement(lAssignExp);
+						cStmt.addStatementAfter(declStmt, lAssignStmt);
+						/*
+					Statement fStmt = IRTools.getFirstNonDeclarationStatement(cStmt);
+					if( fStmt == null ) {
+						cStmt.addStatement(lAssignStmt);
+					} else {
+						if( insertedInitStmt == null ) {
+							cStmt.addStatementBefore(fStmt, lAssignStmt);
+						} else if(insertedInitStmt.getParent().equals(cStmt)) {
+							cStmt.addStatementAfter(insertedInitStmt, lAssignStmt);
+						} else {
+							cStmt.addStatementBefore(fStmt, lAssignStmt);
+						}
+					}
+					insertedInitStmt = lAssignStmt;
+						 */
+					}
+				}
+			} else {
+				//DEBUG: we don't know how to handle this case yet.
+				return;
+			}
+		}
+    }
+
+    /* (non-Javadoc)
+     * @see cetus.transforms.TransformPass#start()
+     */
+    @Override
+    public void start() {
+    	DFIterator<Declaration> iter =
+    			new DFIterator<Declaration>(program, Declaration.class);
+    	while (iter.hasNext()) {
+    		Declaration d = iter.next();
+    		if (d instanceof Procedure) {
+    			PrintTools.printlnStatus(2, pass_name, "examining procedure",
+    					"\"", ((Procedure)d).getName(), "\"");
+    		} else if (d instanceof VariableDeclaration) {
+    			separateDeclInitialization((VariableDeclaration)d);
+    		}
+    	}
+    }
+
+}

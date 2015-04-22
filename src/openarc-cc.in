@@ -1,0 +1,125 @@
+# This is a very early attempt to wrap OpenARC+LLVM in a cc-like wrapper
+# script.  It does not yet support all features of a traditional C compiler.
+
+use strict;
+use warnings;
+
+use Carp;
+use FindBin qw($RealBin);
+
+my $CPP = '@CPP@';
+my $LLVM_LLC = '@LLVM_LLC@';
+my $CC = '@CC@';
+my $CETUS_OUTDIR = 'cetus_output';
+
+exit main(@ARGV);
+
+sub main {
+  print STDERR "$0: called with args: @ARGV\n";
+
+  # clean up
+  run("rm -f ".shesc($CETUS_OUTDIR)."/*.bc"." ".shesc($CETUS_OUTDIR)."/*.o",
+      "Cetus output directory cleanup");
+
+  # parse args
+  my $outOpt = "";
+  my $cppOpts = "";
+  my $ldOpts = "";
+  my $llcOpts = "";
+  my $inCFileArgs = "";
+  my $inOFileArgs = "";
+  my $compileOnly = 0;
+  for (my $argi = 0; $argi <= $#_; ++$argi) {
+    my $arg = $_[$argi];
+    if ($arg eq "-o") {
+      die if $#_ < ++$argi;
+      $outOpt = " -o " . shesc($_[$argi]);
+    }
+    elsif ($arg =~ /^-D/ || $arg =~ /^-I/ || $arg =~ /^-U/) {
+      my $opt = substr $arg, 0, 2;
+      my $optArg = substr $arg, 2;
+      if ($optArg eq "") {
+        die if $#_ < ++$argi;
+        $optArg = $_[$argi];
+      }
+      $cppOpts .= " $opt$optArg";
+    }
+    elsif ($arg =~ /^-[lL]/) {
+      $ldOpts .= " $arg";
+    }
+    elsif ($arg eq "-c") {
+      $compileOnly = 1;
+    }
+    elsif ($arg =~ /^-O/) {
+      $llcOpts .= " " . shesc($arg);
+    }
+    elsif ($arg =~ /^-g/) {
+    }
+    elsif ($arg =~ /^-/) {
+      die "unknown option: $arg\n";
+    }
+    elsif ($arg =~ /\.o$/) {
+      $inOFileArgs .= " " . shesc($arg);
+    }
+    else {
+      $inCFileArgs .= " " . shesc($arg);
+    }
+  }
+
+  # run openarc and llc
+  if ($inCFileArgs) {
+    my $cmd
+      = shesc("$RealBin/openarc")
+        . " -outdir=".shesc($CETUS_OUTDIR)
+        . " -preprocessor=".shesc($CPP." -I. -D_OPENARC_ $cppOpts")
+        . " -emitLLVM"
+        . "$inCFileArgs";
+    run($cmd, "openarc");
+    for my $file (<$CETUS_OUTDIR/*.bc>) {
+      $cmd = shesc($LLVM_LLC)." -filetype=obj".$llcOpts." ".shesc($file);
+      $cmd .= $outOpt if ($compileOnly);
+      run($cmd, "llc for $file");
+      if ($compileOnly && !$outOpt) {
+        my $ofile = $file;
+        $ofile =~ s/(?:\.[^.]*)?$/\.o/;
+        my $cmd = "mv ".shesc($ofile)." .";
+        run($cmd, "moving object file");
+      }
+    }
+  }
+
+  # run linker
+  if (!$compileOnly) {
+    my $cmd = $CC . $outOpt
+              . ($inCFileArgs ? " $CETUS_OUTDIR/*.o" : "")
+              . $inOFileArgs . $ldOpts;
+    run($cmd, "linking");
+  }
+
+  return 0;
+}
+
+sub run {
+  defined(my $cmd = shift(@_)) || croak;
+  defined(my $what = shift(@_)) || croak;
+  scalar(@_) == 0 || die;
+  print STDERR "$0: running $what: $cmd\n";
+  return if (system($cmd) == 0);
+  if ($? == -1) {
+    die "$what failed to execute: $!\n";
+  }
+  elsif ($? & 127) {
+    die "$what died with signal " . ($? & 127) . ", "
+        . (($? & 128) ? "with" : "without") . " coredump\n",
+  }
+  else {
+    die "$what exited with value ".($? >> 8)."\n";
+  }
+}
+
+sub shesc {
+  defined(my $arg = shift(@_)) || croak;
+  scalar(@_) == 0 || die;
+  $arg =~ s/'/'\\''/g;
+  return "'$arg'";
+}

@@ -1,0 +1,40 @@
+**********************
+** OpenARC ASPEN IR **
+**********************
+AspenExpression
+	:AspenTrait(trait, arg-list)
+	:AspenParam(ID, init)
+	:AspenData(ID, size-exp, trait-list)
+	:AspenResource(size-exp, trait-list, memsuffix, ID)
+
+AspenDeclaration
+	:AspenParamDeclaration(AspenParam)
+	:AspenDataDeclaration(AspenData)
+	:AspenKernel(kernel-name, arg-list, body)
+
+AspenStatement
+	:AspenCompoundStatement
+	:AspenExpressionStatement
+		:AspenExposesExpressionStatement(resource) //deprecated
+		:AspenRequiresExpressionStatement
+		:AspenMemoryExpressionStatement
+		
+	:AspenControlStatement
+		:AspenControlExecuteStatement(label, body, parallelism)
+		:AspenControlIfStatement(cond-expression, then-body, else-body)
+		:AspenControlIterateStatement(expression, body, label)
+		:AspenControlKernelCallStatement(kernelID, arg-list)
+		:AspenControlMapStatement(expression, body, label)
+		:AspenControlParallelStatement(body)
+		:AspenControlProbabilityStatement(probability, then-body, else-body)
+		:AspenControlSeqStatement(body, label)
+
+AspenModel
+	List<Traversable> children
+	Map<IDExpression, AspenParam> paramMap
+	Map<IDExpression, AspenParam> internalParamMap
+	Map<IDExpression, AspenData> dataMap
+	Map<IDExpression, AspenKernel> kernelMap
+	Set<AspenModel> importedModels
+	IDExpression entryFunction
+	

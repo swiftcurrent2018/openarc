@@ -1,0 +1,461 @@
+########################
+## Cetus Modification ##
+########################
+[Dec. 3, 2012]
+- cetus.hir.PrintTools
+	- To reduce complex message output, add verbosity offset to print functions
+	that use System.err, which are usually used for compiler-debugging purpose.
+- cetus.analysis.RangeAnalysis
+	- System.err.println() is changed to PrintTools.printlnStatus() for 
+	consistent printing.
+- cetus.analysis.Reduction
+	- To reduce complex message output, add verbosity offset to print functions
+- cetus.hir.Annotation.cloneObject()
+	- Update cloneObject() to supprt additional types, such as Expression and
+	SubArray.
+	- ACCAnnotation is moved from cetus.hir to openacc.hir, and clone-related
+	methods are commented out.
+
+[Dec. 13, 2012]
+- cetus.hir.Annotation.clone()
+	- Update this method to handle Reduction map.
+- cetus.hir.Annotation.cloneRedMap()
+	- Added to handle reduction map.
+- cetus.TranslationUnit.print()
+- cetus.Statement.print()
+- cetus.Declaration.print()
+	- add o.close() in the catch block to print output upto the error point.
+- cetus.hir.Annotation.cloneCollection()
+	- If input collection is instance of Set, use HashSet.
+	  otherwise, use LinkedList.
+
+[Dec. 19, 2012]
+- cetus.transforms.LoopInterchange.swapLoop()
+	- Changed to static method.
+
+[Mar. 6, 2013]
+- cetus.analysis.CallGraph
+	- Add CallGraph(Program program, String mainFunc) constructor to handle
+	the cases where main function is not "main".
+
+[June 14, 2013]
+- cetus.exec.Driver.runPasses()
+	- Remove ompGen from prerequisite list of parallelize-loops pass.
+
+[July 19, 2013]
+- cetus.analysis.InlineExpansion.java
+	- inline keyword should be removed from variable types for return variable.
+
+[Oct. 22, 2013]
+- cetus.base.grammars.NewCParser.g
+	- change rules for statementList from statementList ->  (((cond)decl | statement) | decl)+ to statementList	->  ((cond)decl | statement | decl)+ 
+	- from (cond)decl rule, change curr_cstmt.addDeclaration(decl) to curr_cstmt.addStatement(new DeclarationStatement(decl))
+
+[Nov. 8, 2013]
+- cetus.hir.SizeofExpression
+	- Add getTypes() methed to get types used in the Sizeof operator.
+
+[Mar. 11, 2014]
+- cetus.hir.MinMaxExpression
+	- toString() and defaultPrint() are modified so that the printed MIN/MAX exprssion contains only two arguments. (Nested MIN/MAX expressins are used if more than two arguments exist.)
+
+[March 13, 2013]
+- cetus.analysis.InlineExpansion.java
+	- Wrap warning message printing in InternalInlineIn() so that message is not 
+	printed for standard library.
+
+[Sept. 3, 2014]
+- cetus.analysis.IPPointsToAnalysis
+	- Add runtime APIs in openacc.h to safe_library_calls list so that 
+	internal Point-to analysis does not fail due to OpenACC library calls.
+	- Add runtime APIs in openacc.h to return_to_new list.
+
+[Sept. 23, 2014]
+- cetus.transform.LoopNormalization
+	- Change normalizeLoop() function from "private" to "static public" 
+	to be used by other passes.
+
+#########################
+## Bug Fixes for Cetus ##
+#########################
+[Nov. 30, 2012]
+- cetus.hir.SymbolTools.containsSpecifier() 
+	- "||" operator in checking NestedDeclarator part is changed to "&&".
+
+[Nov. 30, 2012]
+- cetus.analysis.PointsToAnalysis.processBasicAssignment() 
+	- mask null-pointer propagation, but used method may be too conservative;
+	it may need to be fixed in different way.
+
+[Nov. 30, 2012]
+- cetus.transforms.NormalizeReturn.transformProcedure() 
+	- Modify this method to remove CUDA-specifier specifiers too.
+
+[Nov. 30, 2012]
+- cetus.analysis.IPPointsToAnalysis.updateCalls() 
+	- "call_site.in() == null" or "curr_data == null" cases are not checked 
+	in current implementation; for now, the original code is modified so that
+	it will be executed only if they arr not null, but this may not be correct
+	solution; it may need to be fixed in different way.
+	- test case: LUD
+
+[Jan. 23, 2013]
+- cetus.hir.StandardLibrary.getSideEffectParamIndices()
+	- var_arg following const *format parameter usually does not have 
+	side effects, but it has if function is scanf/fscanf/sscanf functions.
+		- Modify this method to reflect this.
+	- test case: SPMUL with programVerification=1
+
+[Feb. 18, 2013]
+- cetus.hir.TranslationUnit.defaultPrint()
+	- Current implementation does not print annotatable in a TranslationUnit 
+	if it contains pragma annotations, which prevent printing OpenACC pragmas
+	such as declare directives.
+		- To enable this, defaultPrint() is modified to print pragma acc too.
+		- If other types of annotations need to be printed, this should be
+		modified further.
+[Aug. 02, 2013]
+		- Modified defaultPrint() to print aspen pragma too.
+
+[May 6, 2013]
+- cetus.base.grammar.Pre.g
+	- PreCParser inserts "#pragma startinclude"/"#pragma endinclude" to every
+	include statement, but it can not recognize include statements prefixed with
+	space. To fix temporarily, PreCLexer is modified so that zero or one space 
+	is allowed for include rule, but this is not complete fix.
+	- It also does not recognize spaces between '#' and "include".
+
+[Oct. 22, 2013]
+- If declaration statement exists after expression statements, Cetus does not
+recognize its symbol, and Cetus also parses it as non-decl statements.
+	- This error occurs if the declaration uses user-specified types. 
+	- test case: Tests/ClassTest/test.c_org
+	- The following pattern is also not correctly parsed (SP/sp.c)
+	    k = grid_points[2]-3;
+    	double rhs_kup1 = rhs[m][i][j][k+1];
+    	double rhs_kup2 = rhs[m][i][j][k+2];
+    	double rhs_mijk;
+
+		//The following reordered one works.
+    	double rhs_kup1;
+    	double rhs_kup2;
+    	double rhs_mijk;
+    	k = grid_points[2]-3;
+    	rhs_kup1 = rhs[m][i][j][k+1];
+    	rhs_kup2 = rhs[m][i][j][k+2];
+	- It seems to be fixed by Cetus modification on Oct. 22, 2013.
+
+[Feb. 6, 2014]
+- cetus.hir.NestedDeclarator.java
+	- isSameSymbol(), hasExternalLinkage(), equals(), and hashCode() methods 
+	are copied from VariableDeclarator.java to treat extern symbols equivalently. 
+
+[Feb. 21, 2014]
+- cetus.hir.CompoundStatement.java
+	- countStatements() should calculate else_count only if the else-statement exists.
+
+[Feb. 24, 2014]
+- cetus.base.NewCParser.g
+	- unaryExpr rule is modified so that "sizeof expr" can have optional
+	parentheses.
+
+[Feb. 25, 2014]
+- In a typecast expression pointer * in specifier list (e.g., void *) is
+recognized incorrectly as a variabledeclarator.
+	- E.g., data_deviceptr.c in openaccbenchL
+	- TransformTools.NULLPointerCorrection() had to be modified to avoid this 
+	bug.
+- The pointer in a sizeof expression is not recognized as a PointerSpecifier 
+(recognized as Declarator).
+	- E.g., jacobi_O2G.c
+	- ASPENModelAnalysis.getBuiltInParamForTypes() had to be modified to avoid 
+	this bug.
+==> cetus.base.NewCParser.g
+	- typeName in castExp and unaryExp is renamed to typeName2 and nonemptyAbstractDeclarator in the typeName2 is also renamed to nonemptyAbstractDeclarator2, which does not creates an abstract declarator with no name. 
+	- Even with this fix, Specifier list may still have declarators for pointer to array or function pointer.
+
+[Mar. 28, 2014]
+- cetus.base.grammars.NewCParser.g structDeclarationList
+	- Adding sdecl is guarded so that only non-null object is added.
+
+[April 1, 2014]
+- cetus.hir.NestedDeclarator.setInitializer()
+	- fix a bug in setInitializer() when initial value is set to null.
+
+[Nov. 24, 2014]
+- cetus.base.grammars.NewCParser.g
+	- Fix a bug misrecognizing identifier as typedef name if both have same name:
+		- Redefine declSpecifers and specifierQualifierList.
+		e.g., typedef int T;
+			  int main() { int T; } //T should be recognized as identifier.
+
+[Dec. 8, 2014]
+- cetus.base.grammars.NewCParser.g and src/cetus/hir/IntegerLiteral.java
+	- Fix a parser bug ignoring suffix of integer literal.
+
+[Jan. 12, 2015]
+- cetus.hir.SymbolTools.setSymbolName()
+- To set symbol name, it first remove its enclosing declaration from the its
+symbol table, but if the target symbol is a Procedure, the symbol is also 
+Declaration. Therefore, the enclosing declaration (entry) to be removed 
+should be correctly selected. 
+	
+[]
+- cetus.analysis.InlineExpansion
+	- When function parameter is replaced with a new local variable, if 
+	the parameter is const, it should be initialized at its declaration.
+	Current implementation always separate declaration and its initialization.
+	- [July 19, 2013] Now constant variable keeps its initialization, but if the 
+	initialization relies on other local variable that is defined later,
+	it will cause errors. (lulesh.c)
+		= To fix temporarily, const is removed if it is for a function parameter.
+
+[]
+- Cetus parser internally normalize "else if" statement as nested if-else 
+structure, but this transform does not allow to annotate the "else if" part.
+	- As a temporary fix, ASPEN if/probability can have list as arguments.
+
+[]
+- Cetus parser ignores unsupported C99 specifiers such as __attribute__.
+
+[]
+- cetus.analysis.InlineExpansion.java
+	- When InlineExpression pass is called, ACCAnnotations exist as standalone
+	PragmaAnnotations, and thus they may be moved into wrong places even if they
+	should have been attached to structured blocks.
+	- Moving this pass after ACCAnnotationParser will not work either, since
+	variable-renaming pass in InlineExpression will work only on strings.
+
+###########################
+## Bug Fixes for OpenARC ##
+###########################
+[July 12, 2012 - done]
+- openacc.analysis.ACCAnalysis.sharedAnalysis()
+    - If a symbol is not included in accshared set, put it into pcopy/copy
+    only if it is not in private/firstprivate set.
+        - test case: CG, BACKPROP
+- openacc.analysis.ACCAnalysis.declareDirectiveAnalysis()
+    - accshared set should include symbols in reduction clauses too.
+        - test case: BACKPROP
+
+[April 19, 2013 - done] 
+- In a memory-transfer verification mode, if scalar variables are passed
+as kernel parameters, the runtime falsely complains missing errors.
+
+[June 05, 2013 - done]
+- openacc.transforms.TransformTools.removeUnusedSymbols()
+- If a symbol is used only in an OpenMP directives, this method will delete it,
+	but underlying OpenMP compiler will complain missing declaration.
+
+[June 27, 2013 - done]
+- functions called in a kernel should be changed to device functions or
+inlined. Otherwise, NVCC will complain.
+
+[June 28, 2013 - done]
+- If OpenACC loop has gang-only reduction, assignment to the gang-private
+variable should be done only by one thread in a thread block.
+- When a compute region is in a worker-single mode, only one thread in a
+thread block should execute the code.
+
+[June 28, 2013 - done]
+- Handling of implicit gang private variables
+	- The local variables defined in a pure gang loop are gang-private, 
+	which will be allocated on the GPU shared memory by default 
+	- The local variable defined outside of gang loops but within a 
+	compute region will be alloced on the GPU shared memory if they are 
+	not included in any gang private clauses.
+	- Cf. allocating on shared memory is NOT in the OpenACC standard.
+
+[June 30, 2013]
+- Worker loop assumes implicit barrier at its end.
+
+[July 19, 2013]
+- In C, both 0 and (void *)0 are legal for NULL pointer, but in C++, only
+0 is legal ("int *ptr = (void *)0;" is illegal in C++, since C++ does not
+allow implicit type conversion.). If NULL is used in the input program, it
+may be replaced with "(void *)0", but it will cause compile-time error when
+compiled by nvcc, which uses C++ compiler. To fix this, NULL in the input
+program should be replaced with 0 or NULL should be redefined explicitly.
+	- Redefining macro thru CPP commandline will not work, since that commandline
+	macro definition will be executed before any macros in the source code.
+
+[Feb. 04, 2014]
+- ACCParser.parse_commaSeparated*()
+- These method will fail if the target expression contains a function call
+with multiple arguments, since the method can not distinguish the commas for
+the function arguments from those for the input list.
+	- Fixed by modifying parse_expression() methods.
+
+[Aug. 25, 2014]
+- OpenARC runtime
+- CudaDriver::kernelNameList, OpenCLDriver::kernelNameList are changed to non-static.
+- Fix bugs in device initialization, so that device is initialized only once per process.
+
+[Sept. 4, 2014]
+- openarc runtime (Hetero IR)
+- std::map::insert() does not overwrite mapped value if there exists an element with the same key. To overwrite mapped value, use std::map::operator[].
+- eventMap is a local variable, which may not exist after the enclosing function returns.
+	==> This does not cause a trouble since std::map copies values.
+[Sept. 4, 2014]
+- openarc runtime (Hetero IR)
+- Current implementation allows multiple host threads to access the same
+device only if they work on different kernels. If multiple  threads try
+to launch the same kernel at the same time, race condition will occur.
+	=> Fixed by having argument maps per host thread.
+
+[]
+- openacc.analysis.ACCParser.ExpressionParser.parse()
+	- should be extended to be able to parse general expressions.
+	- parially improved by the above update.
+
+[]
+- Side effect by C standard library should be recognized by OpenARC analysis 
+passes, such as IpFirstAccessAnalysis and IpRedundantMemTrAnalysis.
+
+- The above analysis passes does not track call-by-value variables across
+function boundary, which cause the analysis misses previous write accesses
+to the variables.
+
+[]
+- If resilience region contains compute regions as children, but if the 
+compute regions don't have ftregion clauses, add them to the compute
+regions and also add ftdata with subset of ftdata of the resilience
+region if existing. 
+
+[]
+- openacc.transforms.TransformTools.removeUnusedProcedure()
+- If a function is referenced only thru function pointer, this method considers
+the function as unused one, deleting it.
+	==> To fix this, simple solution is to delete OpenARC-cloned procedures only.
+
+
+[]
+- Variable Length Arrays (VLA) is a new feature in C99. To support it in the 
+OpenACC-to-CUDA translation context, the VLA should be internally converted
+into a pointer with corresponding malloc().
+	- Easy solution is to support constant propagation.
+
+[]
+- If AccParallelization is on, IVSubstitution analysis is also on as a 
+prerequisite pass, but this may break OpenACC execution semantics,
+resulting in incorrect output.
+	e.g., 
+	#pragma acc parallel num_gang(8) reduction(+gang_num) 
+	{
+		int local_num = 0;
+		#pragma acc loop gang
+	    for(i=0; i<8; i++)
+        {   
+            local_num ++; 
+        }   
+		gang_num += local_num;
+	}
+	//gang_num will be 8
+	==> Modified code
+	#pragma acc parallel num_gang(8) reduction(+gang_num) 
+	{
+		int local_num = 0;
+		#pragma acc loop gang
+	    for(i=0; i<8; i++)
+        {   
+        }   
+        local_num += 8; 
+		gang_num += local_num;
+	}
+	//gang_num will be 64
+	==> IVSubstitution is temporarily disabled in the AccParallelization.
+
+[]
+- openacc.analysis.LocalityAnalysis
+- If a shared variable is written in other procedure, the current Locality
+Analysis pass can not detect that; conservatively, the symbol should not
+be cached on a CUDA constant memory.
+
+[] 
+- Bug in MemTrVerifyTransformaton
+- If check_write() function hoistig is combined with dead variable optimization, bug occurs. (lud_omp.c)
+	- e.g.,
+	for(...) {
+		kernel0(); //write a
+		kernel1(); //write a
+	}
+	//After MemTrOpt
+	check_write(a);
+	for(...) {
+		kernel0(); //write a
+		reset_status(a, notstale);
+		kernel1(); //write a
+	}
+	...
+	check_read(a); //This can not detect missing transfer.
+
+[]
+- LoopTools.getIndexVariable() works only for canonical loops, but 
+OpenARC uses this method for both canonical and non-canonical loops.
+	- For non-canonical loops, extended version of this method
+	(e.g., openacc.analysis.AnalysisTools.getIndexVariables())
+	should be used.
+
+[]
+- Most of interprocedural analyses and transformations may suffer
+from infinite calling if recursive functions exist.
+
+[]
+- openarc runtime (Hetero IR)
+Initializing multiple devices may not work since only the last
+device context will be visible to the current host thread; even if 
+device type/number is changed, 
+it will not be changed (only the last device will be executed.)
+Easy fix is to call Accelerator::init() whenever device type/number is 
+changed or new host thread joins. However, this may create too 
+many device contexts if device type/number is frequently changed.
+Better way is to call Accelerator::init() only if context does not 
+exist; otherwise, attach host thread to the the context for the new 
+device type/number.
+
+
+[]
+- SIMDWidth in ACC2OpenCLTranslator.java may vary depending on the  target
+architecture; it should be set up thru command-line option.
+
+[]
+- In the folloiwng code in NPB MG, a generated kernel has a parameter z as a pointer to array (double (*z)[n2][n1]), but it is incorrect since n2 and n1 are not constant. 
+void zero3(...) {
+double (*z)[n2][n1] = (double (*)[n2][n1])oz;
+...
+#pragma acc parallel loop present(z)
+for(...) {...}
+...
+}
+	==> Solving this problem does not seem to be possible, since C++ does not allow variable-length array (VLA), which is a C99 feature. (C++14 may include this, but not available to public yet.)
+	- CUDA does not allow VLA in a kernel with the same reason.
+
+
+[]
+-Bug in applying shrdArryElmtCachingOnReg optimization,which tries to cache 
+array elements which are valid in certain condtions (only specific threads can 
+have valid index expressions but the generated codes let every thread cache the 
+array elements).
+	- Occurs in HOTSPOT and SRAD.
+
+[]
+- Bug in parsing subarray whose name is either l1 or l2
+	e.g.: copyin(l1[0:H_SIZE]) copyout(l2[1:O_SIZE]) in BACKPROP/Org/ver2/backprop.c
+
+[]
+- If OpenARC translates multiple files separately, and compute regions in different files use the same variable, the translated output will have duplicate definitions of GPU variables for the same variable.
+	
+
+
+###############################
+## Optimizations for OpenARC ##
+###############################
+[]
+- If one of the inner loop is parallel and the outermost loop is not parallel,
+apply loop interchange if possible.
+
+[]
+- Independent map mapping
+	- 1D loop ==> mapped to gang+worker
+	- 2D loop ==> gang for the outermost loop and worker for the innermost loop
+	- 3D loop ==> gang for the outermost loop and worker for the innermost loops

@@ -1,0 +1,12 @@
+// $ANTLR 2.7.7 (2010-12-23): Pre.g -> PreCParserTokenTypes.txt$
+PreCParser    // output token vocab name
+Include=4
+PreprocDirective=5
+Line=6
+Rest=7
+NotSpaceNewline=8
+NotHashSpaceNewline=9
+Newline=10
+Space=11
+Lcurly=12
+Rcurly=13

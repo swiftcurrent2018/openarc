@@ -1,0 +1,17 @@
+/Timer
+/binBuilder_cuda
+/libopenaccrt_cuda.a
+/libopenaccrt_cudapf.a
+/libopenaccrtomp_cuda.a
+/libopenaccrtomp_cudapf.a
+/libopenaccrtdist_cuda.a
+/binBuilder_opencl
+/libopenaccrt_opencl.a
+/libopenaccrt_openclpf.a
+/libopenaccrtomp_opencl.a
+/libopenaccrtomp_openclpf.a
+/libopenaccrtdist_opencl.a
+/libresilience.a
+/make.header
+/resilience.o
+/copy2ARC.bash

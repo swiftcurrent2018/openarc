@@ -1,0 +1,9 @@
+/make.header
+/examples/**/bin
+/examples/**/cetus_input
+/examples/**/cetus_output
+/examples/**/openarcConf.txt
+/benchmarks/**/bin
+/benchmarks/**/cetus_input
+/benchmarks/**/cetus_output
+/benchmarks/**/openarcConf.txt
