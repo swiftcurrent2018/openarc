@@ -52,7 +52,7 @@ public class OMP2ACCTranslator extends TransformPass {
     @Override
     public void start() 
     {
-		System.err.println(pass_name + " is under construction; exit", 0);
+		System.err.println(pass_name + " is under construction; exit");
 		System.exit(1);	
     }
 
