@@ -1,0 +1,47 @@
+#! /bin/bash
+if [ $# -ge 2 ]; then
+	inputSize=$1
+	verLevel=$2
+elif [ $# -eq 1 ]; then
+	inputSize=$1
+	verLevel=0
+else
+	inputSize=65536
+	verLevel=0
+fi
+
+inputSize1=$((inputSize+1))
+
+openarcrt="../../../../../openarcrt"
+openarclib="../../../../../lib"
+
+benchname="backprop"
+
+
+if [ ! -f "openarcConf.txt" ]; then
+    cp "openarcConf_NORMAL.txt" "openarcConf.txt"
+fi
+
+if [ "$inputSize1" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__inputSize__|${inputSize1}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$openarcrt" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__openarcrt__|${openarcrt}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPUDriver -verbosity=${verLevel} -gpuConfFile=openarcConf.txt *.c
+
+echo ""
+echo "====> Input size: ${inputSize}"
+echo ""
+echo "====> To compiled the translated output file:"
+echo "\$ make I_SIZE=${inputSize1}"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; backprop_ACC ${inputSize}"
+echo ""

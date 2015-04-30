@@ -186,7 +186,7 @@ endif
 ##########################
 ifeq ($(TARGET_SYSTEM),Atlanta)
 
-OPENARC_ARCH = 0
+OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
 CC = gcc

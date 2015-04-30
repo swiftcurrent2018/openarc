@@ -194,7 +194,10 @@ public class KernelFunctionCall extends FunctionCall
     {
         p.print(",");
         p.print(call.getConfArgument(3));
-    }
+    } else {
+        p.print(",");
+        p.print("DEFAULT_QUEUE");
+	}
 	p.println(");");
 	if(call.getConfArgument(3) == null)
 	{

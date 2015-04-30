@@ -42,7 +42,7 @@ fi
 exeCmdBase="java -classpath $openarc/lib/cetus.jar:$openarc/lib/antlr.jar openacc.exec.ACC2GPUDriver -gpuConfFile=confFile.txt"
 
 
-baseDir="$openarc/test/examples"
+baseDir="$openarc/test/examples/openarc"
 workDir="${baseDir}/${benchmark}"
 outputDirBase="${workDir}/cetus_output"
 logFile="${workDir}/${benchmark}_Translation.log"

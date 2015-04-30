@@ -253,16 +253,21 @@ public:
     kernelmapopencl_t kernelsMap;
 #endif
     std::vector<std::string> kernelnames;
+	//[CAUTION] Device instances (Accelerator_t objects) in devMap is shared 
+	//by multiple host threads.
     static devmap_t devMap;
     HostConf() {
         HI_init_done = 0;
         HI_kernels_registered = 0;
         acc_device_type_var = acc_device_none;
+    	user_set_device_type_var = acc_device_none;
         acc_device_num_var = 0;
         acc_num_devices = 0;
         isOnAccDevice = 0;
 		use_unifiedmemory = 1;
 		prepin_host_memory = 1;
+		asyncID_offset = 0;
+		threadID = 0;
 #ifdef _OPENARC_PROFILE_
         H2DMemTrCnt = 0;
         H2HMemTrCnt = 0;
@@ -312,6 +317,8 @@ public:
     int isOnAccDevice;
 	int use_unifiedmemory;
 	int prepin_host_memory;
+	int asyncID_offset;
+	int threadID;
 
 #ifdef _OPENARC_PROFILE_
     long H2DMemTrCnt;
@@ -367,14 +374,6 @@ public:
 
 
 extern std::vector<HostConf_t *> hostConfList;
-
-extern int HI_hostinit_done;
-
-extern int HI_openarcrt_verbosity;
-
-extern int HI_num_kernels;
-
-extern std::string *HI_kernelNames;
 
 ////////////////////////
 // Runtime init/reset //

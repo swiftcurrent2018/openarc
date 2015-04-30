@@ -373,7 +373,7 @@ public class ACC2GPUDriver extends Driver
 
     String cpp = BuildConfig.getBuildConfig().getProperty("cpp");
     setOptionValue("preprocessor", cpp + " -CC -I. -D_OPENARC_"
-                   + (getOptionValue("emitLLVM") == null
+                   + (getOptionValue("emitLLVM") != null
                       ? "" : " -D_OPENACC="+openacc_version));
 	}
 	

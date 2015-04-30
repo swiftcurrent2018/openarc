@@ -77,7 +77,7 @@ CLIBS1_BASE = $(GOMP_LIBS)
 CLIBS2_BASE = $(COMMONCLIBS) $(GOMP_LIBS)
 OMP_FLAGS1 = $(GOMP_FLAGS)
 ifneq ($(GOMP_FLAGS),"")
-OMP_FLAGS2 = $(CC_FLAGS_PREFIX) $(GOMP_FLAGS)
+OMP_FLAGS2 = $(GOMP_FLAGS)
 endif
 ifeq ($(DIST),1)
 ACCRT_BASE = openaccrtdist_$(OPENARCLIB_SUFFIX)
@@ -123,9 +123,9 @@ makedirectories:
 	mkdir -p $(TARGET)
 
 clean:
-	rm -f *.o *~;
+	rm -f *.o *~ confFile.txt TuningOptions.txt;
 	if [ -d ./$(CETUS_OUTPUT) ]; then cd $(CETUS_OUTPUT); rm -f *.o *~; cd ..; fi
 	if [ -d $(TARGET) ]; then rm -f $(BENCHMARK_CPU) $(BENCHMARK_OPENACC) Timer; cd $(TARGET); rm -f openarc_kernel*.ptx $(KERNEL_FILE) binBuilder_$(OPENARCLIB_SUFFIX) Timer; fi
 
 purge: clean
-	rm -rf $(TARGET) $(CETUS_OUTPUT) openarcConf.txt
+	rm -rf $(TARGET) $(CETUS_OUTPUT) cetus_input openarcConf.txt *.log

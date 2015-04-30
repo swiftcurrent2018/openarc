@@ -35,7 +35,7 @@ fi
 
 exeCmd="java -classpath $openarc/lib/cetus.jar:$openarc/lib/antlr.jar openacc.exec.ACC2GPUDriver ${gpuConfs} -genTuningConfFiles -tuningLevel=${tLevel} *.c"
 
-baseDir="${openarc}/test/examples"
+baseDir="${openarc}/test/examples/openarc"
 workDir="${baseDir}/${benchmark}"
 cetus_output="${workDir}/cetus_output"
 logFile="${workDir}/${benchmark}_ConfGen.log"

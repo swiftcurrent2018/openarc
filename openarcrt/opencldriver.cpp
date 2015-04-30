@@ -29,7 +29,7 @@ char * deblank(char *str)
 OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::vector<std::string>kernelNames, HostConf_t *conf, int numDevices) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::OpenCLDriver()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::OpenCLDriver(%d, %d)\n", devType, devNum);
 	}	
 #endif
     dev = devType;
@@ -59,7 +59,7 @@ OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::vector<std::st
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::OpenCLDriver()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::OpenCLDriver(%d, %d)\n", devType, devNum);
 	}
 #endif
 }
@@ -72,7 +72,7 @@ HI_error_t OpenCLDriver::init() {
 	char kernel_keyword[] = "__kernel";
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::init()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::init(%d, %d)\n", device_num, dev);
 	}
 #endif
     cl_device_id devices[num_devices];
@@ -113,6 +113,11 @@ HI_error_t OpenCLDriver::init() {
 #endif
     {
         if (clContext == NULL) {
+#ifdef _OPENARC_PROFILE_
+			if( HI_openarcrt_verbosity > 2 ) {
+				fprintf(stderr, "[OPENARCRT-INFO]\t\t\tCreate OpenCL Context\n");
+			}
+#endif
             clContext = clCreateContext( NULL, num_devices, devices, NULL, NULL, &err);
             if(err != CL_SUCCESS) {
                 fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL context with error %d (OPENCL Device)\n", err);
@@ -120,14 +125,6 @@ HI_error_t OpenCLDriver::init() {
             }
         }
     }
-
-//[DEBUG by Seyong] below is commented out since it does not have any effect.
-/*
-    clQueue = clCreateCommandQueue(clContext, clDevice, 0, &err);
-    if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (OPENCL Device)\n", err);
-    }
-*/
 
     char cBuffer[1024];
     char* cBufferN;
@@ -249,50 +246,75 @@ HI_error_t OpenCLDriver::init() {
     }
 
     cl_command_queue s0, s1;
-    s0 = clCreateCommandQueue(clContext, clDevice, 0, &err);
-    if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (OPENCL Device)\n", err);
-		exit(1);
-    }
-    s1 = clCreateCommandQueue(clContext, clDevice, 0, &err);
-    if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (OPENCL Device)\n", err);
-		exit(1);
-    }
-    queueMap[0] = s0;
-    queueMap[1] = s1;
-
-    //make s0 the default queue
-    clQueue = s0;
-
     cl_event e0, e1;
-    std::map<int, cl_event> eventMap;
-    e0 = clCreateUserEvent(clContext, &err);
-    if(err != CL_SUCCESS) {
-        printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
-		exit(1);
-    }
+	for ( int i=0; i<HI_num_hostthreads; i++ ) {
+    	s0 = clCreateCommandQueue(clContext, clDevice, 0, &err);
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (OPENCL Device)\n", err);
+			if( err == CL_INVALID_CONTEXT ) {
+				fprintf(stderr, "Invalid OpenCL context\n");
+			} else if( err == CL_INVALID_DEVICE ) {
+				fprintf(stderr, "Invalid OpenCL device\n");
+			} else if( err == CL_INVALID_VALUE ) {
+				fprintf(stderr, "Invalid property value\n");
+			} else if( err == CL_INVALID_QUEUE_PROPERTIES ) {
+				fprintf(stderr, "Invalid queue properties\n");
+			} else if( err == CL_OUT_OF_HOST_MEMORY ) {
+				fprintf(stderr, "Out of host memory\n");
+			}
+			exit(1);
+    	}
+    	s1 = clCreateCommandQueue(clContext, clDevice, 0, &err);
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (OPENCL Device)\n", err);
+			if( err == CL_INVALID_CONTEXT ) {
+				fprintf(stderr, "Invalid OpenCL context\n");
+			} else if( err == CL_INVALID_DEVICE ) {
+				fprintf(stderr, "Invalid OpenCL device\n");
+			} else if( err == CL_INVALID_VALUE ) {
+				fprintf(stderr, "Invalid property value\n");
+			} else if( err == CL_INVALID_QUEUE_PROPERTIES ) {
+				fprintf(stderr, "Invalid queue properties\n");
+			} else if( err == CL_OUT_OF_HOST_MEMORY ) {
+				fprintf(stderr, "Out of host memory\n");
+			}
+			exit(1);
+    	}
+    	queueMap[0+i*MAX_NUM_QUEUES_PER_THREAD] = s0;
+    	queueMap[1+i*MAX_NUM_QUEUES_PER_THREAD] = s1;
+		if( i == get_thread_id() ) {
+    		//make s0 the default queue
+    		clQueue = s0;
+		}
+    	std::map<int, cl_event> eventMap;
+    	e0 = clCreateUserEvent(clContext, &err);
+    	if(err != CL_SUCCESS) {
+        	printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+			exit(1);
+    	}
+    	clSetUserEventStatus(e0, CL_COMPLETE);
 
-    clSetUserEventStatus(e0, CL_COMPLETE);
+    	e1 = clCreateUserEvent(clContext, &err);
+    	if(err != CL_SUCCESS) {
+        	printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+			exit(1);
+    	}
+    	clSetUserEventStatus(e1, CL_COMPLETE);
 
-    e1 = clCreateUserEvent(clContext, &err);
-    if(err != CL_SUCCESS) {
-        printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
-		exit(1);
-    }
-
-    clSetUserEventStatus(e1, CL_COMPLETE);
-
-    eventMap[0]= e0;
-    eventMap[1]= e1;
-    threadQueueEventMap[get_thread_id()] = eventMap;
+    	eventMap[0+i*MAX_NUM_QUEUES_PER_THREAD]= e0;
+    	eventMap[1+i*MAX_NUM_QUEUES_PER_THREAD]= e1;
+    	threadQueueEventMap[i] = eventMap;
+		masterAddressTableMap[i] = new addresstable_t();
+		postponedFreeTableMap[i] = new asyncfreetable_t();
+		memPoolMap[i] = new memPool_t();
+	}
 
 
     createKernelArgMap();
     init_done = 1;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::init()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::init(%d, %d)\n", device_num, dev);
 	}
 #endif
     return HI_success;
@@ -447,18 +469,26 @@ HI_error_t OpenCLDriver::destroy() {
     HostConf_t * tconf = getHostConf();
     cl_int err;
 
-    err = clFlush(clQueue);
-    if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to flush OPENCL queue with error %d (OPENCL Device)\n", err);
-		exit(1);
-        return HI_error;
-    }
-    err = clFinish(clQueue);
-    if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to finish OPENCL queue with error %d (OPENCL Device)\n", err);
-		exit(1);
-        return HI_error;
-    }
+	for( std::map<int, cl_command_queue >::iterator it= queueMap.begin(); it != queueMap.end(); ++it ) {
+    	err = clFlush(it->second);
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to flush OPENCL queue with error %d (OPENCL Device)\n", err);
+			exit(1);
+        	return HI_error;
+    	}
+    	err = clFinish(it->second);
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to finish OPENCL queue with error %d (OPENCL Device)\n", err);
+			exit(1);
+        	return HI_error;
+    	}
+    	err = clReleaseCommandQueue(it->second);
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL queue with error %d (OPENCL Device)\n", err);
+			exit(1);
+        	return HI_error;
+    	}
+	}
 
     std::map<std::string, cl_kernel> kernels = tconf->kernelsMap.at(this);
     for(std::map<std::string, cl_kernel>::iterator it=kernels.begin(); it!=kernels.end(); ++it) {
@@ -477,17 +507,16 @@ HI_error_t OpenCLDriver::destroy() {
         	return HI_error;
     	}
 	}
-    err = clReleaseCommandQueue(clQueue);
-    if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL queue with error %d (OPENCL Device)\n", err);
-		exit(1);
-        return HI_error;
-    }
 #ifdef _OPENMP
 #pragma omp critical(clContext_critical)
 #endif
     {
         if (clContext != NULL) {
+#ifdef _OPENARC_PROFILE_
+			if( HI_openarcrt_verbosity > 2 ) {
+				fprintf(stderr, "[OPENARCRT-INFO]\t\t\tRelease OpenCL Context\n");
+			}
+#endif
             err = clReleaseContext(clContext);
             if(err != CL_SUCCESS) {
                 fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL context with error %d (OPENCL Device)\n", err);
@@ -527,22 +556,23 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int co
         result = HI_success;
         //fprintf(stderr, "[in HI_malloc1D()] : address found!\n");
     } else {
-		std::multimap<size_t, void *>::iterator it = memPool.find((size_t) count);
-		if( it != memPool.end()) {
+		memPool_t *memPool = memPoolMap[tconf->threadID];
+		std::multimap<size_t, void *>::iterator it = memPool->find((size_t) count);
+		if( it != memPool->end()) {
 			*devPtr = it->second;
-			memPool.erase(it);
+			memPool->erase(it);
 		} else {
         	(*devPtr) = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, (size_t) count, NULL, &err);
         	if(err != CL_SUCCESS) {
             	//fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : Malloc failed\n");
-				for (it = memPool.begin(); it != memPool.end(); ++it) {
+				for (it = memPool->begin(); it != memPool->end(); ++it) {
 					*devPtr = it->second;
         			err = clReleaseMemObject((cl_mem)(*devPtr));
         			if(err != CL_SUCCESS) {
             			fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : failed to free on OpenCL\n");
 					}
 				}
-				memPool.clear();
+				memPool->clear();
         		(*devPtr) = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, (size_t) count, NULL, &err);
 			}
 		}
@@ -711,7 +741,8 @@ HI_error_t OpenCLDriver::HI_free( const void *hostPtr, int asyncID) {
 		if( hostPtr != devPtr ) {
 			//We do not free the device memory; instead put it in the memory pool
 			//and remove host-pointer-to-device-pointer mapping
-			memPool.insert(std::pair<size_t, void *>(size, devPtr));
+			memPool_t *memPool = memPoolMap[tconf->threadID];
+			memPool->insert(std::pair<size_t, void *>(size, devPtr));
 			HI_remove_device_address(hostPtr, asyncID);
 /*
         	cl_int  err = clReleaseMemObject((cl_mem)(devPtr));
@@ -913,7 +944,7 @@ HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI
     double ltime = HI_get_localtime();
 #endif
     //err = cudaMemcpy(dst, src, count, toCudaMemcpyKind(kind));
-    cl_command_queue queue = getQueue(DEFAULT_QUEUE);
+    cl_command_queue queue = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset);
     //cl_command_queue queue = queueMap.at(0);
     if( dst != src ) {
     	switch( kind ) {
@@ -990,7 +1021,7 @@ HI_error_t  OpenCLDriver::HI_memcpy_unified(void *dst, const void *src, size_t c
     double ltime = HI_get_localtime();
 #endif
     //err = cudaMemcpy(dst, src, count, toCudaMemcpyKind(kind));
-    cl_command_queue queue = getQueue(DEFAULT_QUEUE);
+    cl_command_queue queue = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset);
     //cl_command_queue queue = queueMap.at(0);
     if( dst != src ) {
     	switch( kind ) {
@@ -1373,7 +1404,7 @@ HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, int gridSize[3]
 
     cl_int err;
     //fprintf(stderr, "[HI_kernel_call()] GRIDSIZE %d %d %d\n", globalSize[2], globalSize[1], globalSize[0]);
-    if(async != DEFAULT_QUEUE) {
+    if(async != (DEFAULT_QUEUE+tconf->asyncID_offset)) {
         cl_command_queue queue = getQueue(async);
         cl_event *event = getEvent(async);
         err = clEnqueueNDRangeKernel(queue, (cl_kernel)(tconf->kernelsMap.at(this).at(kernel_name)), 3, NULL, globalSize, localSize, 0, NULL, event);
@@ -1425,7 +1456,9 @@ HI_error_t OpenCLDriver::HI_synchronize()
     	//For OpenCL 1.2
     	//cl_int ciErr1 = clEnqueueBarrierWithWaitList(clQueue, 0, NULL, NULL);
     	//cl_int ciErr1 = clEnqueueBarrier(clQueue);
-    	ciErr1 = clFinish(clQueue);
+    	//ciErr1 = clFinish(clQueue);
+    	HostConf_t * tconf = getHostConf();
+    	ciErr1 = clFinish(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
     	if (ciErr1 != CL_SUCCESS)
     	{
         	printf("Error in clFinish, Line %u in file %s : %d\n\n", __LINE__, __FILE__, ciErr1);
@@ -1505,7 +1538,9 @@ void OpenCLDriver::HI_set_async(int asyncId) {
 	if( unifiedMemSupported == 0 ) {
 		//We need explicit synchronization here since HI_synchronize() does not
 		//explicitly synchronize if unified memory is not used.
-    	cl_int ciErr1 = clFinish(clQueue);
+    	//cl_int ciErr1 = clFinish(clQueue);
+    	HostConf_t * tconf = getHostConf();
+    	cl_int ciErr1 = clFinish(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
     	if (ciErr1 != CL_SUCCESS)
     	{
         	printf("Error in clFinish, Line %u in file %s : %d\n\n", __LINE__, __FILE__, ciErr1);
@@ -1798,7 +1833,7 @@ void OpenCLDriver::HI_free(void *devPtr) {
 #endif
     HostConf_t * tconf = getHostConf();
 	void *devPtr2;
-    if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE) == HI_error) ||
+    if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE+tconf->asyncID_offset) == HI_error) ||
         (devPtr != devPtr2) ) {
         //Free device memory if it is not on unified memory.
     	err = clReleaseMemObject((cl_mem)devPtr);

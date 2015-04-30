@@ -40,7 +40,7 @@ if [ "$openarc" = "" ] || [ ! -d "$openarc" ]; then
 	exit
 fi
 
-baseDir="$openarc/test/examples"
+baseDir="$openarc/test/examples/openarc"
 workDir="${baseDir}/${benchmark}"
 outputDirBase="${workDir}/bin/"
 logFile="${workDir}/${benchmark}_Compile.log"
@@ -59,6 +59,9 @@ do
 	###########################################
 	# Create output directory if not existing #
 	###########################################
+	if [ ! -d "${outputDirBase}" ]; then
+		mkdir -p "$outputDirBase"
+	fi
 	cd ${outputDirBase}
 	if [ ! -d ${inputClass} ]; then
 		mkdir ${inputClass}

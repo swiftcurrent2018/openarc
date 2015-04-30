@@ -23,7 +23,7 @@ std::vector<const void *> CudaDriver::hostMemToUnpin;
 CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::vector<std::string>kernelNames, HostConf_t *conf, int numDevices) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::CudaDriver()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::CudaDriver(%d, %d)\n", devType, devNum);
 	}
 #endif
     dev = devType;
@@ -44,7 +44,7 @@ CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::vector<std::string
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::CudaDriver()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::CudaDriver(%d, %d)\n", devType, devNum);
 	}
 #endif
 }
@@ -175,28 +175,33 @@ HI_error_t CudaDriver::init() {
     }
 
     CUstream s0, s1;
+    CUevent e0, e1;
 	// CU_STREAM_DEFAULT => create a blocking stream that synchronizes with 
 	// the NULL stream.
 	// CU_STREAM_NON_BLOCKING => create a non-blocking stream that may run 
 	// concurrently with the NULL stream (no implicit synchronization with 
 	// the NULL stream).
+	for( int i=0; i<HI_num_hostthreads; i++ ) {
 #ifdef USE_BLOCKING_STREAMS
-    cuStreamCreate(&s0, CU_STREAM_DEFAULT);
-    cuStreamCreate(&s1, CU_STREAM_DEFAULT);
+    	cuStreamCreate(&s0, CU_STREAM_DEFAULT);
+    	cuStreamCreate(&s1, CU_STREAM_DEFAULT);
 #else
-    cuStreamCreate(&s0, CU_STREAM_NON_BLOCKING);
-    cuStreamCreate(&s1, CU_STREAM_NON_BLOCKING);
+    	cuStreamCreate(&s0, CU_STREAM_NON_BLOCKING);
+    	cuStreamCreate(&s1, CU_STREAM_NON_BLOCKING);
 #endif
-    queueMap[0] = s0;
-    queueMap[1] = s1;
+    	queueMap[0+i*MAX_NUM_QUEUES_PER_THREAD] = s0;
+    	queueMap[1+i*MAX_NUM_QUEUES_PER_THREAD] = s1;
+    	cuEventCreate(&e0, CU_EVENT_DEFAULT);
+    	std::map<int, CUevent> eventMap;
+    	eventMap[0+i*MAX_NUM_QUEUES_PER_THREAD]= e0;
+    	cuEventCreate(&e1, CU_EVENT_DEFAULT);
+    	eventMap[1+i*MAX_NUM_QUEUES_PER_THREAD]= e1;
+    	threadQueueEventMap[i] = eventMap;
+		masterAddressTableMap[i] = new addresstable_t();
+		postponedFreeTableMap[i] = new asyncfreetable_t();
+		memPoolMap[i] = new memPool_t();
+	}
 
-    CUevent e0, e1;
-    std::map<int, CUevent> eventMap;
-    cuEventCreate(&e0, CU_EVENT_DEFAULT);
-    eventMap[0]= e0;
-    cuEventCreate(&e1, CU_EVENT_DEFAULT);
-    eventMap[1]= e1;
-    threadQueueEventMap[get_thread_id()] = eventMap;
 
     createKernelArgMap();
 
@@ -651,22 +656,23 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int coun
     } else {
         CUresult cuResult = CUDA_SUCCESS;
 #if VICTIM_CACHE_MODE == 0
-        std::multimap<size_t, void *>::iterator it = memPool.find((size_t) count);
-        if (it != memPool.end()) {
+		memPool_t *memPool = memPoolMap[tconf->threadID];
+        std::multimap<size_t, void *>::iterator it = memPool->find((size_t) count);
+        if (it != memPool->end()) {
             *devPtr = it->second;
-            memPool.erase(it);
+            memPool->erase(it);
         } else {
             cuResult = cuMemAlloc((CUdeviceptr*)devPtr, (size_t) count);
             if (cuResult != CUDA_SUCCESS) {
             	//fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] cuMemAlloc failed with error %d \n", cuResult);
-                for (it = memPool.begin(); it != memPool.end(); ++it) {
+                for (it = memPool->begin(); it != memPool->end(); ++it) {
             		*devPtr = it->second;
 					cuResult = cuMemFree((CUdeviceptr)(*devPtr));
                     if(cuResult != CUDA_SUCCESS) {
                         fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] failed to free on CUDA with error %d (NVIDIA CUDA GPU)\n", cuResult);
                     }
                 }
-                memPool.clear();
+                memPool->clear();
                 cuResult = cuMemAlloc((CUdeviceptr*)devPtr, (size_t) count);
             }
         }
@@ -962,7 +968,8 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
 #if VICTIM_CACHE_MODE == 0
 			//We do not free the device memory; instead put it in the memory pool 
 			//and remove host-pointer-to-device-pointer mapping.
-            memPool.insert(std::pair<size_t, void *>(size, devPtr));
+			memPool_t *memPool = memPoolMap[tconf->threadID];
+            memPool->insert(std::pair<size_t, void *>(size, devPtr));
 			HI_remove_device_address(hostPtr, asyncID);
 			// Unpin host memory
 			HI_unpin_host_memory(hostPtr);
@@ -1886,7 +1893,7 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], 
 #endif
     CUresult err;
     //fprintf(stderr, "[HI_kernel_call()] GRIDSIZE %d %d %d\n", gridSize[2], gridSize[1], gridSize[0]);
-    if(async != DEFAULT_QUEUE) {
+    if(async != DEFAULT_QUEUE+tconf->asyncID_offset) {
         CUstream stream = getQueue(async);
         CUevent event = getEvent(async);
         err = cuLaunchKernel(tconf->kernelsMap.at(this).at(kernel_name), gridSize[0], gridSize[1], gridSize[2], blockSize[0], blockSize[1], blockSize[2], 0, stream, (tconf->kernelArgsMap.at(this).at(kernel_name))->kernelParams, NULL);
@@ -1943,7 +1950,9 @@ HI_error_t CudaDriver::HI_synchronize()
 		//cuCtxSynchronize() waits for all tasks in the current context, but we
 		//need to wait for the tasks in the default queue (NULL stream).
     	//CUresult err = cuCtxSynchronize();
-    	CUresult err = cuStreamSynchronize(0);
+    	HostConf_t * tconf = getHostConf();
+    	CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
+    	err = cuStreamSynchronize(0);
     	if (err != CUDA_SUCCESS) {
 			//[DEBUG] CUresult and cudaError_t do not match.
         	//fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] Context Synchronization FAIL with error %d %s\n", err, cudaGetErrorString((cudaError_t)err));
@@ -2033,6 +2042,7 @@ void CudaDriver::HI_set_async(int asyncId) {
     #pragma omp critical (HI_set_async_critical)
 #endif
     {
+        int thread_id = get_thread_id();
         asyncId += 2;
         std::map<int, CUstream >::iterator it= queueMap.find(asyncId);
 
@@ -2051,7 +2061,6 @@ void CudaDriver::HI_set_async(int asyncId) {
             queueMap[asyncId] = str;
         }
 
-        int thread_id = get_thread_id();
         std::map<int, std::map<int, CUevent> >::iterator threadIt;
         threadIt = threadQueueEventMap.find(thread_id);
 
@@ -2079,7 +2088,9 @@ void CudaDriver::HI_set_async(int asyncId) {
 		//since HI_synchronize() does not explicitly synchronize if 
 		//unified memory is not used.
     	//CUresult err = cuCtxSynchronize();
-    	CUresult err = cuStreamSynchronize(0);
+    	HostConf_t * tconf = getHostConf();
+    	CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
+    	err = cuStreamSynchronize(0);
     	if (err != CUDA_SUCCESS) {
         	fprintf(stderr, "[ERROR in CudaDriver::HI_set_async()] Context Synchronization FAIL with error %d\n", err);
 			exit(1);
@@ -2368,7 +2379,7 @@ void CudaDriver::HI_free(void *devPtr) {
 
     CUresult cuResult = CUDA_SUCCESS;
     void *devPtr2;
-    if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE) == HI_error) ||
+    if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE+tconf->asyncID_offset) == HI_error) ||
 		(devPtr != devPtr2) ) {
 		//Free device memory if it is not on unified memory.
     	cuResult = cuMemFree((CUdeviceptr)devPtr);

@@ -14,11 +14,17 @@ import cetus.analysis.LoopTools;
 import cetus.hir.Annotatable;
 import cetus.hir.AssignmentExpression;
 import cetus.hir.CompoundStatement;
+import cetus.hir.Declaration;
 import cetus.hir.Expression;
 import cetus.hir.ExpressionStatement;
 import cetus.hir.ForLoop;
+import cetus.hir.IRTools;
 import cetus.hir.Program;
 import cetus.hir.Statement;
+import cetus.hir.Symbol;
+import cetus.hir.SymbolTable;
+import cetus.hir.SymbolTools;
+import cetus.hir.Traversable;
 import cetus.transforms.LoopNormalization;
 import cetus.transforms.TransformPass;
 
@@ -66,6 +72,28 @@ public class ACCWorkshareLoopNormalization extends TransformPass {
 						Expression origIndexVar = LoopTools.getIndexVariable(fLoop);
 						LoopNormalization.normalizeLoop(fLoop);
 						Expression newIndexVar = LoopTools.getIndexVariable(fLoop);
+						Symbol newIndexSym = SymbolTools.getSymbolOf(newIndexVar);
+						Declaration newIndexSymDecl = newIndexSym.getDeclaration();
+						CompoundStatement cStmt = (CompoundStatement)fLoop.getParent();
+						if( cStmt.containsDeclaration(newIndexSymDecl) ) {
+							Traversable pp = cStmt.getParent();
+							if( pp instanceof ForLoop ) {
+								while( (pp != null) && (pp instanceof ForLoop) ) {
+									pp = pp.getParent();
+									if( pp.getParent() instanceof ForLoop ) {
+										pp = pp.getParent();
+									}
+								}
+								if( (pp != null) && (pp instanceof CompoundStatement) ) {
+									Statement newIndexSymDeclStmt = (Statement)newIndexSymDecl.getParent();
+									cStmt.removeStatement(newIndexSymDeclStmt);
+									newIndexSymDecl.setParent(null);
+									CompoundStatement ppStmt = (CompoundStatement)pp;
+									ppStmt.addDeclaration(newIndexSymDecl);
+									IRTools.replaceAll(fLoop, newIndexVar, newIndexVar);
+								}
+							}
+						}
 						//Replace the original index symbol with the new one if existing in OpenACC annotations.
 						Map<String, String> nameChangeMap = new HashMap<String, String>();
 						nameChangeMap.put(origIndexVar.toString(), newIndexVar.toString());
@@ -74,7 +102,6 @@ public class ACCWorkshareLoopNormalization extends TransformPass {
 						//of the original loop-index variable, but this is not needed and incorrect in 
 						//OpenACC worksharing loop translation. Therefore, remove the last-value assignment
 						//statement.
-						CompoundStatement cStmt = (CompoundStatement)fLoop.getParent();
 						if( cStmt != null ) {
 							Statement nStmt = AnalysisTools.getStatementAfter(cStmt, fLoop);
 							if( (nStmt != null) && (nStmt instanceof ExpressionStatement) ) {

@@ -35,7 +35,7 @@ if [ "$openarc" = "" ] || [ ! -d "$openarc" ]; then
 	exit
 fi
 
-baseDir="$openarc/test/examples"
+baseDir="$openarc/test/examples/openarc"
 workDir="${baseDir}/${benchmark}"
 outputDirBase="${workDir}/bin/"
 logFile="${workDir}/${benchmark}_Run.log"

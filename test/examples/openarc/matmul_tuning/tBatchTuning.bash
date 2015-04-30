@@ -7,10 +7,14 @@ inputData=( 512 )
 numInputs=${#inputData[@]}
 startInput=0
 benchmark="matmul_tuning"
-cmdOptionBase=""
 inputCFiles=( "matmul.c" )
 inputHeaderFiles=( )
 inputFiles=( "${inputCFiles[@]}" "${inputHeaderFiles[@]}" )
+
+# OpenARC options (common to all inputs) to translate the benchmark.
+openarcOptionBase=( "macro=VERIFICATION=1" )
+# commandline options (common to all inputs) to run the benchmark.
+cmdOptionBase=""
 
 ###############################
 # Tuning Level                #
@@ -32,7 +36,7 @@ fi
 ###########################
 # Internal conf variables #
 ###########################
-baseDir="${openarc}/test/examples"
+baseDir="${openarc}/test/examples/openarc"
 workDir="${baseDir}/${benchmark}"
 orgSrcDir="${workDir}/src"
 cetus_input="cetus_input"
@@ -186,12 +190,20 @@ do
 		echo "Tuning configuration files (confFile*.txt)  do not exist in directory, ${inputClass}; skip it."
 		continue
 	fi  
+
+	# Input-specific OpenARC options to translate the benchmark.
+	inputOpenARCOption="macro=SIZE=${inputClass}"
 	k=0 
 	while [ $k -lt ${numExperiments} ]
 	do
 		srcDir="Src_$k";
 		confFile="${confFileBase}${k}.txt"
 		echo "outdir=${workDir}/${cetus_output}/${inputClass}/${srcDir}" >> ${confFile}
+		for tORCOption in ${openarcOptionBase[@]}
+		do
+			echo "${tORCOption}" >> ${confFile}
+		done
+		echo "${inputOpenARCOption}" >> ${confFile}
 	k=$((k+1))
 	done
 
@@ -271,7 +283,7 @@ do
 		# Run O2G translator #
 		######################
 		cd ${workDir}
-        exeCmd="${exeCmdBase} -macro=_N_=${inputClass} *.c"
+        exeCmd="${exeCmdBase} *.c"
         ${exeCmd} 2>&1 | tee compile.log
         grep -i error compile.log   
         if [ $? -eq 0 ]; then
@@ -414,7 +426,9 @@ do
 	inputClass=${inputData[$i]}
 	echo " " >> ${logFile}
 	echo "## Input Data : ${inputClass}" >> ${logFile}
+	# Input-specific options to run the benchmark.
 	inputOption=""
+	# commandline options to run the benchmark.
 	cmdOption="${cmdOptionBase} ${inputOption}"
 
 	k=0

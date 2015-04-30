@@ -18,25 +18,27 @@ if [ "$openarc" = "" ] || [ ! -d "$openarc" ]; then
 	exit
 fi
 
-baseDir="${openarc}/test/examples"
+baseDir="${openarc}/test/examples/openarc"
 workDir="${baseDir}/${benchmark}"
 outputDirBase="${workDir}/cetus_output"
 
 rm -rf tuning_conf
 rm -f TuningOptions.txt
 rm -f userDirective*.txt
-cd ${outputDirBase}
-rm -f userDirective*.txt
-rm -f confFile.txt
+if [ -d "${outputDirBase}" ]; then
+	cd ${outputDirBase}
+	rm -f userDirective*.txt
+	rm -f confFile.txt
 
-i=${startInput}
-while [ $i -lt $numInputs ]
-do
+	i=${startInput}
+	while [ $i -lt $numInputs ]
+	do
 
-	inputClass=${inputData[$i]}
-	rm -rf ${inputClass}
+		inputClass=${inputData[$i]}
+		rm -rf ${inputClass}
 
-i=$((i+1))
-done
+	i=$((i+1))
+	done
+fi
 
 

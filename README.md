@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.3 (August 29, 2014)
+OpenARC V0.3 (April 22, 2015)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -14,6 +14,8 @@ accelerator computing.
 OpenARC supports the full feature set of OpenACC V1.0 and performs 
 source-to-source transformations, targeting heterogeneous devices, such as 
 NVIDIA GPUs, AMD GPUs, and Intel MICs.
+Please refer to the OpenARC website (http://ft.ornl.gov/research/openarc) to 
+find more details on OpenARC.
 
 
 -------------------------------------------------------------------------------
@@ -33,40 +35,39 @@ INSTALLATION
 -------------------------------------------------------------------------------
 * Obtain OpenARC distribution
     - The latest version of OpenARC can be obtained at:
-    http://ft.ornl.gov/research/openarc
+    https://code.ornl.gov/f6l/OpenARC
 
-* Unpack
-    -bUsers need to unpack the distribution before installing OpenARC.
-    
-    $ cd [directory_where_openarc.tar.gz_exists]
-    
-    $ gzip -d openarc.tar.gz | tar xvf -
 
 * Build
+
     First, copy make.header.sample to make.header and adjust the
     configuration there for your platform.  Next, there are several options
     for building OpenARC:
+
     - For Apache Ant users
         
         The provided build.xml defines the build targets for OpenARC. The available
     targets are "compile", "jar", "bin", "clean" and "javadoc". Users need to edit
     the location of the Antlr tool. (build.xml has not yet been updated to build
     OpenARC's LLVM support.)
+
     - For Linux/Unix command line users
         
-        Run the script build.sh after defining system-dependent variables in the
-    script. (e.g., $ build.sh bin #compile and create a wrapper script)
-    If LLVM support is desired, first build jllvm as described in
-    jllvm/README-openarc, and then build OpenARC using build.sh.
+        Run the script build.sh after defining system-dependent variables in the script. (e.g., $ build.sh bin #compile and create a wrapper script)
+
+        If LLVM support is desired, first build jllvm as described in jllvm/README-openarc, and then build OpenARC using build.sh.
+
     - For SDK (Eclipse, Netbeans, etc) users
     
         First, run "make -f configure.mk base", and build the parser with the
         Antlr tool.
-    Then, if LLVM support is desired, run "make -f configure.mk llvm" and
-    build jllvm.
-    Then, follow the instructions of each SDK to set up a project.
+
+        Then, if LLVM support is desired, run "make -f configure.mk llvm" and build jllvm.
+
+        Then, follow the instructions of each SDK to set up a project.
 
 * Build OpenARC runtime
+
   - To compile the output program that OpenARC translated from the input OpenACC
   program, OpenARC runtime should be compiled too. (refer to 
   readme_openarcrt.txt in openarcrt directory.)
@@ -78,8 +79,11 @@ ENVIRONMENT SETUP
 * Environment variable, OPENARC_ARCH, is used to set a target architecture, 
 for which OpenARC translates the input OpenACC program. 
 (Default target is NVIDIA CUDA if the variable does not exist.) 
+
   - Set OPENARC_ARCH = 0 for CUDA (default)
+
                        1 for OpenCL (e.g., AMD GPUs)
+
                        2 for OpenCL for Xeon Phi
   - For example in BASH, 
 
@@ -203,13 +207,19 @@ allowed. One way to allocate 2D array in a contiguous way is the following:
 in pragma annotations. To enable this, either 1) use the OpenARC commandline option, macro (e.g., -macro=SIZE=1024) or 2) use "#pragma openarc #define macro value" 
 directive in the input source code.
 
+- Class member in OpenACC data clauses may not work; one way to avoid this problem is to manually decompose struct data.
+
+    - Example: change "struct var { int *data1; int *data2;} aa;" to "int *aa_data1; int *aa_data2;"
+    
 - Class member is not allowed in an OpenACC subarray, and the start index 
 of a subarray should be 0 (partial array passing is allowed only if its start 
 index is 0.)
 
 - Current implementation ignores vector clause. (e.g., for CUDA target, 
 gang clause is used to set the number of thread blocks, and worker clause is 
-used to specify the number of  threads in a thread block.)
+used to specify the number of  threads in a thread block.) If a compute region 
+has only gang clauses without any worker clause (ignoring vector clauses), 
+the compiler may automaticall add worker clause where appropriate.
  
 - Current implementation allows data regions to have compute regions 
 interprocedurally, but a compute region can have a function call only if 
@@ -231,7 +241,7 @@ extending OpenARC.  A workaround is to forward-declare such a struct or
 union before referencing it.
 
 
-August 29, 2014
+April 22, 2015
 
 The OpenARC Team
 

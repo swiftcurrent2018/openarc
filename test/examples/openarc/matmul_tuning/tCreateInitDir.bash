@@ -15,7 +15,7 @@ if [ "$openarc" = "" ] || [ ! -d "$openarc" ]; then
 	exit
 fi
 
-baseDir="${openarc}/test/examples"
+baseDir="${openarc}/test/examples/openarc"
 workDir="${baseDir}/${benchmark}"
 cetus_input="cetus_input"
 orgSrcDir="${workDir}/src"
