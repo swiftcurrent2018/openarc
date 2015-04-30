@@ -26,8 +26,9 @@ REQUIREMENTS
 * ANTLRv2 
 	- Default antlr.jar file is included in this distribution (./lib)
 * LLVM 3.2
-	- If OpenARC's LLVM support is desired
+	- If OpenARC's LLVM support is desired (LLVM pass is NOT included in the release version.)
 	- See jllvm/README-openarc for details
+	
 
  
 -------------------------------------------------------------------------------
@@ -144,6 +145,9 @@ for OpenARC users; if [openarc-path]/bin/openarc exists, the above command can b
 
   $ [openarc-path]/bin/openarc [options] [C files]
 
+Available OpenARC commandline options can be found either in [openarc-path]/test/openarcConf.sample or by running the following command:
+
+  $ [openarc-path]/bin/openarc -dump-options
 
 -------------------------------------------------------------------------------
 TESTING
