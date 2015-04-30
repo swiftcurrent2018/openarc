@@ -25,6 +25,13 @@ INSTALLATION
   - Go back to the openarcrt directory 
   - Run "batchmake.bash"
     $ ./batchmake.bash
+	//which will create either CUDA or OpenCL libraries of the OpenARC runtime, 
+	//depending on the target architecture. 
+	//For example on a CUDA device:
+	//libopenaccrt_cuda.a -- normal mode OpenARC CUDA library
+	//libopenaccrt_cudapf.a -- profile mode OpenARC CUDA library
+	//libopenaccrtomp_cuda.a -- normal mode OpenARC CUDA library with OpenMP support
+	//libopenaccrtomp_cudapf.a -- profile mode OpenARC CUDA library with OpenMP support
 
 
 -------------------------------------------------------------------------------
