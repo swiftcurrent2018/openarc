@@ -4,7 +4,8 @@ import cetus.analysis.IPPointsToAnalysis;
 import cetus.hir.*;
 import java.util.List;
 
-//DEBUG: [Added by Seyong Lee] this works oly for openacc, but not for omp2gpu.
+//DEBUG: [Added by Seyong Lee] this works only for openacc, but not for omp2gpu.
+import openacc.hir.OpenACCSpecifier;
 import openacc.hir.CUDASpecifier;
 import openacc.hir.OpenCLSpecifier;
 
@@ -77,7 +78,7 @@ public class NormalizeReturn extends ProcedureTransformPass {
             while (return_type.remove(CUDASpecifier.CUDA_GLOBAL));
             while (return_type.remove(CUDASpecifier.CUDA_DEVICE));
             while (return_type.remove(CUDASpecifier.CUDA_HOST));
-            while (return_type.remove(CUDASpecifier.EXTERN_C));
+            while (return_type.remove(OpenACCSpecifier.EXTERN_C));
             //DEBUG: [Added by Putt Sakdhnagool] The following OpenCL-specific function
             //type qualifier should be removed too.
             while (return_type.remove(OpenCLSpecifier.OPENCL_KERNEL));

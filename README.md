@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.3 (April 22, 2015)
+OpenARC V0.4 (June 01, 2015)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -25,9 +25,6 @@ REQUIREMENTS
 * GCC
 * ANTLRv2 
 	- Default antlr.jar file is included in this distribution (./lib)
-* LLVM 3.2
-	- If OpenARC's LLVM support is desired (LLVM pass is NOT included in the release version.)
-	- See jllvm/README-openarc for details
 	
 
  
@@ -54,16 +51,16 @@ INSTALLATION
 
     - For Linux/Unix command line users
         
-        Run the script build.sh after defining system-dependent variables in the script. (e.g., $ build.sh bin #compile and create a wrapper script)
+        If LLVM support is desired, first build LLVM and jllvm as described in jllvm/README-openarc.  (LLVM support is NOT included in the release version.)
 
-        If LLVM support is desired, first build jllvm as described in jllvm/README-openarc, and then build OpenARC using build.sh.
+        Run the script build.sh (e.g., $ build.sh bin #compile and create a wrapper script)
 
     - For SDK (Eclipse, Netbeans, etc) users
     
         First, run "make -f configure.mk base", and build the parser with the
         Antlr tool.
 
-        Then, if LLVM support is desired, run "make -f configure.mk llvm" and build jllvm.
+        Then, if LLVM support is desired, run "make -f configure.mk llvm" and build LLVM and jllvm as described in jllvm/README-openarc.  (LLVM support is NOT included in the release version.)
 
         Then, follow the instructions of each SDK to set up a project.
 
@@ -159,10 +156,15 @@ TESTING
 FEATURES/UPDATES
 -------------------------------------------------------------------------------
 * New features
+- Add a fake virtual device address space for OpenCL targets, which allows pointer-arithmetics on the virtual device address for both CUDA and OpenCL devices.
 
 * Updates
 
 * Bug fixes and improvements
+- Fixes various bugs related to multi-threading and synchronizations.
+- OpenACC update directives allow subarrays with non-zero start index, which 
+offers partial-array transfers between the host and device.
+- Fix bugs in setting an OpenCL driver for MICs.
 
 * Updates in flags
 
@@ -180,6 +182,7 @@ This OpenARC release has the following contents.
 * src                    - OpenARC source code
 * doc                    - OpenARC documents
 * openarcrt              - OpenARC runtime (HeteroIR) source code
+* llvm                   - LLVM sources
 * jllvm                  - Java bindings for LLVM
 * test                   - Examples showing how to use OpenARC
 
@@ -211,20 +214,18 @@ allowed. One way to allocate 2D array in a contiguous way is the following:
 in pragma annotations. To enable this, either 1) use the OpenARC commandline option, macro (e.g., -macro=SIZE=1024) or 2) use "#pragma openarc #define macro value" 
 directive in the input source code.
 
-- Class member in OpenACC data clauses may not work; one way to avoid this problem is to manually decompose struct data.
+- The current implementation does not support a Struct member in OpenACC data clauses; one way to avoid this problem is to manually decompose struct data.
 
     - Example: change "struct var { int *data1; int *data2;} aa;" to "int *aa_data1; int *aa_data2;"
     
-- Class member is not allowed in an OpenACC subarray, and the start index 
-of a subarray should be 0 (partial array passing is allowed only if its start 
-index is 0.)
+- The current implementation allows a subarray (partial array) if its start index is 0; subarrays with non-zero start index are allowed only in an OpenACC update directive.
 
 - Current implementation ignores vector clause. (e.g., for CUDA target, 
 gang clause is used to set the number of thread blocks, and worker clause is 
 used to specify the number of  threads in a thread block.) If a compute region 
 has only gang clauses without any worker clause (ignoring vector clauses), 
-the compiler may automaticall add worker clause where appropriate.
- 
+the compiler may automatically add worker clause where appropriate.
+
 - Current implementation allows data regions to have compute regions 
 interprocedurally, but a compute region can have a function call only if 
 the called fuction does not contain any OpenACC loop directive.  
@@ -244,8 +245,6 @@ not appear to impact OpenARC's user-visible behavior, but it may impact code
 extending OpenARC.  A workaround is to forward-declare such a struct or
 union before referencing it.
 
-
-April 22, 2015
 
 The OpenARC Team
 

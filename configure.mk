@@ -21,8 +21,11 @@ $(BUILD_CFG): $(COMMON_DEPS)
 	echo 'cxx = $(call cmd2abs, $(CXX))' >> $@
 	echo 'llvmTargetTriple = $(LLVM_TARGET_TRIPLE)' >> $@
 	echo 'llvmTargetDataLayout = $(LLVM_TARGET_DATA_LAYOUT)' >> $@
+	echo 'mpi_includes = $(MPI_INCLUDES)' >> $@
+	echo 'mpi_libdir = $(MPI_LIBDIR)' >> $@
 	echo 'fc = $(call cmd2abs, $(FC))' >> $@
 	echo 'spec_cpu2006 = $(SPEC_CPU2006)' >> $@
+	echo 'spec_cfg = $(SPEC_CFG)' >> $@
 
 $(OPENARC_CC): $(OPENARC_CC_IN) $(COMMON_DEPS)
 	mkdir -p $(OPENARC_CC_DIR)
@@ -33,6 +36,5 @@ $(OPENARC_CC): $(OPENARC_CC_IN) $(COMMON_DEPS)
 	sed \
 	  -e 's|@CC@|$(call cmd2abs, $(CC))|g' \
 	  -e 's|@CPP@|$(call cmd2abs, $(CPP))|g' \
-	  -e 's|@LLVM_LLC@|$(call cmd2abs, $(LLVM_LLC))|g' \
 	$< >> $@
 	chmod +x $@

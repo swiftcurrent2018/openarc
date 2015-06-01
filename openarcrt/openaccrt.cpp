@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <limits.h>
 #include "openacc.h"
-#include "openaccrt.h"
 #include "openaccrt_ext.h"
 ////////////////////////////////////////
 // Functions used for resilience test //
@@ -264,8 +263,11 @@ void HostConf::setDefaultDevice() {
     envVar = getenv(acc_device_type_env);
     if( envVar == NULL ) {
 		user_set_device_type_var = acc_device_default;
-        //acc_device_gpu is the default device type.
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
+        acc_device_type_var = acc_device_xeonphi;
+#else
         acc_device_type_var = acc_device_gpu;
+#endif
     } else {
         envVarU = convertToUpper(envVar);
         if( strcmp(envVarU, NVIDIA) == 0 ) {
@@ -276,7 +278,11 @@ void HostConf::setDefaultDevice() {
             acc_device_type_var = acc_device_gpu;
         } else if( strcmp(envVarU, "ACC_DEVICE_DEFAULT") == 0 ) {
 			user_set_device_type_var = acc_device_default;
-            acc_device_type_var = acc_device_gpu;
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
+        	acc_device_type_var = acc_device_xeonphi;
+#else
+        	acc_device_type_var = acc_device_gpu;
+#endif
         } else if( strcmp(envVarU, XEONPHI) == 0 ) {
 			user_set_device_type_var = acc_device_xeonphi;
             acc_device_type_var = acc_device_xeonphi;
@@ -555,14 +561,21 @@ void HostConf::HI_reset() {
     //delete devicememstatusmaptable;
 
 	//device->masterAddressTable.clear();
-	for( std::map<int, addresstable_t*>::iterator it = device->masterAddressTableMap.begin(); it != device->masterAddressTableMap.end(); it++) {
+	for( addresstablemap_t::iterator it = device->masterAddressTableMap.begin(); it != device->masterAddressTableMap.end(); it++) {
+		addresstable_t * tmap = it->second;
+		for( addresstable_t::iterator it2 = tmap->begin(); it2 != tmap->end(); it2++) {
+		(it2->second)->clear();
+	}
+		tmap->clear();
+	} 
+	for( addresstable_t::iterator it = device->masterHandleTable.begin(); it != device->masterHandleTable.end(); it++) {
 		(it->second)->clear();
 	} 
-	for( std::map<int, memPool_t*>::iterator it = device->memPoolMap.begin(); it != device->memPoolMap.end(); it++) {
+	for( memPoolmap_t::iterator it = device->memPoolMap.begin(); it != device->memPoolMap.end(); it++) {
 		(it->second)->clear();
 	} 
 	//device->postponedFreeTable.clear();
-	for( std::map<int, asyncfreetable_t *>::iterator it = device->postponedFreeTableMap.begin(); it != device->postponedFreeTableMap.end(); it++) {
+	for( asyncfreetablemap_t::iterator it = device->postponedFreeTableMap.begin(); it != device->postponedFreeTableMap.end(); it++) {
 		(it->second)->clear();
 	} 
 	//[DEBUG] We disabled device-reset operation to reuse it.
@@ -706,7 +719,7 @@ HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args)
 	return return_status;
 }
 
-HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value)
+HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type)
 {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
@@ -716,7 +729,7 @@ HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t* conf = getHostConf();
-    return_status = conf->device->HI_register_kernel_arg(kernel_name, arg_index, arg_size, arg_value);
+    return_status = conf->device->HI_register_kernel_arg(kernel_name, arg_index, arg_size, arg_value, arg_type);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_register_kernel_arg()\n");
@@ -946,7 +959,7 @@ HI_error_t HI_free_async( const void *hostPtr, int asyncID ) {
         exit(1);
 	}
     HostConf_t * tconf = getHostConf();
-    return_status = tconf->device->HI_free_async(hostPtr, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_free_async(hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free_async(%d)\n", asyncID);
@@ -1015,6 +1028,21 @@ enum cudaMemcpyKind toCudaMemcpyKind( HI_MemcpyKind_t kind ) {
     return cudaMemcpyHostToHost;
 }
 #endif
+
+char const *HI_getMemcpyTypeString( HI_MemcpyKind_t kind ) {
+	char const *str;
+	if(kind == HI_MemcpyHostToHost) {
+		str = "Host-to-Host";
+	} else if(kind == HI_MemcpyHostToDevice) {
+		str = "Host-to-Device";
+	} else if(kind == HI_MemcpyDeviceToHost) {
+		str = "Device-to-Host";
+	} else {
+		str = "Device-to-Device";
+	}
+	return str;
+}
+
 // Copy count bytes from the memory area pointed by src to the memory area
 // pointed by dst, where kind is one of HI_MemcpyHostToHost, HI_MemcpyHostToDevice,
 // HI_MemcpyDeviceToHost, or HI_MemcpyDeviceToDevice.
@@ -1026,7 +1054,9 @@ HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy(%d)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy(%ld)\n", count);
+		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	if( dst == NULL ) {
@@ -1044,7 +1074,8 @@ HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
     return_status = tconf->device->HI_memcpy( dst, src, count, kind, trType);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy(%d)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy(%ld)\n", count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
@@ -1055,7 +1086,9 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_unified(%d)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_unified(%ld)\n", count);
+		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	if( dst == NULL ) {
@@ -1073,7 +1106,8 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
     return_status = tconf->device->HI_memcpy_unified( dst, src, count, kind, trType);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_unified(%d)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_unified(%ld)\n", count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
@@ -1084,7 +1118,9 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_async(%d, %d)\n", async, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_async(%d, %ld)\n", async, count);
+		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	if( dst == NULL ) {
@@ -1102,7 +1138,8 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
     return_status = tconf->device->HI_memcpy_async(dst, src, count, kind, trType, async+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_async(%d, %d)\n", async, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_async(%d, %ld)\n", async, count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
@@ -1113,7 +1150,9 @@ HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_asyncS(%d, %d)\n", count, async);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_asyncS(%ld, %d)\n", count, async);
+		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	if( dst == NULL ) {
@@ -1127,7 +1166,8 @@ HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
     return_status = tconf->device->HI_memcpy_asyncS(dst, src, count, kind, trType, async+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_asyncS(%d, %d)\n", count, async);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_asyncS(%ld, %d)\n", count, async);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
@@ -1174,7 +1214,9 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D(%d)\n", widthInBytes*height);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D(%ld)\n", widthInBytes*height);
+		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	if( dst == NULL ) {
@@ -1192,7 +1234,8 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
     return_status = tconf->device->HI_memcpy2D(dst, dpitch, src, spitch, widthInBytes, height, kind);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D(%d)\n", widthInBytes*height);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D(%ld)\n", widthInBytes*height);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
@@ -1203,7 +1246,9 @@ HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D_async(%d, %d)\n", widthInBytes*height, async);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D_async(%ld, %d)\n", widthInBytes*height, async);
+		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	if( dst == NULL ) {
@@ -1221,7 +1266,8 @@ HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
     return_status = tconf->device->HI_memcpy2D_async(dst, dpitch, src, spitch, widthInBytes, height, kind, async+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D_async(%d, %d)\n", widthInBytes*height, async);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D_async(%ld, %d)\n", widthInBytes*height, async);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
@@ -1249,7 +1295,31 @@ HI_error_t HI_get_device_address(const void * hostPtr, void **devPtr, int asyncI
         fprintf(stderr, "[ERROR in HI_get_device_address()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
-    return_status = tconf->device->HI_get_device_address(hostPtr, devPtr, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_get_device_address(hostPtr, devPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_device_address(%d)\n", asyncID);
+	}
+	tconf->PresentTableCnt++;
+	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
+#endif
+	return return_status;
+}
+
+HI_error_t HI_get_device_address(const void * hostPtr, void **devPtrBase, size_t *offset, int asyncID) {
+	HI_error_t return_status;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_device_address(%d)\n", asyncID);
+	}
+	double ltime = HI_get_localtime();
+#endif
+    HostConf_t * tconf = getHostConf();
+    if( tconf->isOnAccDevice == 0 ) {
+        fprintf(stderr, "[ERROR in HI_get_device_address()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        exit(1);
+    }    
+    return_status = tconf->device->HI_get_device_address(hostPtr, devPtrBase, offset, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_device_address(%d)\n", asyncID);
@@ -1269,7 +1339,7 @@ HI_error_t HI_set_device_address(const void * hostPtr, void *devPtr, size_t size
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
-    return_status = tconf->device->HI_set_device_address(hostPtr, devPtr, size, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_set_device_address(hostPtr, devPtr, size, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_device_address(%d)\n", asyncID);
@@ -1289,7 +1359,7 @@ HI_error_t HI_remove_device_address(const void * hostPtr, int asyncID) {
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
-    return_status = tconf->device->HI_remove_device_address(hostPtr, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_remove_device_address(hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_remove_device_address(%d)\n", asyncID);
@@ -1310,7 +1380,7 @@ HI_error_t HI_get_host_address(const void * devPtr, void **hostPtr, int asyncID)
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
-    return_status = tconf->device->HI_get_host_address(devPtr, hostPtr, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_get_host_address(devPtr, hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_host_address(%d)\n", asyncID);
@@ -1330,7 +1400,7 @@ HI_error_t HI_get_temphost_address(const void * hostPtr, void **temphostPtr, int
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
-    return_status = tconf->device->HI_get_temphost_address(hostPtr, temphostPtr, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_get_temphost_address(hostPtr, temphostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_temphost_address(%d)\n", asyncID);
@@ -1353,18 +1423,29 @@ int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
     acc_device_t devType = tconf->acc_device_type_var;
     int devNum = acc_get_device_num(devType);
     countermap_t * prtcounter = tconf->prtcntmaptable;
-    if( HI_get_device_address(hostPtr, devPtr, asyncID+tconf->asyncID_offset) == HI_success ) {
-        if( prtcounter->count(hostPtr) > 0 ) {
-            result = prtcounter->at(hostPtr);
+	void * hostPtrBase = (void *)hostPtr;
+	void *devPtrBase;
+	size_t offset;
+    if( tconf->device->HI_get_device_address(hostPtr, &devPtrBase, &offset, asyncID+tconf->asyncID_offset, tconf->threadID) == HI_success ) {
+		if( offset > 0 ) {
+			hostPtrBase = (void *)((size_t)hostPtrBase - offset);
+			*devPtr = (void *) ((size_t)devPtrBase + offset);
+		} else {
+			*devPtr = devPtrBase;
+		}
+        if( prtcounter->count(hostPtrBase) > 0 ) {
+            result = prtcounter->at(hostPtrBase);
             if( result <= 0 ) result = 1;
-            (*prtcounter)[hostPtr] = result + 1;
+            (*prtcounter)[hostPtrBase] = result + 1;
         } else {
             result = 1;
-            (*prtcounter)[hostPtr] = 2;
+            (*prtcounter)[hostPtrBase] = 2;
         }
     } else {
         *devPtr = 0;
-        (*prtcounter)[hostPtr] = 1;
+		if( prtcounter->count(hostPtrBase) > 0 ) {
+        	(*prtcounter)[hostPtrBase] = 0;
+		}
         result = 0;
     }
 #ifdef _OPENARC_PROFILE_
@@ -1387,18 +1468,29 @@ int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
     acc_device_t devType = tconf->acc_device_type_var;
     int devNum = acc_get_device_num(devType);
     countermap_t * prtcounter = tconf->prtcntmaptable;
-    if( HI_get_device_address(hostPtr, devPtr, asyncID+tconf->asyncID_offset) == HI_success) {
-        if( prtcounter->count(hostPtr) > 0 ) {
-            result = prtcounter->at(hostPtr);
+	void * hostPtrBase = (void *)hostPtr;
+	void *devPtrBase;
+	size_t offset;
+    if( tconf->device->HI_get_device_address(hostPtr, &devPtrBase, &offset, asyncID+tconf->asyncID_offset, tconf->threadID) == HI_success) {
+		if( offset > 0 ) {
+			hostPtrBase = (void *)((size_t)hostPtrBase - offset);
+			*devPtr = (void *) ((size_t)devPtrBase + offset);
+		} else {
+			*devPtr = devPtrBase;
+		}
+        if( prtcounter->count(hostPtrBase) > 0 ) {
+            result = prtcounter->at(hostPtrBase);
             result = result -1;
             if( result < 0 ) result = 0;
         } else {
             result = 0;
         }
-        (*prtcounter)[hostPtr] = result;
+        (*prtcounter)[hostPtrBase] = result;
     } else {
         *devPtr = 0;
-        (*prtcounter)[hostPtr] = 0;
+		if( prtcounter->count(hostPtrBase) > 0 ) {
+        	(*prtcounter)[hostPtrBase] = 0;
+		}
         result = -1; //error!!
     }
 #ifdef _OPENARC_PROFILE_
@@ -1574,9 +1666,9 @@ void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t st
         //HI_memstatus_t devicestatus = (*devicememstatusmap)[hostPtr];
         if( status == HI_stale ) {
             //Set the status to stale if GPU variable is freed.
-            std::multimap<int, std::map<const void *,void*> >::iterator it = tconf->device->masterAddressTableMap[tconf->threadID]->find(asyncID+tconf->asyncID_offset);
-            std::map<const void *,void*>::iterator it2 =	(it->second).find(hostPtr);
-            if(it2 == (it->second).end() ) {
+            addresstable_t::iterator it = tconf->device->masterAddressTableMap[tconf->threadID]->find(asyncID+tconf->asyncID_offset);
+            std::map<const void *,void*>::iterator it2 =	(it->second)->find(hostPtr);
+            if(it2 == (it->second)->end() ) {
                 (*devicememstatusmap)[hostPtr] = status;
             }
             /*
@@ -1598,7 +1690,7 @@ void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t st
                 }
                 */
 				asyncfreetable_t *postponedFreeTable = tconf->device->postponedFreeTableMap[tconf->threadID];
-                std::multimap<int, const void*>::iterator hostPtrIter = postponedFreeTable->find(asyncID+tconf->asyncID_offset);
+                asyncfreetable_t::iterator hostPtrIter = postponedFreeTable->find(asyncID+tconf->asyncID_offset);
 
                 while(hostPtrIter != postponedFreeTable->end()) {
                     //fprintf(stderr, "[in HI_postponed_free()] Freeing on stream %d, address %x\n", asyncID, hostPtrIter->second);
@@ -1644,7 +1736,8 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const(%d)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const(%ld)\n", count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	if( hostPtr == NULL ) {
@@ -1659,7 +1752,8 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
     return_status = tconf->device->HI_memcpy_const(hostPtr, constName, kind, count);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const(%d)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const(%ld)\n", count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;

@@ -18,17 +18,13 @@ public class OpenCLSpecifier extends Specifier
   private static HashMap<String, OpenCLSpecifier> spec_map = new HashMap(24);
 
   private static String[] names =
-    {   "__kernel", "__global", "__local", "__constant",
-    	"size_t", "std::string"};
+    {   "__kernel", "__global", "__local", "__constant" };
 
   /* The following type-specifiers are added to support CUDA */
   public static final OpenCLSpecifier OPENCL_KERNEL	= new OpenCLSpecifier(0);
   public static final OpenCLSpecifier OPENCL_GLOBAL	= new OpenCLSpecifier(1);
   public static final OpenCLSpecifier OPENCL_LOCAL	= new OpenCLSpecifier(2);
   public static final OpenCLSpecifier OPENCL_CONSTANT	= new OpenCLSpecifier(3);
-  /* size_t is a macro, but treat it as a specifier for convenience */
-  public static final OpenCLSpecifier SIZE_T = new OpenCLSpecifier(4);
-  public static final OpenCLSpecifier STRING	= new OpenCLSpecifier(5);
 
   protected int cvalue;
 

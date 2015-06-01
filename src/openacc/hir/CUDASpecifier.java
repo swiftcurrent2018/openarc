@@ -19,7 +19,7 @@ public class CUDASpecifier extends Specifier
   private static String[] names =
     {   "__global__", "__shared__", "__host__",
     	"__device__", "__constant__", "__noinline__",
-    	"dim3", "cudaChannelFormatDesc", "size_t", "__restrict__", "\"C\"", "std::string"};
+    	"dim3", "cudaChannelFormatDesc", "__restrict__" };
   
   /* The following type-specifiers are added to support CUDA */
   public static final CUDASpecifier CUDA_GLOBAL	= new CUDASpecifier(0);
@@ -31,10 +31,7 @@ public class CUDASpecifier extends Specifier
   public static final CUDASpecifier CUDA_DIM3	= new CUDASpecifier(6);
   public static final CUDASpecifier CUDA_cudaChannelFormatDesc	= new CUDASpecifier(7);
   /* size_t is a macro, but treat it as a specifier for convenience */
-  public static final CUDASpecifier SIZE_T = new CUDASpecifier(8);
-  public static final CUDASpecifier CUDA_RESTRICT	= new CUDASpecifier(9);
-  public static final CUDASpecifier EXTERN_C	= new CUDASpecifier(10);
-  public static final CUDASpecifier STRING	= new CUDASpecifier(11);
+  public static final CUDASpecifier CUDA_RESTRICT	= new CUDASpecifier(8);
 
   protected int cvalue;
 

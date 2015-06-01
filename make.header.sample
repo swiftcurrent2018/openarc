@@ -34,8 +34,6 @@
 #     only if LLVM support is enabled):                            #
 #       LLVM_TARGET_TRIPLE      : LLVM target triple string        #
 #       LLVM_TARGET_DATA_LAYOUT : LLVM target data layout string   #
-#       LLVM_LLC                : the llc executable included in   #
-#                                 your LLVM installation.          #
 #       PERL                    : location of perl                 #
 #   - Modify target-specific test configuration (required only for #
 #     some examples, benchmarks, or other tests):                  #
@@ -43,6 +41,9 @@
 #       MPI_LIBDIR   : library path for MPI                        #
 #       FC           : fortran compiler                            #
 #       SPEC_CPU2006 : SPEC CPU 2006 installation directory        #
+#       SPEC_CFG     : SPEC CPU 2006 config file (if value does    #
+#                      not contain "/", then it names a sample     #
+#                      file included with OpenARC)                 #
 #                                                                  #
 # When specifying CPP, you must specify a C preprocessor and       #
 # command-line options that disable C language extensions that     #
@@ -50,7 +51,8 @@
 # clang, we have found that /usr/include/stdlib.h uses clang's     #
 # block reference extension.  To suppress that usage, we specify   #
 # CPP as gcc 4.2 (from MacPorts package apple-gcc42) with the -E   #
-# and -std=c99 options.                                            #
+# and -std=c99 options. (CF: GCC (Apple LLVM version 6.1.0) on OSX #
+# V10.10 ignores -std=c99 option.)                                 #
 #                                                                  #
 # LLVM_TARGET_TRIPLE and LLVM_TARGET_DATA_LAYOUT describe the      #
 # target platform to LLVM.  If you have clang installed, you can   #
@@ -121,13 +123,13 @@ endif
 
 #LLVM_TARGET_TRIPLE =
 #LLVM_TARGET_DATA_LAYOUT =
-#LLVM_LLC =
 #PERL = perl
 
 #MPI_INCLUDES =
 #MPI_LIBDIR =
 #FC =
 #SPEC_CPU2006 =
+#SPEC_CFG =
 
 endif
 
@@ -171,13 +173,13 @@ endif
 
 LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
 LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128
-LLVM_LLC = llc
 PERL = perl
 
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.4-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.4-rhel6-gnu/lib
-#FC =
-#SPEC_CPU2006 =
+FC = gfortran
+SPEC_CPU2006 = /spec/cpu2006/1.0.1
+SPEC_CFG = spec-newark.cfg.in
 
 endif
 
@@ -207,13 +209,13 @@ GFRONTEND_DEBUG = -g
 
 #LLVM_TARGET_TRIPLE =
 #LLVM_TARGET_DATA_LAYOUT =
-#LLVM_LLC =
 #PERL = perl
 
 #MPI_INCLUDES =
 #MPI_LIBDIR =
 #FC =
 #SPEC_CPU2006 =
+#SPEC_CFG =
 
 endif
 
@@ -228,6 +230,8 @@ GOMP_LIBS = -lgomp
 CC = gcc
 CXX = g++
 CPP = $(CC) -E -std=c99
+#On OSX V10.10, use external GNU compiler.
+#CPP = /usr/local/bin/gcc -E -std=c99
 GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
 GPROFILEMACROS = -D_OPENARC_PROFILE_=1
 BACKENDCXX = g++
@@ -244,13 +248,13 @@ GFRONTEND_DEBUG = -g
 
 LLVM_TARGET_TRIPLE = x86_64-apple-macosx10.9.0
 LLVM_TARGET_DATA_LAYOUT = e-m:o-i64:64-f80:128-n8:16:32:64-S128
-LLVM_LLC = llc
 PERL = perl
 
 MPI_INCLUDES = /opt/local/include/openmpi-mp
 MPI_LIBDIR = /opt/local/lib/openmpi-mp
 FC = gfortran-mp-4.9
 SPEC_CPU2006 = /spec/cpu2006/1.0.1
+SPEC_CFG = spec-osx.cfg.in
 
 endif
 
@@ -264,29 +268,30 @@ GOMP_FLAGS = -openmp
 GOMP_LIBS =
 CC = icc
 CXX = icpc
-CPP = $(CC) -E
+#CPP = $(CC) -E
+CPP = gcc -E -std=c99
 GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
 GPROFILEMACROS = -D_OPENARC_PROFILE_=1
 BACKENDCXX = icpc
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
-GBACKEND_INCLUDES = 
-GBACKEND_LIBS = -lOpenCL
+GBACKEND_INCLUDES = -I/global/opt/intel/opencl/include
+GBACKEND_LIBS = -L/nics/d/home/lees2/local/icd/bin -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -lOpenCL
+GFRONTEND_INCLUDES = -I$(OPENARCLIB) -I/global/opt/intel/opencl/include
+GFRONTEND_LIBS = -L/nics/d/home/lees2/local/icd/bin -L$(OPENARCLIB) -lOpenCL
 GFRONTEND_DEBUG = -g
 
 #LLVM_TARGET_TRIPLE =
 #LLVM_TARGET_DATA_LAYOUT =
-#LLVM_LLC =
 #PERL = perl
 
 #MPI_INCLUDES =
 #MPI_LIBDIR =
 #FC =
 #SPEC_CPU2006 =
+#SPEC_CFG =
 
 endif
 
@@ -298,10 +303,15 @@ endif
 #
 # Returns CMD specified absolutely if CMD contains "/" or if CMD is found in
 # $PATH.  Otherwise, returns just CMD.
+#
+# The seemingly redundant "< /dev/null" is needed, or make fails to run the
+# "type" command on newark.  The trouble is that "type" is a shell built-in,
+# and make on some platforms tries to run it as an executable if the command
+# line doesn't contain any special shell characters.
 cmd2abs = $(strip $(if $(findstring /, $(filter-out /%, \
                                          $(firstword $(1)))), \
                        $(shell pwd)/$(strip $(firstword $(1))), \
-                       $(if $(shell type -P $(firstword $(1))), \
-                            $(shell type -P $(firstword $(1))), \
+                       $(if $(shell type -P $(firstword $(1)) </dev/null), \
+                            $(shell type -P $(firstword $(1)) </dev/null), \
                             $(firstword $(1)))) \
                   $(wordlist 2, $(words $(1)), $(1)))

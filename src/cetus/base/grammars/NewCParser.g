@@ -226,6 +226,9 @@ public boolean isTypedefName(String name)
   }
   if (name.equals("__builtin_va_list"))
     return true;
+  // [NVL support added by Joel E. Denny]
+  if (name.equals("__builtin_nvl_heap"))
+    return true;
 
   //System.err.println("Typename "+name+" not found");
   return false;

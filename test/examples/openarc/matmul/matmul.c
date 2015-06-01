@@ -36,7 +36,7 @@ MatrixMultiplication_openacc(float * a, float * b, float * c)
 #ifdef _OPENACCM
   acc_init(acc_device_default);
 #endif
-#pragma acc data copyout(a[0:(M*N)]), copyin(b[0:(M*P)],c[0:(P*N)])
+#pragma acc data pcopyout(a[0:(M*N)]), copyin(b[0:(M*P)],c[0:(P*N)])
   {
 #pragma acc kernels loop independent gang
     for (i=0; i<M; i++){

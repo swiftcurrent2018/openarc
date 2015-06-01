@@ -35,6 +35,19 @@ DEFSET_CPU = -DVERIFICATION=$(VERIFICATION) -D_NCLUSTERS=$(_NCLUSTERS) -D_NATTRI
 DEFSET_ACC = -DVERIFICATION=$(VERIFICATION) -D_NCLUSTERS=$(_NCLUSTERS) -D_NATTRIBUTES=${_NATTRIBUTES} -D_NPOINTS=${_NPOINTS} -D_UNROLLFAC=${_UNROLLFAC}
 
 #########################################################
+# Makefile options that the user can overwrite          #
+# OMP: set to 1 to use OpenMP (default: 0)              # 
+# MODE: set to profile to use a built-in profiling tool #
+#       (default: normal)                               #
+#       If this is set to profile, the runtime system   #
+#       will print profiling results according to the   #
+#       verbosity level set by OPENARCRT_VERBOSITY      #
+#       environment variable.                           # 
+#########################################################
+OMP ?= 0
+MODE ?= normal
+
+#########################################################
 # Use the following macros to give program-specific     #
 # compiler flags and libraries                          #
 # - CFLAGS1 and CLIBS1 to compile the input C program   #

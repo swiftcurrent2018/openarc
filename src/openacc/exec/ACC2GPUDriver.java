@@ -23,6 +23,7 @@ import openacc.codegen.*;
  */
 public class ACC2GPUDriver extends Driver
 {
+	private final String preprocessorDefault;
 	private Set<String> optionsWithIntArgument;
 	static private String openacc_version = "201111";
 	private static final Set<String> cachingOpts =
@@ -93,6 +94,9 @@ public class ACC2GPUDriver extends Driver
       options.add(options.UTILITY, "noPrintCode",
         "do not print final code, whether C or LLVM IR");
 
+        options.add(options.UTILITY,
+            "debug_preprocessor_command",
+            "Print the command and options to be used for preprocessing and exit");
 	    
 	    options.add(options.UTILITY, "acc2gpu", "N",
         "Generate a Host+Accelerator program from OpenACC program: \n" +
@@ -362,19 +366,17 @@ public class ACC2GPUDriver extends Driver
     // Specify "cc -E" not "cpp" as the preprocessor because, if it's clang
     // (3.5.1), "cpp" implies "-traditional-cpp", which is not compatible with
     // some system header files (MAC OS X 10.9.5).
-    //
-    // Currently, the LLVM backend does not support OpenACC, so do not define
-    // _OPENACC if -emitLLVM.
 
     //setOptionValue("acc2gpu", "1");
     //Replace default preprocessor options.
     //setOptionValue("preprocessor", "cc -E -CC -I. -D _OPENARC_ -D _OPENACC="+openacc_version);
     //DEBUG: for Mac, the following option should be used, instead.
 
+    // Do not let java String interning happen here so that we can compare by
+    // reference later to see if the default value is still set.
     String cpp = BuildConfig.getBuildConfig().getProperty("cpp");
-    setOptionValue("preprocessor", cpp + " -CC -I. -D_OPENARC_"
-                   + (getOptionValue("emitLLVM") != null
-                      ? "" : " -D_OPENACC="+openacc_version));
+    preprocessorDefault = cpp + " -CC -I.";
+    setOptionValue("preprocessor", preprocessorDefault);
 	}
 	
 	/**
@@ -667,6 +669,15 @@ public class ACC2GPUDriver extends Driver
 	public void run(String[] args)
 	{
 		parseCommandLine(args);
+		//Add include-path to the preprocessor command if existing.
+		//[DEBUG] Current implementation allows only one "addIncludePath" commandline option.
+		//To specify multiple include-paths, they should be specified in the configuration file.
+		String value = getOptionValue("addIncludePath");
+		if( value != null )
+		{
+			String newCPPCMD = getOptionValue("preprocessor") + " -I" + value;
+			setOptionValue("preprocessor", newCPPCMD);
+		}
 		parseGpuConfFile();
 		//If help, version, dump-options, or dump-system-options is included
 		//in the user-configuration file, exit after running specified task.
@@ -695,13 +706,21 @@ public class ACC2GPUDriver extends Driver
 			//explicitly disables it.
 			setOptionValue("acc2gpu", "1");
 		}
-		
-		String value = getOptionValue("addIncludePath");
-		if( value != null )
+
+		// Currently, the LLVM backend does not support OpenACC, so do not define
+		// _OPENACC if -emitLLVM.
+		String preprocessorString = getOptionValue("preprocessor");
+		if( getOptionValue("emitLLVM") == null )
 		{
-			String newCPPCMD = getOptionValue("preprocessor") + " -I" + value;
-			setOptionValue("preprocessor", newCPPCMD);
+			preprocessorString += " -D_OPENACC=" + openacc_version;
 		}
+		//_OPENARC_ internal macro is always added.
+		preprocessorString += " -D_OPENARC_";
+		setOptionValue("preprocessor",preprocessorString);
+        if(getOptionValue("debug_preprocessor_command") != null) {
+        	Tools.exit("\npreprocessor command to be used = " + getOptionValue("preprocessor") + "\n");
+        }
+		
 		HashMap<String, HashMap<String,Object>> userDirectives = parseUserDirectiveFile();
 		HashMap<String, Object> tuningConfigs = parseTuningConfig();
 
@@ -839,8 +858,15 @@ public class ACC2GPUDriver extends Driver
 
 						if (options.contains(option_name)) {
 							// Commandline input has higher priority than this configuration input.
-							if( getOptionValue(option_name) == null ) {
+							if( option_name.equals("preprocessor") ) {
+								Tools.exit("[ERROR in configuration file parsing] preprocessor option should not be specified in the configuration file; exit!"); 
+							} else if( getOptionValue(option_name) == null ) {
 								setOptionValue(option_name, opt.substring(eq + 1));
+								if( option_name.equals("addIncludePath") ) {
+									String tInc = opt.substring(eq + 1);
+									String newCPPCMD = getOptionValue("preprocessor") + " -I" + tInc;
+									setOptionValue("preprocessor", newCPPCMD);
+								}
 							} else {
 								if( option_name.equals("verbosity") || option_name.equals("outdir") ) {
 									setOptionValue(option_name, opt.substring(eq + 1));

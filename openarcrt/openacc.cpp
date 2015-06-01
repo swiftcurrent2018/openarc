@@ -2,7 +2,6 @@
 #include <string.h>
 #include <cstring>
 #include "openacc.h"
-#include "openaccrt.h"
 #include "openaccrt_ext.h"
 
 static const char *openarcrt_verbosity_env = "OPENARCRT_VERBOSITY";
@@ -43,25 +42,20 @@ int acc_get_num_devices( acc_device_t devtype ) {
     if( HI_hostinit_done == 0 ) {
         HI_hostinit(0);
     }
-    //DEBUG: Do we need to set up CUDA context?
-    if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
-            (devtype == acc_device_default) || (devtype == acc_device_radeon)) {
+    if( (devtype == acc_device_not_host) || (devtype == acc_device_default) ) {
+		tconf->setDefaultDevice();
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+        count = OpenCLDriver::HI_get_num_devices(tconf->acc_device_type_var);
+#else
+		count = CudaDriver::HI_get_num_devices(tconf->acc_device_type_var);
+#endif
+    } else if( (devtype == acc_device_nvidia) || (devtype == acc_device_radeon)) {
         devtype = acc_device_gpu;
-        if(tconf->genOCL) {
-#ifdef OPENARC_ARCH
-#if OPENARC_ARCH == 0
-			count = 0;
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+        count = OpenCLDriver::HI_get_num_devices(devtype);
 #else
-            count = OpenCLDriver::HI_get_num_devices(devtype);
+		count = CudaDriver::HI_get_num_devices(devtype);
 #endif
-#else
-			count = 0;
-#endif
-        } else {
-#if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
-            count = CudaDriver::HI_get_num_devices(devtype);
-#endif
-        }
     } else if( devtype == acc_device_host ) {
         count = 1;
     } else if( devtype == acc_device_xeonphi ) {
@@ -102,11 +96,11 @@ void acc_set_device_type( acc_device_t devtype ) {
 #endif
     HostConf_t * tconf = getHostConf();
     tconf->user_set_device_type_var =  devtype;
-    if( devtype == acc_device_default || devtype == acc_device_nvidia || devtype == acc_device_radeon ) {
+    if( devtype == acc_device_nvidia || devtype == acc_device_radeon ) {
         //tconf->user_set_device_type_var = acc_device_gpu;
         tconf->acc_device_type_var = acc_device_gpu;
         tconf->isOnAccDevice = 1;
-    } else if ( devtype == acc_device_not_host) {
+    } else if ( (devtype == acc_device_not_host) || (devtype == acc_device_default) ) {
 #if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
         tconf->acc_device_type_var = acc_device_xeonphi;
 #else
@@ -238,11 +232,16 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
         tconf->device = HostConf::devMap.at(devtype).at(devnum);
         tconf->acc_device_type_var = acc_device_xeonphi;
         tconf->acc_device_num_var = devnum;
-        if(tconf->device->init_done != 1) {
-            tconf->device->init();
-        } else {
-            tconf->device->createKernelArgMap();
-        }
+#ifdef _OPENMP
+		#pragma omp critical(acc_set_device_num_critical)
+#endif
+		{
+        	if(tconf->device->init_done != 1) {
+            	tconf->device->init();
+        	} else {
+            	tconf->device->createKernelArgMap();
+        	}
+		}
     } else if (devtype == acc_device_not_host) {
         tconf->setDefaultDevice();
     	tconf->user_set_device_type_var = devtype;
@@ -257,12 +256,16 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
 		}
         tconf->device = HostConf::devMap.at(tconf->acc_device_type_var).at(devnum);
         tconf->acc_device_num_var = devnum;
-        if(tconf->device->init_done != 1) {
-            tconf->device->init();
-        } else {
-            tconf->device->createKernelArgMap();
-        }
-
+#ifdef _OPENMP
+		#pragma omp critical(acc_set_device_num_critical)
+#endif
+		{
+        	if(tconf->device->init_done != 1) {
+            	tconf->device->init();
+        	} else {
+            	tconf->device->createKernelArgMap();
+        	}
+		}
     } else if (devtype == acc_device_default) {
         tconf->setDefaultDevice();
 		int numDevs = HostConf::devMap.at(tconf->acc_device_type_var).size();
@@ -276,11 +279,38 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
 		}
         tconf->device = HostConf::devMap.at(tconf->acc_device_type_var).at(devnum);
         tconf->acc_device_num_var = devnum;
-        if(tconf->device->init_done != 1) {
-            tconf->device->init();
-        } else {
-            tconf->device->createKernelArgMap();
-        }
+#ifdef _OPENMP
+		#pragma omp critical(acc_set_device_num_critical)
+#endif
+		{
+        	if(tconf->device->init_done != 1) {
+            	tconf->device->init();
+        	} else {
+            	tconf->device->createKernelArgMap();
+        	}
+		}
+    } else if (devtype == acc_device_current) {
+		int numDevs = HostConf::devMap.at(tconf->acc_device_type_var).size();
+		if( numDevs <= devnum ) {
+			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
+			exit(1);
+		} else {
+#ifdef _OPENARC_PROFILE_
+			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, tconf->acc_device_type_var);
+#endif
+		}
+        tconf->device = HostConf::devMap.at(tconf->acc_device_type_var).at(devnum);
+        tconf->acc_device_num_var = devnum;
+#ifdef _OPENMP
+		#pragma omp critical(acc_set_device_num_critical)
+#endif
+		{
+        	if(tconf->device->init_done != 1) {
+            	tconf->device->init();
+        	} else {
+            	tconf->device->createKernelArgMap();
+        	}
+		}
     } else if( devtype == acc_device_host ) {
         //tconf->device = tconf->devMap.at(devtype).at(devnum);
         tconf->device = NULL;
@@ -335,9 +365,11 @@ int acc_get_device_num( acc_device_t devtype ) {
 	int return_data;
     HostConf_t * tconf = getHostConf();
     if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
-            (devtype == acc_device_default) || (devtype == acc_device_radeon) || (devtype == acc_device_gpu)  ) {
+            (devtype == acc_device_default) || (devtype == acc_device_radeon) || (devtype == acc_device_gpu) || (devtype == acc_device_xeonphi)  ) {
         return_data = tconf->acc_device_num_var;
     } else if( devtype == acc_device_host ) {
+        return_data = tconf->acc_device_num_var;
+    } else if( devtype == acc_device_current ) {
         return_data = tconf->acc_device_num_var;
     } else {
         fprintf(stderr, "[ERROR in acc_get_device_num()] Not supported device type %d; exit!\n", devtype);
@@ -357,13 +389,23 @@ int acc_async_test( int asyncID ) {
 		fprintf(stderr, "[OPENARCRT-INFO] enter acc_async_test(%d)\n", asyncID);
 	}
 #endif
-	int return_data;
+	int return_data = 1;
     HostConf_t * tconf = getHostConf();
 	if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in acc_async_test()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
 	}
-    return_data = tconf->device->HI_async_test(asyncID+tconf->asyncID_offset);
+    //return_data = tconf->device->HI_async_test(asyncID+tconf->asyncID_offset);
+    HostConf_t * ttconf;
+	for(std::vector<HostConf_t *>::iterator it = hostConfList.begin(); it != hostConfList.end(); ++it) {
+		ttconf = *it;
+		if(ttconf->device != NULL) {
+			if( ttconf->device->HI_async_test_ifpresent(asyncID+ttconf->asyncID_offset) == 0 ) {
+				return_data = 0;
+				break;
+			}
+		}
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_async_test(%d)\n", asyncID);
@@ -405,7 +447,14 @@ void acc_wait( int arg ) {
         fprintf(stderr, "[ERROR in acc_wait()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
 	}
-    tconf->device->HI_wait(arg+tconf->asyncID_offset);
+    //tconf->device->HI_wait(arg+tconf->asyncID_offset);
+    HostConf_t * ttconf;
+	for(std::vector<HostConf_t *>::iterator it = hostConfList.begin(); it != hostConfList.end(); ++it) {
+		ttconf = *it;
+		if(ttconf->device != NULL) {
+			ttconf->device->HI_wait_ifpresent(arg+ttconf->asyncID_offset);
+		}
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_wait(%d)\n", arg);
@@ -469,21 +518,14 @@ void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[] ) {
 	HI_kernelNames = kernelNames;
     HostConf_t * tconf = getInitHostConf();
     //Set device type.
-    if( devtype == acc_device_default ) {
+    if( (devtype == acc_device_default) || (devtype == acc_device_not_host) ) {
 		tconf->setDefaultDevice();
 	} else {
 		//[CAUTION] device type should be set consistently with 
 		//setDefaultDevice().
     	tconf->user_set_device_type_var =  devtype;
-		if( (devtype == acc_device_nvidia) || (devtype == acc_device_radeon) ||
-			(devtype == acc_device_default) ) {
+		if( (devtype == acc_device_nvidia) || (devtype == acc_device_radeon) ) {
         	tconf->acc_device_type_var = acc_device_gpu;
-		} else if( devtype == acc_device_not_host ) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
-        	tconf->acc_device_type_var = acc_device_xeonphi;
-#else
-        	tconf->acc_device_type_var = acc_device_gpu;
-#endif
 		} else {
         	tconf->acc_device_type_var = devtype;
 		}
@@ -525,21 +567,14 @@ void acc_init( acc_device_t devtype ) {
 	HI_num_kernels = 0;
     HostConf_t * tconf = getInitHostConf();
     //Set device type.
-    if( devtype == acc_device_default ) {
+    if( (devtype == acc_device_default) || (devtype == acc_device_not_host) ) {
 		tconf->setDefaultDevice();
 	} else {
 		//[CAUTION] device type should be set consistently with 
 		//setDefaultDevice().
     	tconf->user_set_device_type_var =  devtype;
-		if( (devtype == acc_device_nvidia) || (devtype == acc_device_radeon) ||
-			(devtype == acc_device_default) ) {
+		if( (devtype == acc_device_nvidia) || (devtype == acc_device_radeon) ) {
         	tconf->acc_device_type_var = acc_device_gpu;
-		} else if( devtype == acc_device_not_host ) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
-        	tconf->acc_device_type_var = acc_device_xeonphi;
-#else
-        	tconf->acc_device_type_var = acc_device_gpu;
-#endif
 		} else {
         	tconf->acc_device_type_var = devtype;
 		}
@@ -684,7 +719,14 @@ void acc_wait_async(int arg, int async) {
         fprintf(stderr, "[ERROR in acc_wait_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
 	}
-    tconf->device->HI_wait_async(arg+tconf->asyncID_offset, async+tconf->asyncID_offset);
+    //tconf->device->HI_wait_async(arg+tconf->asyncID_offset, async+tconf->asyncID_offset);
+    HostConf_t * ttconf;
+	for(std::vector<HostConf_t *>::iterator it = hostConfList.begin(); it != hostConfList.end(); ++it) {
+		ttconf = *it;
+		if(ttconf->device != NULL) {
+			ttconf->device->HI_wait_async_ifpresent(arg+ttconf->asyncID_offset, async+ttconf->asyncID_offset);
+		}
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_wait_async(%d, %d)\n", arg, async);

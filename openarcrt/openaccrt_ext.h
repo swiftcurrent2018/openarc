@@ -15,12 +15,7 @@
 #endif
 #endif
 
-typedef std::map<const void *, void *> addressmap_t;
-typedef std::map<const void *, int> countermap_t;
-typedef std::map<const void *, size_t> sizemap_t;
-typedef std::map<int, addressmap_t *> asyncphostmap_t;
-typedef std::map<int, sizemap_t *> asynchostsizemap_t;
-typedef std::map<const void *, HI_memstatus_t> memstatusmap_t;
+#include "openaccrt.h"
 
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
 typedef std::map<int, cudaStream_t> asyncmap_t;
@@ -92,11 +87,11 @@ public:
     HI_error_t init();
     HI_error_t HI_register_kernels(std::vector<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
-    HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value);
+    HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
     HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
     HI_error_t HI_synchronize();
     HI_error_t destroy();
-    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, int count, int asyncID);
+    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID);
     HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
     HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID);
     HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID);
@@ -114,7 +109,7 @@ public:
     void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType);
 	
 	// Experimental API to support unified memory //
-    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, int count, int asyncID);
+    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID);
     HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
     HI_error_t HI_free_unified( const void *hostPtr, int asyncID);
 
@@ -126,12 +121,15 @@ public:
     HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
     void HI_set_async(int asyncId);
     void HI_wait(int arg);
+    void HI_wait_ifpresent(int arg);
     void HI_waitS1(int arg);
     void HI_waitS2(int arg);
     void HI_wait_all();
     void HI_wait_async(int arg, int async);
+    void HI_wait_async_ifpresent(int arg, int async);
     void HI_wait_all_async(int async);
     int HI_async_test(int asyncId);
+    int HI_async_test_ifpresent(int asyncId);
     int HI_async_test_all();
     CUstream getQueue(int async) {
 		if( queueMap.count(async + 2) == 0 ) {
@@ -148,6 +146,15 @@ public:
 			exit(1);
 		}
         return threadQueueEventMap.at(get_thread_id()).at(async + 2);
+    }
+
+    CUevent getEvent_ifpresent(int async) {
+		int thread_id = get_thread_id();
+		if( (threadQueueEventMap.count(thread_id) == 0) || (threadQueueEventMap.at(thread_id).count(async + 2) == 0) ) {
+			return NULL;
+		} else {
+        	return threadQueueEventMap.at(get_thread_id()).at(async + 2);
+		}
     }
 
 } CudaDriver_t;
@@ -173,11 +180,11 @@ public:
     HI_error_t init();
     HI_error_t HI_register_kernels(std::vector<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
-    HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value);
+    HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
     HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
     HI_error_t HI_synchronize();
     HI_error_t destroy();
-    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, int count, int asyncID);
+    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID);
     HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
     HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID);
     HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID);
@@ -194,7 +201,7 @@ public:
     void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType);
 	
 	// Experimental API to support unified memory //
-    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, int count, int asyncID);
+    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID);
     HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
     HI_error_t HI_free_unified( const void *hostPtr, int asyncID);
 
@@ -205,12 +212,15 @@ public:
 
     void HI_set_async(int asyncId);
     void HI_wait(int arg);
+    void HI_wait_ifpresent(int arg);
     void HI_waitS1(int arg);
     void HI_waitS2(int arg);
     void HI_wait_all();
     void HI_wait_async(int arg, int async);
+    void HI_wait_async_ifpresent(int arg, int async);
     void HI_wait_all_async(int async);
     int HI_async_test(int asyncId);
+    int HI_async_test_ifpresent(int asyncId);
     int HI_async_test_all();
 
     cl_command_queue getQueue(int async) {
@@ -228,6 +238,15 @@ public:
 			exit(1);
 		}
         return &(threadQueueEventMap.at(get_thread_id()).at(async + 2));
+    }
+
+    cl_event * getEvent_ifpresent(int async) {
+		int thread_id = get_thread_id();
+		if( (threadQueueEventMap.count(thread_id) == 0) || (threadQueueEventMap.at(thread_id).count(async + 2) == 0) ) {
+			return NULL;
+		} else {
+        	return &(threadQueueEventMap.at(get_thread_id()).at(async + 2));
+		}
     }
 
 
@@ -257,6 +276,7 @@ public:
 	//by multiple host threads.
     static devmap_t devMap;
     HostConf() {
+		device = NULL;
         HI_init_done = 0;
         HI_kernels_registered = 0;
         acc_device_type_var = acc_device_none;

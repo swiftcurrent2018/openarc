@@ -208,7 +208,7 @@ public abstract class ACC2GPUTranslator {
 		}
 		VariableDeclarator kernel_declarator = new VariableDeclarator(new NameID("kernel_str"), new ArraySpecifier(new IntegerLiteral(accKernelsList.size())));
 		Identifier kernel_str = new Identifier(kernel_declarator);
-		Declaration kernel_decl = new VariableDeclaration(CUDASpecifier.STRING, kernel_declarator);
+		Declaration kernel_decl = new VariableDeclaration(OpenACCSpecifier.STRING, kernel_declarator);
 		DeclarationStatement kernel_stmt = new DeclarationStatement(kernel_decl);
 		for( int i=0; i<main_List.size(); i++ ) {
 			Procedure tmain = main_List.get(i);

@@ -8,9 +8,12 @@ use Carp;
 use FindBin qw($RealBin);
 
 my $CPP = '@CPP@';
-my $LLVM_LLC = '@LLVM_LLC@';
 my $CC = '@CC@';
 my $CETUS_OUTDIR = 'cetus_output';
+
+my $LLVM_BIN = "$RealBin/../llvm/install/bin";
+my $LLVM_LLC = "$LLVM_BIN/llc";
+my $LLVM_OPT = "$LLVM_BIN/opt";
 
 exit main(@ARGV);
 
@@ -22,9 +25,9 @@ sub main {
       "Cetus output directory cleanup");
 
   # parse args
-  my $outOpt = "";
-  my $cppOpts = "";
-  my $ldOpts = "";
+  my $outOptFile;
+  my $cppOpts = " -I$RealBin/../nvl/include";
+  my $ldOpts = " -L$RealBin/../nvl/rt";
   my $llcOpts = "";
   my $inCFileArgs = "";
   my $inOFileArgs = "";
@@ -33,7 +36,7 @@ sub main {
     my $arg = $_[$argi];
     if ($arg eq "-o") {
       die if $#_ < ++$argi;
-      $outOpt = " -o " . shesc($_[$argi]);
+      $outOptFile = $_[$argi];
     }
     elsif ($arg =~ /^-D/ || $arg =~ /^-I/ || $arg =~ /^-U/) {
       my $opt = substr $arg, 0, 2;
@@ -67,6 +70,7 @@ sub main {
   }
 
   # run openarc and llc
+  my $outFiles = "";
   if ($inCFileArgs) {
     my $cmd
       = shesc("$RealBin/openarc")
@@ -76,23 +80,32 @@ sub main {
         . "$inCFileArgs";
     run($cmd, "openarc");
     for my $file (<$CETUS_OUTDIR/*.bc>) {
-      $cmd = shesc($LLVM_LLC)." -filetype=obj".$llcOpts." ".shesc($file);
-      $cmd .= $outOpt if ($compileOnly);
-      run($cmd, "llc for $file");
-      if ($compileOnly && !$outOpt) {
-        my $ofile = $file;
-        $ofile =~ s/(?:\.[^.]*)?$/\.o/;
-        my $cmd = "mv ".shesc($ofile)." .";
-        run($cmd, "moving object file");
+      my $outFile;
+      if ($compileOnly && $outOptFile) {
+        $outFile = $outOptFile;
       }
+      else {
+        $outFile = $file;
+        $outFile =~ s/(?:.*\/)?([^.]*|.*\.)(?:.*)?/$1.o/;
+        if (!$compileOnly) {
+          $outFile = "$CETUS_OUTDIR/$outFile";
+        }
+      }
+      $outFiles .= " ".shesc($outFile);
+      $cmd = shesc($LLVM_OPT)." -nvl ".shesc($file)
+             ." | ".shesc($LLVM_LLC)." -filetype=obj".$llcOpts
+             ." -o ".shesc($outFile);
+      run($cmd, "opt and llc for $file");
     }
   }
 
   # run linker
   if (!$compileOnly) {
-    my $cmd = $CC . $outOpt
-              . ($inCFileArgs ? " $CETUS_OUTDIR/*.o" : "")
-              . $inOFileArgs . $ldOpts;
+    my $cmd = $CC;
+    if ($outOptFile) {
+      $cmd .= " -o ".$outOptFile;
+    }
+    $cmd .= $outFiles . $inOFileArgs . $ldOpts;
     run($cmd, "linking");
   }
 

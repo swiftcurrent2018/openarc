@@ -773,10 +773,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					tu.addDeclarationAfter(numBlocks_decl, bytes_decl);
 				}
 			}
-			str = new StringBuilder(128);
-			if( opt_GenDistOpenACC ) {
-            	if( containsACCAnnotations ) {
-                	str.append("\n#pragma omp threadprivate(gpuNumThreads, totalGpuNumThreads, gpuNumBlocks, gpuBytes)");
+			str = new StringBuilder(256);
+            if( containsACCAnnotations ) {
+            	if( opt_GenDistOpenACC ) {
+                	str.append("\n#pragma omp threadprivate(gpuNumThreads, totalGpuNumThreads, gpuNumBlocks, gpuBytes)\n");
+            	} else {
+            		str.append("\n#ifdef _OPENMP\n");
+                	str.append("#pragma omp threadprivate(gpuNumThreads, totalGpuNumThreads, gpuNumBlocks, gpuBytes)\n");
+            		str.append("#endif\n");
             	}
 			}
 			str.append("\n#endif \n/* End of __O2G_HEADER__ */\n");
@@ -1370,6 +1374,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							} else if( targetSymbolTable instanceof Procedure ) {
 								targetSymbolTable = ((Procedure)targetSymbolTable).getBody();
 							}
+							if( targetSymbolTable instanceof CompoundStatement ) {
+								if( AnalysisTools.ipFindFirstPragmaInParent(at, OmpAnnotation.class, new HashSet(Arrays.asList("parallel", "task")), false, null, null) != null ) { 
+									targetSymbolTable = (CompoundStatement)at.getParent();
+								}
+							}
 							List<Specifier> clonedspecs = new ChainedList<Specifier>();
 							clonedspecs.addAll(typeSpecs);
 							clonedspecs.remove(Specifier.STATIC);
@@ -1408,6 +1417,15 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								VariableDeclaration gpu_decl = new VariableDeclaration(clonedspecs, 
 										gpu_declarator);
 								gpuVar = new Identifier(gpu_declarator);
+								StringBuilder str2 = new StringBuilder(256);
+								str2.append("#ifdef _OPENMP\n");
+								str2.append("#pragma omp threadprivate(");
+								str2.append(str.toString());
+								str2.append(")\n");
+								str2.append("#endif");
+								CodeAnnotation tOmpAnnot = new CodeAnnotation(str2.toString());
+								AnnotationDeclaration tAnnotDecl = new AnnotationDeclaration(tOmpAnnot);
+								//AnnotationStatement tAnnotStmt = new AnnotationStatement(tOmpAnnot);
 								if( targetSymbolTable instanceof TranslationUnit ) {
 									symSet = main_TrUnt.getSymbols();
 									gpu_sym = AnalysisTools.findsSymbol(symSet, str.toString());
@@ -1427,6 +1445,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 											gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 													gpu_declarator);
 											tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+											parentTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl);
 											parentTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
 											OpenACCHeaderEndMap.put(parentTrUnt, gpu_decl);
 											gpuVar = new Identifier(gpu_declarator);
@@ -1441,6 +1460,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 										gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 												gpu_declarator);
 										Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+										parentTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl);
 										parentTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
 										OpenACCHeaderEndMap.put(parentTrUnt, gpu_decl);
 										gpuVar = new Identifier(gpu_declarator);
@@ -1448,6 +1468,16 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								} else {
 									addNewGpuSymbol = true;
 									targetSymbolTable.addDeclaration(gpu_decl);
+									//Check whether the current symbol declaration is within an OpenMP parallel/task region.
+									//If not, add #pragma omp threadprivate directive to it.
+									//[DEBUG] automatic variable can not be threadprivate.
+						/*			if( (AnalysisTools.ipFindFirstPragmaInParent(targetSymbolTable, OmpAnnotation.class, new HashSet(Arrays.asList("parallel", "task")), false, null, null) == null) && 
+											!((Annotatable)targetSymbolTable).containsAnnotation(OmpAnnotation.class, "parallel")  &&
+											!((Annotatable)targetSymbolTable).containsAnnotation(OmpAnnotation.class, "task") )  {
+										if( targetSymbolTable instanceof CompoundStatement ) {
+											((CompoundStatement)targetSymbolTable).addStatementAfter((Statement)gpu_decl.getParent(), tAnnotStmt);
+										}
+									}*/
 								}
 							}
 							// Replace all instances of the shared variable to the parameter variable
@@ -1536,21 +1566,35 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		//checks only the base address of each variable.
 		//CAVEAT: If partial array passing occurs, memory-transfer verification may not work correctly.
 		boolean partialArrayPassing = false;
+		boolean isContinuous = true;
+		boolean isFirstDimension = true;
 		for( Expression startIndex : startList ) {
 			if( startIndex instanceof IntegerLiteral ) {
 				if( ((IntegerLiteral)startIndex).getValue() != 0 ) {
 					partialArrayPassing = true;
+					if( !isFirstDimension ) {
+						isContinuous = false;
+					}
 				}
 			} else {
 				partialArrayPassing = true;
+				if( !isFirstDimension ) {
+					isContinuous = false;
+				}
 			}
 			if( partialArrayPassing && (
-					(dataClauseT != DataClauseType.UpdateOnly) || (lengthList.size() > 1)) ) {
+					(dataClauseT != DataClauseType.UpdateOnly) || !isContinuous) ) {
 				Tools.exit("[ERROR in ACC2OPENCLTranslator.genCUDACodesForDataClause()] current implementation allows partial " +
-						"array passing only for 1-dimensional array in update directives," +
+						"array passing only for continuous subarray in update directives," +
 						"but a variable (" + hostVar + ") in the following non-update directive has non-zero start index; exit!\n" +
 								"Enclosing annotation: " + dAnnot + "\nEnclosing file: " + parentTrUnt.getInputFilename() + "\n");
 			}
+			isFirstDimension = false;
+		}
+		if( partialArrayPassing && (startList.size() > 1) ) {
+			PrintTools.println("\n[WARNING] The current implementation assumes that the subarray in the following directive is continuous in the memory layout."
+					+ "If not, the generated code will transfer incorrect data.\n"
+					+ "OpenACC annotation: " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot),0);
 		}
 		
 		if( dRegionType == DataRegionType.ImplicitProgramRegion ) {
@@ -1593,6 +1637,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			}
 			Tools.exit("[ERROR in ACC2OPENCLTranslator.handleCUDAMalloc()] a symbol(" +
 					IRSym + ") in a " + scope + " is not visible; exit!");
+		}
+		if( targetSymbolTable instanceof CompoundStatement ) {
+			if( AnalysisTools.ipFindFirstPragmaInParent(at, OmpAnnotation.class, new HashSet(Arrays.asList("parallel", "task")), false, null, null) != null ) { 
+				targetSymbolTable = (CompoundStatement)at.getParent();
+			}
 		}
 
         if(asyncExp != null)
@@ -1663,12 +1712,22 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			VariableDeclaration gpu_decl = new VariableDeclaration(clonedspecs, 
 					gpu_declarator);
 			gpuVar = new Identifier(gpu_declarator);
+			StringBuilder str2 = new StringBuilder(256);
+			str2.append("#ifdef _OPENMP\n");
+			str2.append("#pragma omp threadprivate(");
+			str2.append(str.toString());
+			str2.append(")\n");
+			str2.append("#endif");
+			CodeAnnotation tOmpAnnot = new CodeAnnotation(str2.toString());
+			AnnotationDeclaration tAnnotDecl = new AnnotationDeclaration(tOmpAnnot);
+			//AnnotationStatement tAnnotStmt = new AnnotationStatement(tOmpAnnot);
 			if( targetSymbolTable instanceof TranslationUnit ) {
 				symSet = main_TrUnt.getSymbols();
 				gpu_sym = AnalysisTools.findsSymbol(symSet, str.toString());
 				if( gpu_sym == null ) {
 					addNewGpuSymbol = true;
 					Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(main_TrUnt);
+					main_TrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl);
 					main_TrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
 					OpenACCHeaderEndMap.put(main_TrUnt, gpu_decl);
 					if( dRegionType == DataRegionType.ImplicitProgramRegion ) {
@@ -1684,6 +1743,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 										gpu_declarator);
 								tLastCudaDecl = OpenACCHeaderEndMap.get(tTrUnt);
+								tTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl.clone());
 								tTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
 								OpenACCHeaderEndMap.put(tTrUnt, gpu_decl);
 								//gpuVar = new Identifier(gpu_declarator);
@@ -1700,6 +1760,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 									gpu_declarator);
 							tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+							parentTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl.clone());
 							parentTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
 							OpenACCHeaderEndMap.put(parentTrUnt, gpu_decl);
 							gpuVar = new Identifier(gpu_declarator);
@@ -1715,6 +1776,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 							gpu_declarator);
 					Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+					parentTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl.clone());
 					parentTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
 					OpenACCHeaderEndMap.put(parentTrUnt, gpu_decl);
 					gpuVar = new Identifier(gpu_declarator);
@@ -1722,6 +1784,16 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			} else {
 				addNewGpuSymbol = true;
 				targetSymbolTable.addDeclaration(gpu_decl);
+				//Check whether the current symbol declaration is within an OpenMP parallel/task region.
+				//If not, add #pragma omp threadprivate directive to it.
+				//[DEBUG] automatic variable can not be threadprivate.
+/*				if( (AnalysisTools.ipFindFirstPragmaInParent(targetSymbolTable, OmpAnnotation.class, new HashSet(Arrays.asList("parallel", "task")), false, null, null) == null) && 
+						!((Annotatable)targetSymbolTable).containsAnnotation(OmpAnnotation.class, "parallel")  &&
+						!((Annotatable)targetSymbolTable).containsAnnotation(OmpAnnotation.class, "task") )  {
+					if( targetSymbolTable instanceof CompoundStatement ) {
+						((CompoundStatement)targetSymbolTable).addStatementAfter((Statement)gpu_decl.getParent(), tAnnotStmt);
+					}
+				}*/
 			}
 		}
 		
@@ -3740,6 +3812,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			if( targetSymbolTable instanceof Procedure ) {
 				targetSymbolTable = ((Procedure)targetSymbolTable).getBody();
 			}
+			if( targetSymbolTable instanceof CompoundStatement ) {
+				if( AnalysisTools.ipFindFirstPragmaInParent(region, OmpAnnotation.class, new HashSet(Arrays.asList("parallel", "task")), false, null, null) != null ) { 
+					targetSymbolTable = (CompoundStatement)region.getParent();
+				}
+			}
 			
 			//FIXME: below will work only for scalar variable, since multiple instances of array variables
 			//are possible in the registerRO and registerRW clauses.
@@ -4684,7 +4761,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 									if( symType == '1' ) { //pitched malloc
 										String pitchVarName = "pitch__" + cloned_param_declr.getSymbolName();
 										VariableDeclarator pitch_declarator = new VariableDeclarator(new NameID(pitchVarName));
-										VariableDeclaration pitch_decl = new VariableDeclaration(OpenCLSpecifier.SIZE_T, 
+										VariableDeclaration pitch_decl = new VariableDeclaration(OpenACCSpecifier.SIZE_T, 
 												pitch_declarator);
 										Identifier paramPitchID = new Identifier(pitch_declarator);
 										extraParamList.add(pitch_decl);

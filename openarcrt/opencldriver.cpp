@@ -1,7 +1,7 @@
 #include "openacc.h"
-#include "openaccrt.h"
 #include "openaccrt_ext.h"
 #include <unistd.h>
+#include <stdlib.h>
 
 #define MAX_SOURCE_SIZE (0x100000)
 //[DEBUG] commented out since it is no more static.
@@ -305,6 +305,7 @@ HI_error_t OpenCLDriver::init() {
     	eventMap[1+i*MAX_NUM_QUEUES_PER_THREAD]= e1;
     	threadQueueEventMap[i] = eventMap;
 		masterAddressTableMap[i] = new addresstable_t();
+		masterHandleTable[i] = new addressmap_t();
 		postponedFreeTableMap[i] = new asyncfreetable_t();
 		memPoolMap[i] = new memPool_t();
 	}
@@ -439,11 +440,14 @@ int OpenCLDriver::HI_get_num_devices(acc_device_t devType) {
     if(devType == acc_device_gpu || devType == acc_device_xeonphi) {
         cl_platform_id platform;
         clGetPlatformIDs(1, &platform, NULL);
-        cl_int err;
-        if(devType == acc_device_xeonphi)
+        cl_int err = CL_SUCCESS;
+        if(devType == acc_device_xeonphi) {
 			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ACCELERATOR, 0, NULL, &numDevices);
-		else
+		} else if(devType == acc_device_gpu) {
 			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+		} else {
+			numDevices = 0;
+		}
 			
         if (err != CL_SUCCESS) {
             fprintf(stderr, "[ERROR in OpenCLDriver::HI_get_num_devices()] Failed to get device IDs  for type %d\n", devType);
@@ -534,10 +538,10 @@ HI_error_t OpenCLDriver::destroy() {
 }
 
 
-HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int count, int asyncID) {
+HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D(%d, %u)\n", asyncID, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
 	}
 #endif
     HostConf_t * tconf = getHostConf();
@@ -551,34 +555,60 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int co
 #endif
     HI_error_t result = HI_error;
     cl_int  err = CL_SUCCESS;
+	void * memHandle;
 
-    if(HI_get_device_address(hostPtr, devPtr, asyncID) == HI_success ) {
-        result = HI_success;
-        //fprintf(stderr, "[in HI_malloc1D()] : address found!\n");
+    if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
+        //result = HI_success;
+		fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+		exit(1);
     } else {
 		memPool_t *memPool = memPoolMap[tconf->threadID];
-		std::multimap<size_t, void *>::iterator it = memPool->find((size_t) count);
+		std::multimap<size_t, void *>::iterator it = memPool->find(count);
 		if( it != memPool->end()) {
+#ifdef _OPENARC_PROFILE_
+			if( HI_openarcrt_verbosity > 2 ) {
+				fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_malloc1D(%d, %lu) reuses memories in the memPool\n", asyncID, count);
+			}
+#endif
 			*devPtr = it->second;
 			memPool->erase(it);
+            HI_set_device_address(hostPtr, *devPtr, count, asyncID, tconf->threadID);
 		} else {
-        	(*devPtr) = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, (size_t) count, NULL, &err);
+        	memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, count, NULL, &err);
         	if(err != CL_SUCCESS) {
             	//fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : Malloc failed\n");
+#ifdef _OPENARC_PROFILE_
+				if( HI_openarcrt_verbosity > 2 ) {
+					fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_malloc1D(%d, %lu) releases memories in the memPool\n", asyncID, count);
+				}
+#endif
+				HI_device_mem_handle_t tHandle;
+				void * tDevPtr;
 				for (it = memPool->begin(); it != memPool->end(); ++it) {
-					*devPtr = it->second;
-        			err = clReleaseMemObject((cl_mem)(*devPtr));
-        			if(err != CL_SUCCESS) {
-            			fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : failed to free on OpenCL\n");
+					tDevPtr = it->second;
+					if( HI_get_device_mem_handle(tDevPtr, &tHandle, tconf->threadID) == HI_success ) { 
+        				err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+        				if(err != CL_SUCCESS) {
+            				fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : failed to free on OpenCL\n");
+						}
+						free(tDevPtr);
+						HI_remove_device_mem_handle(tDevPtr, tconf->threadID);
 					}
 				}
 				memPool->clear();
-        		(*devPtr) = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, (size_t) count, NULL, &err);
+        		memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, count, NULL, &err);
+			}
+        	if(err == CL_SUCCESS) {
+				*devPtr = malloc(count); //redundant malloc to create a fake device pointer.
+				if( *devPtr == NULL ) {
+        			fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] :fake device malloc failed\n");
+					exit(1);
+				}
+            	HI_set_device_address(hostPtr, *devPtr, count, asyncID, tconf->threadID);
+            	HI_set_device_mem_handle(*devPtr, memHandle, count, tconf->threadID);
 			}
 		}
         if(err == CL_SUCCESS) {
-            HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID);
-            //fprintf(stderr, "[in HI_malloc1D()] : address not found, so malloced \n");
 #ifdef _OPENARC_PROFILE_
             tconf->DMallocCnt++;
 #endif
@@ -593,7 +623,8 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int co
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc1D(%d, %u)\n", asyncID, count);
+		HI_print_device_address_mapping_summary(tconf->threadID);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
 	}
 #endif
     return result;
@@ -601,7 +632,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int co
 }
 
 //[FIXME] Implement this!
-HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, int count, int asyncID) {
+HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID) {
 	fprintf(stderr, "[OPENARCRT-ERROR]OpenCLDriver::HI_malloc1D_unified() is not yet implemented!\n");
 	//exit(1);
 #ifdef _OPENARC_PROFILE_
@@ -620,24 +651,32 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
 #endif
     HI_error_t result = HI_error;
     cl_int  err;
+	void *memHandle;
 
-    if(HI_get_device_address(hostPtr, devPtr, asyncID) == HI_success ) {
-        result = HI_success;
-        //fprintf(stderr, "[in HI_malloc1D_unified()] : address found!\n");
+    if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
+        //result = HI_success;
+		fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D_unified()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+		exit(1);
     } else {
 		if( unifiedMemSupported == 0 ) {
 			result = HI_success;
             fprintf(stderr, "[OPENARCRT-WARNING in OpenCLDriver::HI_malloc1D_unified(%d)] unified memory is either not supported or disabled in the current device; device memory should be explicitly managed either through data clauses or though runtime APIs.\n", asyncID);
 			if( hostPtr == NULL ) {
-            	*devPtr = malloc((size_t)count);
+            	*devPtr = malloc(count);
 			} else {
 				*devPtr = (void *)hostPtr;
 			}
 		} else {
-        	(*devPtr) = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, (size_t) count, NULL, &err);
+			//[FIXME] This doesn not allocate unified memory.
+        	memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, count, NULL, &err);
         	if(err == CL_SUCCESS) {
-            	HI_set_device_address(*devPtr, *devPtr, (size_t) count, asyncID);
-            	//fprintf(stderr, "[in HI_malloc1D_unified()] : address not found, so malloced \n");
+				*devPtr = malloc(count); //redundant malloc to create a fake device pointer.
+				if( *devPtr == NULL ) {
+        			fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D_unified()] :fake device malloc failed\n");
+					exit(1);
+				}
+            	HI_set_device_address(*devPtr, *devPtr, count, asyncID, tconf->threadID);
+            	HI_set_device_mem_handle(*devPtr, memHandle, count, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
             	tconf->DMallocCnt++;
 #endif
@@ -660,6 +699,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
 
 }
 
+//[FIXME] Implement this!
 //the ElementSizeBytes in cuMemAllocPitch is currently set to 16.
 HI_error_t OpenCLDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID) {
 #ifdef _OPENARC_PROFILE_
@@ -676,7 +716,7 @@ HI_error_t OpenCLDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t
     return HI_success;
 }
 
-
+//[FIXME] Implement this!
 HI_error_t OpenCLDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -734,7 +774,7 @@ HI_error_t OpenCLDriver::HI_free( const void *hostPtr, int asyncID) {
     void *devPtr;
 	size_t size;
     //Check if the mapping exists. Free only if a mapping is found
-    if( HI_get_device_address(hostPtr, &devPtr, NULL, &size, asyncID) != HI_error) {
+    if( HI_get_device_address(hostPtr, &devPtr, NULL, &size, asyncID, tconf->threadID) != HI_error) {
        //If this method is called for unified memory, memory deallocation
        //is skipped; unified memory will be deallocatedd only by 
        //HI_free_unified().
@@ -743,17 +783,21 @@ HI_error_t OpenCLDriver::HI_free( const void *hostPtr, int asyncID) {
 			//and remove host-pointer-to-device-pointer mapping
 			memPool_t *memPool = memPoolMap[tconf->threadID];
 			memPool->insert(std::pair<size_t, void *>(size, devPtr));
-			HI_remove_device_address(hostPtr, asyncID);
+			HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
 /*
-        	cl_int  err = clReleaseMemObject((cl_mem)(devPtr));
-        	if( err == CL_SUCCESS ) {
-            	HI_remove_device_address(hostPtr, asyncID);
-
-        	} else {
-            	fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] OpenCL memory free failed with error %d\n", err);
-				exit(1);
-            	result = HI_error;
-        	}
+			HI_device_mem_handle_t tHandle;
+			if( HI_get_device_mem_handle(devPtr, &tHandle, tconf->threadID) == HI_success ) { 
+        		cl_int  err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+        		if( err == CL_SUCCESS ) {
+            		HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
+					free(devPtr);
+					HI_remove_device_mem_handle(devPtr, tconf->threadID);
+        		} else {
+            		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] OpenCL memory free failed with error %d\n", err);
+					exit(1);
+            		result = HI_error;
+        		}
+			}
 */
 #ifdef _OPENARC_PROFILE_
 			tconf->DFreeCnt++;
@@ -793,26 +837,28 @@ HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
     HI_error_t result = HI_success;
     void *devPtr;
     //Check if the mapping exists. Free only if a mapping is found
-    if( HI_get_device_address(hostPtr, &devPtr, asyncID) != HI_error) {
+    if( HI_get_device_address(hostPtr, &devPtr, NULL, NULL, asyncID, tconf->threadID) != HI_error) {
 		if( unifiedMemSupported == 0 ) {
 			free(devPtr);
 		} else {
-        	cl_int  err = clReleaseMemObject((cl_mem)(devPtr));
-        	if( err == CL_SUCCESS ) {
-            	HI_remove_device_address(hostPtr, asyncID);
-
-#ifdef _OPENARC_PROFILE_
-            	tconf->DFreeCnt++;
-#endif
-        	} else {
-            	fprintf(stderr, "[ERROR in OpenCLDriver::HI_free_unified()] OpenCL memory free failed with error %d\n", err);
-				exit(1);
-            	result = HI_error;
-        	}
+			HI_device_mem_handle_t tHandle;
+			if( HI_get_device_mem_handle(devPtr, &tHandle, tconf->threadID) == HI_success ) { 
+        		cl_int  err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+        		if( err == CL_SUCCESS ) {
+            		HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
+					free(devPtr);
+					HI_remove_device_mem_handle(devPtr, tconf->threadID);
+        		} else {
+            		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free_unified()] OpenCL memory free failed with error %d\n", err);
+					exit(1);
+            		result = HI_error;
+        		}
+			}
 		}
     }
 
 #ifdef _OPENARC_PROFILE_
+	tconf->DFreeCnt++;
     tconf->totalFreeTime += HI_get_localtime() - ltime;
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -842,14 +888,23 @@ void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t d
     if(  devType == acc_device_gpu || devType == acc_device_nvidia || 
     devType == acc_device_radeon || devType == acc_device_xeonphi || devType == acc_device_current) {
 		if( tempMallocSet.count(*tempPtr) > 0 ) {
+			HI_device_mem_handle_t tHandle;
 			tempMallocSet.erase(*tempPtr);
-            clReleaseMemObject((cl_mem)(*tempPtr));
+			if( HI_get_device_mem_handle(*tempPtr, &tHandle, tconf->threadID) == HI_success ) { 
+        		cl_int  err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+        		if( err == CL_SUCCESS ) {
+					free(*tempPtr);
+					HI_remove_device_mem_handle(*tempPtr, tconf->threadID);
+        		} 
+			}
 #ifdef _OPENARC_PROFILE_
             tconf->DFreeCnt++;
 #endif
         }
         cl_int err;
-        (*tempPtr) = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, (size_t) count, NULL, &err);
+        void * memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, count, NULL, &err);
+		*tempPtr = malloc(count);
+        HI_set_device_mem_handle(*tempPtr, memHandle, count, tconf->threadID);
 		tempMallocSet.insert(*tempPtr);
         if (err != CL_SUCCESS) {
             fprintf(stderr, "[ERROR in OpenCLDriver::HI_tempMalloc1D()] : Malloc failed\n");
@@ -897,8 +952,15 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
     if(  devType == acc_device_gpu || devType == acc_device_nvidia || 
     devType == acc_device_radeon || devType == acc_device_xeonphi || devType == acc_device_current) {
         if( *tempPtr != 0 ) {
+			HI_device_mem_handle_t tHandle;
 			tempMallocSet.erase(*tempPtr);
-            clReleaseMemObject((cl_mem)(*tempPtr));
+			if( HI_get_device_mem_handle(*tempPtr, &tHandle, tconf->threadID) == HI_success ) { 
+        		cl_int  err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+        		if( err == CL_SUCCESS ) {
+					free(*tempPtr);
+					HI_remove_device_mem_handle(*tempPtr, tconf->threadID);
+        		} 
+			}
 #ifdef _OPENARC_PROFILE_
             tconf->DFreeCnt++;
 #endif
@@ -954,15 +1016,33 @@ HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI
         	break;
     	}
     	case HI_MemcpyHostToDevice: {
-        	err = clEnqueueWriteBuffer(queue, (cl_mem) dst, CL_TRUE, 0, count, src, 0, NULL, NULL);
+			HI_device_mem_handle_t tHandle;
+			if( HI_get_device_mem_handle(dst, &tHandle, tconf->threadID) == HI_success ) {
+        		err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, count, src, 0, NULL, NULL);
+			} else {
+        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)dst);
+#ifdef _OPENARC_PROFILE_
+				HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+				exit(1);
+			}
         	break;
     	}
     	case HI_MemcpyDeviceToHost: {
-        	err = clEnqueueReadBuffer(queue, (cl_mem)src, CL_TRUE, 0, count, dst, 0, NULL, NULL);
+			HI_device_mem_handle_t tHandle;
+			if( HI_get_device_mem_handle(src, &tHandle, tconf->threadID) == HI_success ) {
+        		err = clEnqueueReadBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, count, dst, 0, NULL, NULL);
+			} else {
+        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)src);
+#ifdef _OPENARC_PROFILE_
+				HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+				exit(1);
+			}
         	break;
     	}
     	case HI_MemcpyDeviceToDevice: {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy()] Device to Device transfers not supported\n");
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy()] Device to Device transfers not supported; exit!\n");
 			exit(1);
         	break;
     	}
@@ -1031,11 +1111,29 @@ HI_error_t  OpenCLDriver::HI_memcpy_unified(void *dst, const void *src, size_t c
         	break;
     	}
     	case HI_MemcpyHostToDevice: {
-        	err = clEnqueueWriteBuffer(queue, (cl_mem) dst, CL_TRUE, 0, count, src, 0, NULL, NULL);
+			HI_device_mem_handle_t tHandle;
+			if( HI_get_device_mem_handle(dst, &tHandle, tconf->threadID) == HI_success ) {
+        		err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, count, src, 0, NULL, NULL);
+			} else {
+        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_unified()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)dst);
+#ifdef _OPENARC_PROFILE_
+				HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+				exit(1);
+			}
         	break;
     	}
     	case HI_MemcpyDeviceToHost: {
-        	err = clEnqueueReadBuffer(queue, (cl_mem)src, CL_TRUE, 0, count, dst, 0, NULL, NULL);
+			HI_device_mem_handle_t tHandle;
+			if( HI_get_device_mem_handle(src, &tHandle, tconf->threadID) == HI_success ) {
+        		err = clEnqueueReadBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, count, dst, 0, NULL, NULL);
+			} else {
+        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_unified()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)src);
+#ifdef _OPENARC_PROFILE_
+				HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+				exit(1);
+			}
         	break;
     	}
     	case HI_MemcpyDeviceToDevice: {
@@ -1106,11 +1204,29 @@ HI_error_t OpenCLDriver::HI_memcpy_async(void *dst, const void *src, size_t coun
         	break;
     	}
     	case HI_MemcpyHostToDevice: {
-        	err = clEnqueueWriteBuffer(queue, (cl_mem) dst, CL_FALSE, 0, count, src, 0, NULL, event);
+			HI_device_mem_handle_t tHandle;
+			if( HI_get_device_mem_handle(dst, &tHandle, tconf->threadID) == HI_success ) {
+        		err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_FALSE, tHandle.offset, count, src, 0, NULL, event);
+			} else {
+        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_async()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)dst);
+#ifdef _OPENARC_PROFILE_
+				HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+				exit(1);
+			}
         	break;
     	}
     	case HI_MemcpyDeviceToHost: {
-        	err = clEnqueueReadBuffer(queue, (cl_mem)src, CL_FALSE, 0, count, dst, 0, NULL, event);
+			HI_device_mem_handle_t tHandle;
+			if( HI_get_device_mem_handle(src, &tHandle, tconf->threadID) == HI_success ) {
+        		err = clEnqueueReadBuffer(queue, (cl_mem)(tHandle.basePtr), CL_FALSE, tHandle.offset, count, dst, 0, NULL, event);
+			} else {
+        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_async()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)src);
+#ifdef _OPENARC_PROFILE_
+				HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+				exit(1);
+			}
         	break;
     	}
     	case HI_MemcpyDeviceToDevice: {
@@ -1179,14 +1295,32 @@ HI_error_t OpenCLDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t cou
         break;
     }
     case HI_MemcpyHostToDevice: {
-        err = clEnqueueWriteBuffer(queue, (cl_mem) dst, CL_FALSE, 0, count, src, 0, NULL, event);
+		HI_device_mem_handle_t tHandle;
+		if( HI_get_device_mem_handle(dst, &tHandle, tconf->threadID) == HI_success ) {
+        	err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_FALSE, tHandle.offset, count, src, 0, NULL, event);
+		} else {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_asyncS()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)dst);
+#ifdef _OPENARC_PROFILE_
+			HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+			exit(1);
+		}
         break;
     }
     case HI_MemcpyDeviceToHost: {
 		void *tDst;
 		HI_tempMalloc1D(&tDst, count, acc_device_host);
 		HI_set_temphost_address(dst, tDst, async);
-        err = clEnqueueReadBuffer(queue, (cl_mem)src, CL_FALSE, 0, count, tDst, 0, NULL, event);
+		HI_device_mem_handle_t tHandle;
+		if( HI_get_device_mem_handle(src, &tHandle, tconf->threadID) == HI_success ) {
+        	err = clEnqueueReadBuffer(queue, (cl_mem)(tHandle.basePtr), CL_FALSE, tHandle.offset, count, tDst, 0, NULL, event);
+		} else {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_asyncS()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)src);
+#ifdef _OPENARC_PROFILE_
+			HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+			exit(1);
+		}
         break;
     }
     case HI_MemcpyDeviceToDevice: {
@@ -1238,52 +1372,8 @@ HI_error_t OpenCLDriver::HI_memcpy2D(void *dst, size_t dpitch, const void *src, 
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_memcpy2D()\n");
 	}
 #endif
-    /*if( tconf == NULL ) {
-    #ifdef _OPENMP
-    	int thread_id = omp_get_thread_num();
-    #else
-    	int thread_id = 0;
-    #endif
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy2D()] No host configuration exists for the current host thread (thread ID: %d); please set an environment variable, OMP_NUM_THREADS, to the maximum number of OpenMP threads used for your application; exit!\n", thread_id);
-        exit(1);
-    }
-    if( tconf->HI_init_done == 0 ) {
-    	tconf->HI_init(DEVICE_NUM_UNDEFINED);
-    }
-    #ifdef _OPENARC_PROFILE_
-    double ltime = HI_get_localtime();
-    #endif
-    cl_int  err;
-    CUDA_MEMCPY2D pcopy;
-    switch( kind ) {
-    	case HI_MemcpyHostToHost: {pcopy.srcMemoryType =  CU_MEMORYTYPE_HOST;
-    								  pcopy.dstMemoryType =  CU_MEMORYTYPE_HOST;
-    								  pcopy.srcHost = src;
-    								  pcopy.dstHost = dst;}
-    	case HI_MemcpyHostToDevice: {pcopy.srcMemoryType =  CU_MEMORYTYPE_HOST;
-    									pcopy.dstMemoryType =  CU_MEMORYTYPE_DEVICE;
-    									pcopy.srcHost = src;
-    									pcopy.dstDevice = (CUdeviceptr) dst;}
-    	case HI_MemcpyDeviceToHost: {pcopy.srcMemoryType =  CU_MEMORYTYPE_DEVICE;
-    									pcopy.dstMemoryType =  CU_MEMORYTYPE_HOST;
-    									pcopy.srcDevice = (CUdeviceptr) src;
-    									pcopy.dstHost = dst;}
-    	case HI_MemcpyDeviceToDevice: {pcopy.srcMemoryType =  CU_MEMORYTYPE_DEVICE;
-    									  pcopy.dstMemoryType =  CU_MEMORYTYPE_DEVICE;
-    									  pcopy.srcDevice = (CUdeviceptr) src;
-    									  pcopy.dstDevice = (CUdeviceptr) dst;}
-    }
-
-    pcopy.srcXInBytes = 0;
-    pcopy.srcY = 0;
-    pcopy.dstXInBytes = 0;
-    pcopy.dstY = 0;
-    pcopy.srcPitch = spitch;
-    pcopy.dstPitch = dpitch;
-    pcopy.WidthInBytes = widthInBytes;
-    pcopy.Height = height;
-
-    err = cuMemcpy2D(&pcopy);
+    /*
+	//[TODO]
     #ifdef _OPENARC_PROFILE_
     if( kind == HI_MemcpyHostToDevice ) {
     	tconf->H2DMemTrCnt++;
@@ -1358,7 +1448,7 @@ HI_error_t OpenCLDriver::HI_register_kernel_numargs(std::string kernel_name, int
 }
 
 
-HI_error_t OpenCLDriver::HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value)
+HI_error_t OpenCLDriver::HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1366,7 +1456,21 @@ HI_error_t OpenCLDriver::HI_register_kernel_arg(std::string kernel_name, int arg
 	}
 #endif
     HostConf_t * tconf = getHostConf();
-    cl_int err = clSetKernelArg((cl_kernel)(tconf->kernelsMap.at(this).at(kernel_name)), arg_index, arg_size, arg_value);
+    cl_int err;
+	if( arg_type == 0 ) { //scalar variable
+    	err = clSetKernelArg((cl_kernel)(tconf->kernelsMap.at(this).at(kernel_name)), arg_index, arg_size, arg_value);
+	} else { //pointer variable
+		HI_device_mem_handle_t tHandle;
+		if( HI_get_device_mem_handle(*((void **)arg_value), &tHandle, tconf->threadID) == HI_success ) {
+    		err = clSetKernelArg((cl_kernel)(tconf->kernelsMap.at(this).at(kernel_name)), arg_index, arg_size, &(tHandle.basePtr));
+		} else {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_register_kernel_arg()] Cannot find a device pointer to memory handle mapping; failed to add argument %d to kernel %s (OPENCL Device)\n", arg_index, kernel_name.c_str());
+#ifdef _OPENARC_PROFILE_
+			HI_print_device_address_mapping_entries(tconf->threadID);
+#endif
+			exit(1);
+		}
+	}
     if(err != CL_SUCCESS)
     {
         fprintf(stderr, "[ERROR in OpenCLDriver::HI_register_kernel_arg()] failed to add argument %d to kernel %s with error %d (OPENCL Device)\n", arg_index, kernel_name.c_str(), err);
@@ -1573,10 +1677,36 @@ void OpenCLDriver::HI_wait(int arg) {
 		exit(1);
     }
 
-	HI_postponed_free(arg);
+	HI_postponed_free(arg, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_wait(%d)\n", arg);
+	}
+#endif
+}
+
+void OpenCLDriver::HI_wait_ifpresent(int arg) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_ifpresent(%d)\n", arg);
+	}
+#endif
+    cl_event *event = getEvent_ifpresent(arg);
+	if( event != NULL ) {
+    	cl_int err ;
+    	HostConf_t * tconf = getHostConf();
+    	err = clWaitForEvents(1, event);
+
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_ifpresent()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", arg, err);
+			exit(1);
+    	}
+
+		HI_postponed_free(arg, tconf->threadID);
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_wait_ifpresent(%d)\n", arg);
 	}
 #endif
 }
@@ -1591,8 +1721,6 @@ void OpenCLDriver::HI_wait_async(int arg, int async) {
     cl_event *event2 = getEvent(async);
     cl_int err ;
     HostConf_t * tconf = getHostConf();
-    //clGetEventInfo(*event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(err), &err, NULL);
-    //fprintf(stderr, "[OpenCLDriver::HI_wait_async()] status is %d (NVIDIA CUDA GPU)\n", err);
 
     err = clWaitForEvents(1, event);
 
@@ -1601,7 +1729,7 @@ void OpenCLDriver::HI_wait_async(int arg, int async) {
 		exit(1);
     }
 
-	HI_postponed_free(arg);
+	HI_postponed_free(arg, tconf->threadID);
 
     err = clWaitForEvents(1, event2);
 
@@ -1613,6 +1741,42 @@ void OpenCLDriver::HI_wait_async(int arg, int async) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_wait_async(%d, %d)\n", arg, async);
+	}
+#endif
+}
+
+void OpenCLDriver::HI_wait_async_ifpresent(int arg, int async) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_async_ifpresent(%d, %d)\n", arg, async);
+	}
+#endif
+    cl_event *event = getEvent_ifpresent(arg);
+    cl_event *event2 = getEvent_ifpresent(async);
+	if( (event != NULL) && (event2 != NULL) ) {
+    	cl_int err ;
+    	HostConf_t * tconf = getHostConf();
+
+    	err = clWaitForEvents(1, event);
+
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async_ifpresent()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", arg, err);
+			exit(1);
+    	}
+
+		HI_postponed_free(arg, tconf->threadID);
+
+    	err = clWaitForEvents(1, event2);
+
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async_ifpresent()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", async, err);
+			exit(1);
+    	}
+	}
+
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_wait_async_ifpresent(%d, %d)\n", arg, async);
 	}
 #endif
 }
@@ -1650,7 +1814,7 @@ void OpenCLDriver::HI_waitS2(int asyncId) {
 	}
 #endif
 	HI_free_temphosts(asyncId);
-	HI_postponed_free(asyncId);
+	HI_postponed_free(asyncId, get_thread_id());
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_waitS2(%d)\n", asyncId);
@@ -1664,9 +1828,9 @@ void OpenCLDriver::HI_wait_all() {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_all()\n");
 	}
 #endif
-    eventmap_opencl_t *eventMap = &threadQueueEventMap.at(get_thread_id());
-    cl_int err;
     HostConf_t * tconf = getHostConf();
+    eventmap_opencl_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
+    cl_int err;
 
     for(eventmap_opencl_t::iterator it = eventMap->begin(); it != eventMap->end(); ++it) {
         //clGetEventInfo((it->second), CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(err), &err, NULL);
@@ -1676,6 +1840,7 @@ void OpenCLDriver::HI_wait_all() {
             fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_all()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, err);
 			exit(1);
         }
+		HI_postponed_free(it->first-2, tconf->threadID);
     }
 
 #ifdef _OPENARC_PROFILE_
@@ -1691,9 +1856,9 @@ void OpenCLDriver::HI_wait_all_async(int async) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_all_async(%d)\n", async);
 	}
 #endif
-    eventmap_opencl_t *eventMap = &threadQueueEventMap.at(get_thread_id());
-    cl_int err;
     HostConf_t * tconf = getHostConf();
+    eventmap_opencl_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
+    cl_int err;
 
     for(eventmap_opencl_t::iterator it = eventMap->begin(); it != eventMap->end(); ++it) {
         //clGetEventInfo((it->second), CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(err), &err, NULL);
@@ -1703,6 +1868,7 @@ void OpenCLDriver::HI_wait_all_async(int async) {
             fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_all_async()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, err);
 			exit(1);
         }
+		HI_postponed_free(it->first-2, tconf->threadID);
     }
 
     cl_event *event2 = getEvent(async);
@@ -1720,7 +1886,6 @@ void OpenCLDriver::HI_wait_all_async(int async) {
 #endif
 }
 
-
 int OpenCLDriver::HI_async_test(int asyncId) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1730,7 +1895,6 @@ int OpenCLDriver::HI_async_test(int asyncId) {
     cl_event *event = getEvent(asyncId);
     cl_int err, status ;
     HostConf_t * tconf = getHostConf();
-    //fprintf(stderr, "[OpenCLDriver::HI_wait()] status is %d (NVIDIA CUDA GPU)\n", err);
 
     err = clGetEventInfo(*event,  CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &status, NULL);
     if(err != CL_SUCCESS) {
@@ -1746,10 +1910,45 @@ int OpenCLDriver::HI_async_test(int asyncId) {
 #endif
         return 0;
     }
-    HI_postponed_free(asyncId);
+    HI_postponed_free(asyncId, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_async_test(%d)\n", asyncId);
+	}
+#endif
+    return 1;
+}
+
+int OpenCLDriver::HI_async_test_ifpresent(int asyncId) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_async_test_ifpresent(%d)\n", asyncId);
+	}
+#endif
+    cl_event *event = getEvent_ifpresent(asyncId);
+	if( event != NULL ) {
+    	cl_int err, status ;
+    	HostConf_t * tconf = getHostConf();
+
+    	err = clGetEventInfo(*event,  CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &status, NULL);
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_async_test_ifpresent()] failed test on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", asyncId, err);
+			exit(1);
+    	}
+
+    	if(status != CL_COMPLETE) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_async_test_ifpresent(%d)\n", asyncId);
+	}
+#endif
+        	return 0;
+    	}
+    	HI_postponed_free(asyncId, tconf->threadID);
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_async_test_ifpresent(%d)\n", asyncId);
 	}
 #endif
     return 1;
@@ -1761,9 +1960,9 @@ int OpenCLDriver::HI_async_test_all() {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_async_test_all()\n");
 	}
 #endif
-    eventmap_opencl_t *eventMap = &threadQueueEventMap.at(get_thread_id());
-    cl_int err, status;
     HostConf_t * tconf = getHostConf();
+    eventmap_opencl_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
+    cl_int err, status;
 
     std::set<int> queuesChecked;
 
@@ -1783,7 +1982,7 @@ int OpenCLDriver::HI_async_test_all() {
     //release the waiting frees
     std::set<int>::iterator it;
     for (it=queuesChecked.begin(); it!=queuesChecked.end(); ++it) {
-        HI_postponed_free(*it);
+        HI_postponed_free(*it, tconf->threadID);
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1804,11 +2003,18 @@ void OpenCLDriver::HI_malloc(void **devPtr, size_t size) {
     double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
-    *devPtr = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, (size_t) size, NULL, &err);
+	void * memHandle;
+    memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, size, NULL, &err);
     if( err != CL_SUCCESS ) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc()] :failed to malloc on OpenCL with error %d (NVIDIA CUDA GPU)\n", err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc()] :failed to malloc on OpenCL with clCreateBuffer error %d\n", err);
 		exit(1);
     }
+	*devPtr = malloc(size); //redundant malloc to create a fake device pointer.
+	if( *devPtr == NULL ) {
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc()] :fake device malloc failed\n");
+		exit(1);
+	}
+    HI_set_device_mem_handle(*devPtr, memHandle, size, tconf->threadID);
 
 #ifdef _OPENARC_PROFILE_
     tconf->totalMallocTime += HI_get_localtime() - ltime;
@@ -1833,15 +2039,20 @@ void OpenCLDriver::HI_free(void *devPtr) {
 #endif
     HostConf_t * tconf = getHostConf();
 	void *devPtr2;
-    if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE+tconf->asyncID_offset) == HI_error) ||
+    if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID) == HI_error) ||
         (devPtr != devPtr2) ) {
         //Free device memory if it is not on unified memory.
-    	err = clReleaseMemObject((cl_mem)devPtr);
+		HI_device_mem_handle_t tHandle;
+		if( HI_get_device_mem_handle(devPtr, &tHandle, tconf->threadID) == HI_success ) { 
+       		err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+        	if(err != CL_SUCCESS) {
+        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] :failed to free on OpenCL with error %d\n", err);
+				exit(1);
+			}
+			free(devPtr);
+			HI_remove_device_mem_handle(devPtr, tconf->threadID);
+		}
 	}
-    if( err != CL_SUCCESS ) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] :failed to free on OpenCL with error %d (NVIDIA CUDA GPU)\n", err);
-		exit(1);
-    }
 
 #ifdef _OPENARC_PROFILE_
     tconf->totalFreeTime += HI_get_localtime() - ltime;

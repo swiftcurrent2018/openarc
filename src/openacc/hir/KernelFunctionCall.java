@@ -113,40 +113,26 @@ public class KernelFunctionCall extends FunctionCall
     	p.print("HI_register_kernel_arg(");
 		p.print("\"" + call.getName() + "\",");
 		p.print(i + ",");
-        //Special case for OpenCL
 
-        //If use OpenCL, the use of texture memory is not allowed
-        if(targetArch != 0)
+		VariableDeclaration paramDecl = (VariableDeclaration)call.linkedProcedure.getParameter(i);
+		Declarator paramDeclarator = (Declarator)paramDecl.getChildren().get(0);
+		List<Specifier> specifierList = paramDecl.getSpecifiers();
+		boolean isPointer = false;
+		if( paramDeclarator instanceof NestedDeclarator ) {
+			isPointer = true;
+		} else if( paramDeclarator instanceof VariableDeclarator ) {
+			VariableDeclarator vDeclr = (VariableDeclarator)paramDeclarator;
+			if( SymbolTools.isArray(vDeclr) || SymbolTools.isPointer(vDeclr) ) {
+				isPointer = true;
+			}
+		} else {
+			Tools.exit("[ERROR in KernelFunctionCall] Unexpected parameter type");
+		}
+
+		//Special case for OpenCL
+		//If use OpenCL, the use of texture memory is not allowed
+		if(targetArch != 0)
         {
-            VariableDeclaration paramDecl = (VariableDeclaration)call.linkedProcedure.getParameter(i);
-            Declarator paramDeclarator = (Declarator)paramDecl.getChildren().get(0);
-            List<Specifier> specifierList = paramDecl.getSpecifiers();
-            //[DEBUG] Modified by Seyong Lee; below checking is incorrect.
-/*            if(paramDeclarator.getArraySpecifiers().size() > 0 || paramDeclarator.getSpecifiers().size() > 0 || specifierList.size() > 1 )
-            {
-                //This param is an array or pointer
-                p.print("sizeof(void*),");
-            }
-            else if(specifierList.size() == 1)
-            {
-                p.print(new SizeofExpression(specifierList));
-                p.print(",");
-            }
-            else
-            {
-                 Tools.exit("[Function Call] Unspecify parameter");
-            }*/
-            boolean isPointer = false;
-            if( paramDeclarator instanceof NestedDeclarator ) {
-            	isPointer = true;
-            } else if( paramDeclarator instanceof VariableDeclarator ) {
-            	VariableDeclarator vDeclr = (VariableDeclarator)paramDeclarator;
-            	if( SymbolTools.isArray(vDeclr) || SymbolTools.isPointer(vDeclr) ) {
-            		isPointer = true;
-            	}
-            } else {
-                 Tools.exit("[ERROR in KernelFunctionCall] Unexpected parameter type");
-            }
             if( isPointer ) {
                 p.print("sizeof(void*),");
             } else {
@@ -180,6 +166,11 @@ public class KernelFunctionCall extends FunctionCall
 			} else {
 				p.print(new UnaryExpression(UnaryOperator.ADDRESS_OF, call.getArgument(i).clone()));
 			}
+		}
+		if( isPointer ) {
+		    p.print(",1");
+		} else {
+		    p.print(",0");
 		}
 		p.println(");");
 	}

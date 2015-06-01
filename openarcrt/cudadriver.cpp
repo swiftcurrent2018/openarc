@@ -1,5 +1,4 @@
 #include "openacc.h"
-#include "openaccrt.h"
 #include "openaccrt_ext.h"
 #include <iostream>
 #include <sstream>
@@ -198,6 +197,7 @@ HI_error_t CudaDriver::init() {
     	eventMap[1+i*MAX_NUM_QUEUES_PER_THREAD]= e1;
     	threadQueueEventMap[i] = eventMap;
 		masterAddressTableMap[i] = new addresstable_t();
+		masterHandleTable[i] = new addressmap_t();
 		postponedFreeTableMap[i] = new asyncfreetable_t();
 		memPoolMap[i] = new memPool_t();
 	}
@@ -298,7 +298,11 @@ int CudaDriver::HI_get_num_devices(acc_device_t devType) {
 #endif
     //cudaGetDeviceCount(&numDevices);
     cuInit(0);
-    cuDeviceGetCount(&numDevices);
+	if( devType == acc_device_gpu ) {
+    	cuDeviceGetCount(&numDevices);
+	} else {
+		numDevices = 0;
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_get_num_devices()\n");
@@ -499,10 +503,10 @@ void CudaDriver::unpin_host_memory_all(int asyncID)
     #pragma omp critical (pin_host_memory_critical)
 #endif
     {
-		std::multimap<int, std::map<const void *,void *> >::iterator it = CudaDriver::auxAddressTable.find(asyncID);
+		addresstable_t::iterator it = CudaDriver::auxAddressTable.find(asyncID);
 		if(it != CudaDriver::auxAddressTable.end()) {
 			CudaDriver::hostMemToUnpin.clear();
-			for( std::map<const void *, void *>::iterator it2 = (it->second).begin(); it2 != (it->second).end(); ++it2 ) {
+			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
         		CUdeviceptr host = (CUdeviceptr)it2->first;
         		//If the hostPtr is already pinned
         		if(CudaDriver::pinnedHostMemCounter.find(host) != CudaDriver::pinnedHostMemCounter.end()) {
@@ -517,12 +521,12 @@ void CudaDriver::unpin_host_memory_all(int asyncID)
                 		}
 						//Free corresponding device memory.
 						addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
-						cuMemFree((CUdeviceptr)aet->devPtr);
+						cuMemFree((CUdeviceptr)aet->basePtr);
             		}
         		}
 			}
 			while( !CudaDriver::hostMemToUnpin.empty() ) {
-				(it->second).erase(CudaDriver::hostMemToUnpin.back());
+				(it->second)->erase(CudaDriver::hostMemToUnpin.back());
 				CudaDriver::hostMemToUnpin.pop_back();
 			}
 		}
@@ -546,9 +550,9 @@ void CudaDriver::unpin_host_memory_all()
     #pragma omp critical (pin_host_memory_critical)
 #endif
     {
-		for( std::multimap<int, std::map<const void *,void *> >::iterator it = CudaDriver::auxAddressTable.begin(); it != CudaDriver::auxAddressTable.end(); ++it) {
+		for( addresstable_t::iterator it = CudaDriver::auxAddressTable.begin(); it != CudaDriver::auxAddressTable.end(); ++it) {
 			CudaDriver::hostMemToUnpin.clear();
-			for( std::map<const void *, void *>::iterator it2 = (it->second).begin(); it2 != (it->second).end(); ++it2 ) {
+			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
         		CUdeviceptr host = (CUdeviceptr)it2->first;
         		//If the hostPtr is already pinned
         		if(CudaDriver::pinnedHostMemCounter.find(host) != CudaDriver::pinnedHostMemCounter.end()) {
@@ -563,12 +567,12 @@ void CudaDriver::unpin_host_memory_all()
                 		}
 						//Free corresponding device memory.
 						addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
-						cuMemFree((CUdeviceptr)aet->devPtr);
+						cuMemFree((CUdeviceptr)aet->basePtr);
             		}
         		}
 			}
 			while( !CudaDriver::hostMemToUnpin.empty() ) {
-				(it->second).erase(CudaDriver::hostMemToUnpin.back());
+				(it->second)->erase(CudaDriver::hostMemToUnpin.back());
 				CudaDriver::hostMemToUnpin.pop_back();
 			}
 		}
@@ -588,12 +592,12 @@ void CudaDriver::release_freed_device_memory(int asyncID)
 	}
 #endif
     {
-		std::multimap<int, std::map<const void *,void *> >::iterator it = CudaDriver::auxAddressTable.find(asyncID);
+		addresstable_t::iterator it = CudaDriver::auxAddressTable.find(asyncID);
 		if(it != CudaDriver::auxAddressTable.end()) {
-			for( std::map<const void *, void *>::iterator it2 = (it->second).begin(); it2 != (it->second).end(); ++it2 ) {
+			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
 				//Free corresponding device memory.
 				addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
-				cuMemFree((CUdeviceptr)aet->devPtr);
+				cuMemFree((CUdeviceptr)aet->basePtr);
 			}
 		}
     }
@@ -612,11 +616,11 @@ void CudaDriver::release_freed_device_memory()
 	}
 #endif
     {
-		for( std::multimap<int, std::map<const void *, void *> >::iterator it = CudaDriver::auxAddressTable.begin(); it != CudaDriver::auxAddressTable.end(); ++it ) {
-			for( std::map<const void *, void *>::iterator it2 = (it->second).begin(); it2 != (it->second).end(); ++it2 ) {
+		for( addresstable_t::iterator it = CudaDriver::auxAddressTable.begin(); it != CudaDriver::auxAddressTable.end(); ++it ) {
+			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
 				//Free corresponding device memory.
 				addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
-				cuMemFree((CUdeviceptr)aet->devPtr);
+				cuMemFree((CUdeviceptr)aet->basePtr);
 			}
 		}
     }
@@ -627,10 +631,10 @@ void CudaDriver::release_freed_device_memory()
 #endif
 }
 
-HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int count, int asyncID) {
+HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D(%d, %u)\n", asyncID, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
 	}
 #endif
     HostConf_t * tconf = getHostConf();
@@ -651,20 +655,32 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int coun
 #endif
     HI_error_t result = HI_error;
 
-    if(HI_get_device_address(hostPtr, devPtr, asyncID) == HI_success ) {
-        result = HI_success;
+    if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
+        //result = HI_success;
+		fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+		exit(1);
     } else {
         CUresult cuResult = CUDA_SUCCESS;
 #if VICTIM_CACHE_MODE == 0
 		memPool_t *memPool = memPoolMap[tconf->threadID];
-        std::multimap<size_t, void *>::iterator it = memPool->find((size_t) count);
+        std::multimap<size_t, void *>::iterator it = memPool->find(count);
         if (it != memPool->end()) {
+#ifdef _OPENARC_PROFILE_
+			if( HI_openarcrt_verbosity > 2 ) {
+				fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_malloc1D(%d, %lu) reuses memories in the memPool\n", asyncID, count);
+			}
+#endif
+			*devPtr = it->second;
             *devPtr = it->second;
             memPool->erase(it);
         } else {
-            cuResult = cuMemAlloc((CUdeviceptr*)devPtr, (size_t) count);
+            cuResult = cuMemAlloc((CUdeviceptr*)devPtr, count);
             if (cuResult != CUDA_SUCCESS) {
-            	//fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] cuMemAlloc failed with error %d \n", cuResult);
+#ifdef _OPENARC_PROFILE_
+				if( HI_openarcrt_verbosity > 2 ) {
+					fprintf(stderr, "[OPENARCRT-INFO]\t\tCudaDriver::HI_malloc1D(%d, %lu) releases memories in the memPool\n", asyncID, count);
+				}
+#endif
                 for (it = memPool->begin(); it != memPool->end(); ++it) {
             		*devPtr = it->second;
 					cuResult = cuMemFree((CUdeviceptr)(*devPtr));
@@ -673,7 +689,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int coun
                     }
                 }
                 memPool->clear();
-                cuResult = cuMemAlloc((CUdeviceptr*)devPtr, (size_t) count);
+                cuResult = cuMemAlloc((CUdeviceptr*)devPtr, count);
             }
         }
         if( cuResult == CUDA_SUCCESS ) {
@@ -689,7 +705,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int coun
 #endif
 				}
 			}
-            HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID);
+            HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
             tconf->DMallocCnt++;
 #endif
@@ -704,12 +720,12 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int coun
 		///////////////////////////
 		// VICTIM_CACHE_MODE = 1 //
 		///////////////////////////
-    	if(HI_get_device_address_from_victim_cache(hostPtr, devPtr, NULL, NULL, asyncID) == HI_success ) {
+    	if(HI_get_device_address_from_victim_cache(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
 			result = HI_success;
             if( tconf->prepin_host_memory == 1 ) {
 				inc_pinned_host_memory_counter(hostPtr);
 			}
-			HI_remove_device_address_from_victim_cache(hostPtr, asyncID);
+			HI_remove_device_address_from_victim_cache(hostPtr, asyncID, tconf->threadID);
         } else {
             cuResult = cuMemAlloc((CUdeviceptr*)devPtr, (size_t) count);
             if (cuResult != CUDA_SUCCESS) {
@@ -757,7 +773,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int coun
 			}
 		}
         if( cuResult == CUDA_SUCCESS ) {
-            HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID);
+            HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
             tconf->DMallocCnt++;
 #endif
@@ -774,16 +790,17 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, int coun
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_malloc1D(%d, %u)\n", asyncID, count);
+		HI_print_device_address_mapping_summary(tconf->threadID);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
 	}
 #endif
     return result;
 }
 
-HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, int count, int asyncID) {
+HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D_unified(%d, %u)\n", asyncID, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D_unified(%d, %lu)\n", asyncID, count);
 	}
 #endif
     HostConf_t * tconf = getHostConf();
@@ -805,14 +822,16 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
     HI_error_t result = HI_error;
 
 
-    if(HI_get_device_address(hostPtr, devPtr, asyncID) == HI_success ) {
-        result = HI_success;
+    if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
+        //result = HI_success;
+		fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D_unified()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+		exit(1);
     } else {
 #if CUDA_VERSION >= 6000
 		if( unifiedMemSupported == 0 ) {
 			fprintf(stderr, "[OPENARCRT-WARNING in CudaDriver::HI_malloc1D_unified(%d)] unified memory is either not supported or disabled in the current device; device memory should be explicitly managed either through data clauses or though runtime APIs.\n", asyncID);
 			if( hostPtr == NULL ) {
-				*devPtr = malloc((size_t)count);
+				*devPtr = malloc(count);
 			} else {
 				*devPtr = (void *)hostPtr;
 			}
@@ -820,9 +839,9 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
 			//CU_MEM_ATTACH_GLOBAL: this memory is accessible from any stream on any device.
 			//CU_MEM_ATTACH_HOST: the allocation is created within initial visibility restricted to host access
 			//only; an explicit call to cuStreamAttachMemAsync will be required to enable access on the device.
-        	CUresult cuResult = cuMemAllocManaged((CUdeviceptr*)devPtr, (size_t) count, CU_MEM_ATTACH_GLOBAL);
+        	CUresult cuResult = cuMemAllocManaged((CUdeviceptr*)devPtr, count, CU_MEM_ATTACH_GLOBAL);
         	if( cuResult == CUDA_SUCCESS ) {
-            	HI_set_device_address(*devPtr, *devPtr, (size_t) count, asyncID);
+            	HI_set_device_address(*devPtr, *devPtr, count, asyncID, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
             	tconf->DMallocCnt++;
 #endif
@@ -837,7 +856,7 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
 #else
 		fprintf(stderr, "[OPENARCRT-WARNING in CudaDriver::HI_malloc1D_unified(%d)] To use the unified memory, CUDA toolkit version 6 or later should be used (currrent version = %d); device memory should be explicitly managed either through data clauses or though runtime APIs.\n", CUDA_VERSION, asyncID);
 		if( hostPtr == NULL ) {
-			*devPtr = malloc((size_t)count);
+			*devPtr = malloc(count);
 		} else {
 			*devPtr = (void *)hostPtr;
 		}
@@ -849,7 +868,7 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_malloc1D_unified(%d, %u)\n", asyncID, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_malloc1D_unified(%d, %lu)\n", asyncID, count);
 	}
 #endif
     return result;
@@ -872,8 +891,10 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
 #endif
     HI_error_t result;
 
-    if(HI_get_device_address(hostPtr, devPtr, asyncID) == HI_success ) {
+    if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
         result = HI_success;
+		fprintf(stderr, "[ERROR in CudaDriver::HI_malloc2D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+		exit(1);
     } else {
         CUresult cuResult = cuMemAllocPitch((CUdeviceptr*)devPtr, pitch, widthInBytes, height, 16);
         if( cuResult == CUDA_SUCCESS ) {
@@ -890,7 +911,7 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
 				}
 			}
 
-            HI_set_device_address(hostPtr, *devPtr, (size_t) widthInBytes*height, asyncID);
+            HI_set_device_address(hostPtr, *devPtr, (size_t) widthInBytes*height, asyncID, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
             tconf->DMallocCnt++;
 #endif
@@ -959,7 +980,7 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
     void *devPtr;
     size_t size;
     //Check if the mapping exists. Free only if a mapping is found
-    if( HI_get_device_address(hostPtr, &devPtr, NULL, &size, asyncID) != HI_error) {
+    if( HI_get_device_address(hostPtr, &devPtr, NULL, &size, asyncID, tconf->threadID) != HI_error) {
 		//If this method is called for unified memory, memory deallocation
 		//is skipped; unified memory will be deallocatedd only by 
 		//HI_free_unified().
@@ -970,15 +991,15 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
 			//and remove host-pointer-to-device-pointer mapping.
 			memPool_t *memPool = memPoolMap[tconf->threadID];
             memPool->insert(std::pair<size_t, void *>(size, devPtr));
-			HI_remove_device_address(hostPtr, asyncID);
+			HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
 			// Unpin host memory
 			HI_unpin_host_memory(hostPtr);
 #else
 			///////////////////////////
 			// VICTIM_CACHE_MODE = 1 //
 			///////////////////////////
-			HI_remove_device_address(hostPtr, asyncID);
-			HI_set_device_address_in_victim_cache(hostPtr, devPtr, size, asyncID);
+			HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
+			HI_set_device_address_in_victim_cache(hostPtr, devPtr, size, asyncID, tconf->threadID);
            // Decrease pinned host memory counter
             if( tconf->prepin_host_memory == 1 ) {
             	dec_pinned_host_memory_counter(hostPtr);
@@ -989,7 +1010,7 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
 /*
 			cuResult = cuMemFree((CUdeviceptr)(devPtr));
         	if( cuResult == CUDA_SUCCESS ) {
-            	HI_remove_device_address(hostPtr, asyncID);
+            	HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
             	// Unpin host memory
             	if( tconf->prepin_host_memory == 1 ) {
             		HI_unpin_host_memory(hostPtr);
@@ -1032,13 +1053,13 @@ HI_error_t CudaDriver::HI_free_unified( const void *hostPtr, int asyncID) {
     HI_error_t result = HI_success;
     void *devPtr;
     //Check if the mapping exists. Free only if a mapping is found
-    if( HI_get_device_address(hostPtr, &devPtr, asyncID) != HI_error) {
+    if( HI_get_device_address(hostPtr, &devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success) {
 		if( unifiedMemSupported == 0 ) {
 			free(devPtr);
 		} else {
         	CUresult cuResult = cuMemFree((CUdeviceptr)(devPtr));
         	if( cuResult == CUDA_SUCCESS ) {
-            	HI_remove_device_address(hostPtr, asyncID);
+            	HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
 
 #ifdef _OPENARC_PROFILE_
             	tconf->DFreeCnt++;
@@ -1419,7 +1440,7 @@ HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
         	break;
     	}
     	case HI_MemcpyHostToDevice: {
-			baseHostPtr = HI_get_base_address_of_host_memory(src, async);
+			baseHostPtr = HI_get_base_address_of_host_memory(src, async, tconf->threadID);
 			if( baseHostPtr == 0 ) {
 				baseHostPtr = src;
 			}
@@ -1428,7 +1449,7 @@ HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
         	break;
     	}
     	case HI_MemcpyDeviceToHost: {
-			baseHostPtr = HI_get_base_address_of_host_memory((const void *)dst, async);
+			baseHostPtr = HI_get_base_address_of_host_memory((const void *)dst, async, tconf->threadID);
 			if( baseHostPtr == 0 ) {
 				baseHostPtr = (const void *)dst;
 			}
@@ -1841,7 +1862,7 @@ HI_error_t CudaDriver::HI_register_kernel_numargs(std::string kernel_name, int n
 }
 
 
-HI_error_t CudaDriver::HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value)
+HI_error_t CudaDriver::HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -2120,10 +2141,36 @@ void CudaDriver::HI_wait(int arg) {
 		exit(1);
     }
 
-    HI_postponed_free(arg);
+    HI_postponed_free(arg, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_wait(%d)\n", arg);
+	}
+#endif
+}
+
+void CudaDriver::HI_wait_ifpresent(int arg) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_ifpresent(%d)\n", arg);
+	}
+#endif
+    CUevent event = getEvent_ifpresent(arg);
+	if( event != NULL ) {
+    	HostConf_t * tconf = getHostConf();
+
+    	CUresult cuResult = cuEventSynchronize(event);
+
+    	if(cuResult != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_ifpresent()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", arg, cuResult);
+			exit(1);
+    	}
+
+    	HI_postponed_free(arg, tconf->threadID);
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_wait_ifpresent(%d)\n", arg);
 	}
 #endif
 }
@@ -2146,7 +2193,7 @@ void CudaDriver::HI_wait_async(int arg, int async) {
 		exit(1);
     }
 
-    HI_postponed_free(arg);
+    HI_postponed_free(arg, tconf->threadID);
 
     cuResult = cuEventSynchronize(event2);
 
@@ -2158,6 +2205,41 @@ void CudaDriver::HI_wait_async(int arg, int async) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_wait_async(%d, %d)\n", arg, async);
+	}
+#endif
+}
+
+void CudaDriver::HI_wait_async_ifpresent(int arg, int async) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_async_ifpresent(%d, %d)\n", arg, async);
+	}
+#endif
+    CUevent event = getEvent_ifpresent(arg);
+    CUevent event2 = getEvent_ifpresent(async);
+	if( (event != NULL) && (event2 != NULL) ) {
+    	HostConf_t * tconf = getHostConf();
+
+    	CUresult cuResult = cuEventSynchronize(event);
+
+    	if(cuResult != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async_ifpresent()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", arg, cuResult);
+			exit(1);
+    	}
+
+    	HI_postponed_free(arg, tconf->threadID);
+
+    	cuResult = cuEventSynchronize(event2);
+
+    	if(cuResult != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async_ifpresent()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", async, cuResult);
+			exit(1);
+    	}
+	}
+
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_wait_async_ifpresent(%d, %d)\n", arg, async);
 	}
 #endif
 }
@@ -2192,7 +2274,7 @@ void CudaDriver::HI_waitS2(int asyncId) {
 	}
 #endif
 	HI_free_temphosts(asyncId);
-    HI_postponed_free(asyncId);
+    HI_postponed_free(asyncId, get_thread_id());
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_waitS2(%d)\n", asyncId);
@@ -2206,11 +2288,9 @@ void CudaDriver::HI_wait_all() {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_all()\n");
 	}
 #endif
-    eventmap_cuda_t *eventMap = &threadQueueEventMap.at(get_thread_id());
     HostConf_t * tconf = getHostConf();
+    eventmap_cuda_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     CUresult cuResult;
-
-    std::set<int> queuesChecked;
 
     for(eventmap_cuda_t::iterator it = eventMap->begin(); it != eventMap->end(); ++it) {
         cuResult = cuEventSynchronize(it->second);
@@ -2218,14 +2298,9 @@ void CudaDriver::HI_wait_all() {
             fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, cuResult);
 			exit(1);
         }
-        queuesChecked.insert(it->first);
+		HI_postponed_free(it->first-2, tconf->threadID);
     }
 
-    //release the waiting frees
-    std::set<int>::iterator it;
-    for (it=queuesChecked.begin(); it!=queuesChecked.end(); ++it) {
-        HI_postponed_free(*it);
-    }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_wait_all()\n");
@@ -2240,11 +2315,9 @@ void CudaDriver::HI_wait_all_async(int async) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_all_async(%d)\n", async);
 	}
 #endif
-    eventmap_cuda_t *eventMap = &threadQueueEventMap.at(get_thread_id());
     HostConf_t * tconf = getHostConf();
+    eventmap_cuda_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     CUresult cuResult;
-
-    std::set<int> queuesChecked;
 
     for(eventmap_cuda_t::iterator it = eventMap->begin(); it != eventMap->end(); ++it) {
         cuResult = cuEventSynchronize(it->second);
@@ -2252,13 +2325,7 @@ void CudaDriver::HI_wait_all_async(int async) {
             fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, cuResult);
 			exit(1);
         }
-        queuesChecked.insert(it->first);
-    }
-
-    //release the waiting frees
-    std::set<int>::iterator it;
-    for (it=queuesChecked.begin(); it!=queuesChecked.end(); ++it) {
-        HI_postponed_free(*it);
+		HI_postponed_free(it->first-2, tconf->threadID);
     }
 
     CUevent event2 = getEvent(async);
@@ -2296,10 +2363,42 @@ int CudaDriver::HI_async_test(int asyncId) {
         return 0;
     }
 
-    HI_postponed_free(asyncId);
+    HI_postponed_free(asyncId, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_async_test(%d)\n", asyncId);
+	}
+#endif
+    return 1;
+}
+
+int CudaDriver::HI_async_test_ifpresent(int asyncId) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_async_test_ifpresent(%d)\n", asyncId);
+	}
+#endif
+    CUevent event = getEvent_ifpresent(asyncId);
+	if( event != NULL ) {
+    	HostConf_t * tconf = getHostConf();
+
+    	CUresult cuResult = cuEventQuery(event);
+
+    	if(cuResult != CUDA_SUCCESS) {
+        	//fprintf(stderr, "in CudaDriver::HI_async_test_ifpresent()] stream %d code %d\n", asyncId, cuResult);
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_async_test_ifpresent(%d)\n", asyncId);
+	}
+#endif
+        	return 0;
+    	}
+
+    	HI_postponed_free(asyncId, tconf->threadID);
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_async_test_ifpresent(%d)\n", asyncId);
 	}
 #endif
     return 1;
@@ -2311,8 +2410,8 @@ int CudaDriver::HI_async_test_all() {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_async_test_all()\n");
 	}
 #endif
-    eventmap_cuda_t *eventMap = &threadQueueEventMap.at(get_thread_id());
     HostConf_t * tconf = getHostConf();
+    eventmap_cuda_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     CUresult cuResult;
 
     std::set<int> queuesChecked;
@@ -2328,7 +2427,7 @@ int CudaDriver::HI_async_test_all() {
     //release the waiting frees
     std::set<int>::iterator it;
     for (it=queuesChecked.begin(); it!=queuesChecked.end(); ++it) {
-        HI_postponed_free(*it);
+        HI_postponed_free(*it, tconf->threadID);
     }
 
 #ifdef _OPENARC_PROFILE_
@@ -2379,7 +2478,7 @@ void CudaDriver::HI_free(void *devPtr) {
 
     CUresult cuResult = CUDA_SUCCESS;
     void *devPtr2;
-    if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE+tconf->asyncID_offset) == HI_error) ||
+    if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID) == HI_error) ||
 		(devPtr != devPtr2) ) {
 		//Free device memory if it is not on unified memory.
     	cuResult = cuMemFree((CUdeviceptr)devPtr);
