@@ -640,17 +640,14 @@ public class ASPENModelAnalysis extends AnalysisPass {
 						// check whether loop stride is 1.
 						Expression incr = LoopTools.getIncrementExpression(ploop);
 						Boolean increasingOrder = true;
+						Boolean strideOne = true;
 						if( incr instanceof IntegerLiteral ) {
 							long IntIncr = ((IntegerLiteral)incr).getValue();
 							if( IntIncr < 0 ) {
 								increasingOrder = false;
 							}
 							if( Math.abs(IntIncr) != 1 ) {
-								Tools.exit("\n[ERROR in ASPENModelGen] case2: loop statement without ignore or execute ASPEN clause should have " +
-										"loop count information in either loop or parallelism ASPEN clause, unless the compiler can figure out the loop count.\n" +
-										"Loop Statement:\n" + at + 
-									"\nEnclosing Procedure: " + proc.getSymbolName() +"\nEnclosing Translation Unit: " + 
-									((TranslationUnit)proc.getParent()).getOutputFilename() + "\n");
+								strideOne = false;
 							}
 						} else {
 							Tools.exit("\n[ERROR in ASPENModelGen] case3: loop statement without ignore or execute ASPEN clause should have " +
@@ -662,13 +659,27 @@ public class ASPENModelAnalysis extends AnalysisPass {
 						}
 						// identify the loop index variable 
 						//Expression ivar = LoopTools.getIndexVariable(ploop);
+						//[FIXME] LoopTools assumes increasing order, and thus below will be incorrect
+						//if the loop is not in an increasing order.
 						Expression lb = Symbolic.simplify(LoopTools.getLowerBoundExpression(ploop));
 						Expression ub = Symbolic.simplify(LoopTools.getUpperBoundExpression(ploop));
 						Expression tSize = null;
-						if( increasingOrder ) {
-							tSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+						if( strideOne ) {
+							if( increasingOrder ) {
+								tSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+							} else {
+								tSize = Symbolic.add(Symbolic.subtract(lb,ub),new IntegerLiteral(1));
+							}
 						} else {
-							tSize = Symbolic.add(Symbolic.subtract(lb,ub),new IntegerLiteral(1));
+							Expression tExp = null;
+							if( increasingOrder ) {
+								tExp = Symbolic.divide(Symbolic.subtract(ub,lb), incr.clone());
+							} else {
+								tExp = Symbolic.divide(Symbolic.subtract(lb,ub), incr.clone());
+							}
+							FunctionCall floorCall = new FunctionCall(new NameID("floor"));
+							floorCall.addArgument(tExp);
+							tSize = Symbolic.add(floorCall,new IntegerLiteral(1));
 						}
 						if( (tSize == null) || !containsParamSymbolsOnly(tSize) ) {
 							Tools.exit("\n[ERROR in ASPENModelGen] case4: loop statement without ignore or execute ASPEN clause should have " +

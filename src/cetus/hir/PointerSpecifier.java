@@ -52,6 +52,11 @@ public class PointerSpecifier extends Specifier {
         }
     }
 
+    // [Added by Joel E. Denny]
+    public List<Specifier> getQualifiers() {
+      return qualifiers == null ? new ArrayList<Specifier>() : qualifiers;
+    }
+
     public void print(PrintWriter o) {
         o.print("*");
         if (qualifiers != null && !qualifiers.isEmpty()) {

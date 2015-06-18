@@ -1,7 +1,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC Runtime V0.3 (August 29, 2014)
+OpenARC Runtime V0.4 (June 01, 2015)
 
 OpenARC Runtime implements APIs used by the output program translated
 by OpenARC.
@@ -49,7 +49,6 @@ LIMITATIONS
 -------------------------------------------------------------------------------
 
 
-August 29, 2014
 The OpenARC Team
 
 URL: http://ft.ornl.gov/research/openarc
