@@ -34,6 +34,11 @@ public class ASPENParam extends ASPENExpression {
 			addChild(tInitVal);
 		}
 	}
+
+	public ASPENParam clone() {
+		ASPENParam nParam = (ASPENParam)super.clone();
+		return nParam;
+	}
 	
 	public IDExpression getID() {
 		return (IDExpression)children.get(0);

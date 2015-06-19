@@ -1286,6 +1286,15 @@ public abstract class TransformTools {
 		StringBuilder sb = new StringBuilder(32);
 		if( base instanceof AccessSymbol ) {
 			sb.append(buildAccessSymbolName((AccessSymbol)base));
+		} else if( base instanceof DerefSymbol ) {
+			while( base instanceof DerefSymbol ) {
+				base = ((DerefSymbol)base).getRefSymbol();
+			}
+			if( base instanceof AccessSymbol ) {
+				sb.append(buildAccessSymbolName((AccessSymbol)base));
+			} else {
+				sb.append(base.getSymbolName());
+			}
 		} else {
 			sb.append(base.getSymbolName());
 		}

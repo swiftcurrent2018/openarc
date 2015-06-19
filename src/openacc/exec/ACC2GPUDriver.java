@@ -258,7 +258,21 @@ public class ACC2GPUDriver extends Driver
 		
 		options.add(options.UTILITY, "ASPENModelGen",
             "modelname=name:mode=number:entryfunction=entryfunc:complement=0|1:functions=foo,bar:postprocessing=number",
-        "Generate ASPEN model for the input program");
+        "Generate ASPEN model for the input program; \n"
+        + "modelname = [name of generated Aspen model]\n"
+        + "mode = 0 (skip the whole Aspen model gereation passes)\n"
+        + "       1 (analyze an input program and generated output C program annotated with Aspen directives)\n"
+        + "       2 (skip analysis pass and generate output Aspen model only with Aspen directives annotated in the input program)\n"
+        + "       3 (mode 1 + 2; analyze an input program, annotate it with Aspen directives, and generate output Aspen model (default))\n"
+        + "       4 (mode 3 + modify the input OpenACC program such that each compute region is selectively offloaded using HI_aspenpredic() function)\n"
+        + "entryfunction = [entry function to generate Aspen model]\n"
+        + "functions = [comma-separated list of functions]\n"
+        + "complement = 0 (ignore functions if specified in functions sub-option (default))\n"
+        + "             1 (ignore functions if not specified in functions sub-option)\n"
+        + "postprocessing = 0 (does not perform any Aspen IR flattening transformation)\n"
+        + "                 1 (inline Aspen kernels called within Aspen maps)\n"
+        + "                 2 (inline Aspen kernels + merge Aspen maps if directly nested (default))"
+        + "");
 		
 		options.add(options.UTILITY, "addSafetyCheckingCode",
 		"Add GPU-memory-usage-checking code just before each kernel call; used for debugging.");

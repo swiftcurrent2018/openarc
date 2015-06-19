@@ -42,8 +42,9 @@ import openacc.hir.ASPENParamDeclaration;
 import openacc.hir.ASPENRequiresExpressionStatement;
 import openacc.hir.ASPENResource;
 import openacc.hir.ASPENStatement;
-
 import cetus.analysis.CallGraph;
+import cetus.hir.AccessExpression;
+import cetus.hir.AccessSymbol;
 import cetus.hir.Annotatable;
 import cetus.hir.AnnotationDeclaration;
 import cetus.hir.AnnotationStatement;
@@ -97,6 +98,7 @@ import cetus.transforms.TransformPass;
 public class ASPENModelGen extends TransformPass {
 	private boolean IRSymbolOnly = true;
 	private Procedure main = null;
+	private TranslationUnit mainTrUnt = null;
 	private ASPENModel aspenModel = null;
 	private Set<IDExpression> ignoredKernels = new HashSet<IDExpression>();
 	private	int exeBlockCnt = 0;
@@ -291,6 +293,7 @@ public class ASPENModelGen extends TransformPass {
 				modelName = modelName.substring(0, dotIndex).trim();
 			}
 		}
+		mainTrUnt = (TranslationUnit)main.getParent(); 
 		/////////////////////////////////////////////
 		//Step1: Add global ASPEN parameters/data. //
 		/////////////////////////////////////////////
@@ -831,13 +834,17 @@ public class ASPENModelGen extends TransformPass {
 			for( IDExpression tNameID : tNameIDs ) {
 				if( !accessedNameIDs.contains(tNameID) ) {
 					boolean mayBeUsed = false;
-					for( SomeExpression tSome : accessedSomeExps ) {
-						if( tSome.toString().contains(tNameID.toString()) ) {
-							mayBeUsed = true;
-							break;
+					String tNameStr = tNameID.toString();
+					if( tNameStr.contains("aspen_param_type_") ) {
+						for( SomeExpression tSome : accessedSomeExps ) {
+							if( tSome.toString().contains(tNameID.toString()) ) {
+								mayBeUsed = true;
+								break;
+							}
 						}
 					}
-					if( !mayBeUsed ) {
+					//Remove unused internal Aspen parameters only if they represent type sizes.
+					if( !mayBeUsed && tNameStr.contains("aspen_param_sizeof_") ) {
 						aspenDecl = aspenModel.removeParam(tNameID);
 						if( aspenDecl != null ) {
 							IRtr = aspenDeclToIRMap.get(aspenDecl);
@@ -1105,8 +1112,43 @@ public class ASPENModelGen extends TransformPass {
 			}
 		}
 		
+		//////////////////////////////////////////////////////////////////////
+		//Step7: convert scalar struct members to internal Aspen parameter. //
+		//////////////////////////////////////////////////////////////////////
+		DFIterator<AccessExpression> eiter = new DFIterator<AccessExpression>(aspenModel, AccessExpression.class);
+		while(eiter.hasNext())
+		{
+			AccessExpression tAccExp = eiter.next();
+			AccessSymbol tAccSym = new AccessSymbol(tAccExp);
+			Symbol tMemSym = tAccSym.getMemberSymbol();
+			if( SymbolTools.isArray(tMemSym) || SymbolTools.isPointer(tMemSym) ) {
+				continue;
+			}
+			StringBuilder str = new StringBuilder(32);
+			str.append("aspen_param_");
+			str.append(TransformTools.buildAccessSymbolName(tAccSym));
+			NameID nParamID = new NameID(str.toString());
+			if( !aspenModel.containsParam(nParamID) ) {
+				Set<ASPENParam> nParamSet = new HashSet<ASPENParam>();
+				ASPENParam aParam = new ASPENParam(nParamID);
+				nParamSet.add(aParam);
+				ASPENAnnotation nParamAnnot = new ASPENAnnotation("declare", "_directive");
+				nParamAnnot.put("param", nParamSet);
+				AnnotationDeclaration nParamDecl = new AnnotationDeclaration(nParamAnnot);
+				if( aspenDeclToIRMap.isEmpty() ) {
+					mainTrUnt.addDeclarationBefore(mainTrUnt.getFirstDeclaration(), nParamDecl);
+				} else {
+					mainTrUnt.addDeclarationAfter(mainTrUnt.getFirstDeclaration(), nParamDecl);
+				}
+				ASPENParamDeclaration aspenParamDecl = new ASPENParamDeclaration(aParam.clone());
+				aspenModel.addASPENDeclarationFirst(aspenParamDecl);
+				aspenDeclToIRMap.put(aspenParamDecl, nParamDecl);
+			}
+			tAccExp.swapWith(nParamID.clone());
+		}
+		
 		/////////////////////////////////////////////////////////////////////////////
-		//Step7: Check uninitialized parameters and data without size information. //
+		//Step8: Check uninitialized parameters and data without size information. //
 		/////////////////////////////////////////////////////////////////////////////
 		tSymSet = new HashSet<Symbol>();
 		paramSet = aspenModel.getParamSymbols();
@@ -1286,11 +1328,11 @@ public class ASPENModelGen extends TransformPass {
 		}
 		
 		/////////////////////////////////////////////////
-		//Step8: Flatten ASPEN IRs to meet the current //
+		//Step9: Flatten ASPEN IRs to meet the current //
 		//ASPEN parallelism mapping strategy.          //                                                          //
 		/////////////////////////////////////////////////
 		///////////////////////////////////////////////////////////
-		//Step8-1: Inline ASPEN kernels called within ASPEN maps //
+		//Step9-1: Inline ASPEN kernels called within ASPEN maps //
 		///////////////////////////////////////////////////////////
 		if( postprocessing > 0 ) {
 			do {
@@ -1302,6 +1344,9 @@ public class ASPENModelGen extends TransformPass {
 				}
 			} while( IRMerged );
 		}
+		/////////////////////////////////////
+		//Step9-2: Merge nested ASPEN maps //
+		/////////////////////////////////////
 		if( postprocessing > 1 ) {
 			for( Traversable t : aspenModel.getChildren() ) {
 				if( t instanceof ASPENKernel ) {
@@ -1311,7 +1356,7 @@ public class ASPENModelGen extends TransformPass {
 		}
 		
 		///////////////////////////////////////////////
-		//Step9: Write the model to the output file. //
+		//Step10: Write the model to the output file. //
 		///////////////////////////////////////////////
 		if( genASPENModel ) {
 			PrintTools.printlnStatus("Printing ASPEN Model...", 1);

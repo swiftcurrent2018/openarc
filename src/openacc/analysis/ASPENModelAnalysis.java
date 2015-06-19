@@ -35,13 +35,14 @@ import openacc.hir.ASPENResource;
 import openacc.hir.ASPENStatement;
 import openacc.hir.ASPENTrait;
 import openacc.transforms.ASPENModelGen;
-
+import openacc.transforms.TransformTools;
 import cetus.analysis.AnalysisPass;
 import cetus.analysis.CFGraph;
 import cetus.analysis.CallGraph;
 import cetus.analysis.LoopTools;
 import cetus.exec.Driver;
 import cetus.hir.AccessExpression;
+import cetus.hir.AccessSymbol;
 import cetus.hir.Annotatable;
 import cetus.hir.AnnotationDeclaration;
 import cetus.hir.AnnotationStatement;
@@ -337,7 +338,7 @@ public class ASPENModelAnalysis extends AnalysisPass {
 					continue;
 				}
 				if( tr instanceof AnnotationDeclaration ) {
-					//[Step 2-1] Handle existing ASPEN param annotations.
+					//[Step 2-1] Handle existing ASPEN pragma annotations.
 					AnnotationDeclaration annot = (AnnotationDeclaration)tr;
 					aspenAnnot = annot.getAnnotation(ASPENAnnotation.class, "param");
 					if( aspenAnnot != null ) {
@@ -681,6 +682,9 @@ public class ASPENModelAnalysis extends AnalysisPass {
 							floorCall.addArgument(tExp);
 							tSize = Symbolic.add(floorCall,new IntegerLiteral(1));
 						}
+						if( tSize != null ) {
+							tSize = convertAccessExpressionsToInternalParams(tSize, ploop);
+						}
 						if( (tSize == null) || !containsParamSymbolsOnly(tSize) ) {
 							Tools.exit("\n[ERROR in ASPENModelGen] case4: loop statement without ignore or execute ASPEN clause should have " +
 									"loop count information in either loop or parallelism ASPEN clause, unless the compiler can figure out the loop count.\n" +
@@ -745,6 +749,9 @@ public class ASPENModelAnalysis extends AnalysisPass {
 						}
 					}
 					if( inASPENModelRegion && (aspenAnnotData1.ifCond.isEmpty()) && (aspenAnnotData1.probability.isEmpty()) ) {
+						if( ifCond != null ) {
+							ifCond = convertAccessExpressionsToInternalParams(ifCond, at);
+						}
 						if( (ifCond == null) || !containsParamSymbolsOnly(ifCond) ) {
 							Tools.exit("\n[ERROR in ASPENModelGen] If statement without ignore or execute ASPEN clause should have " +
 									"either if or probability ASPEN clause, unless the compiler can figure it out.\n" +
@@ -1568,6 +1575,63 @@ public class ASPENModelAnalysis extends AnalysisPass {
 			((ASPENResource)aExp).updateID();
 		}
 	}
+
+	/**
+	 * Convert AccessExpressions to internal Aspen parameters if the accessed member is a scalar variable.
+	 * 
+	 * @param exp
+	 * @return
+	 */
+	protected Expression convertAccessExpressionsToInternalParams(Expression exp, Traversable refTR) {
+		Expression newExp = exp;
+		if( (exp != null) && (refTR != null) ) {
+			DFIterator<AccessExpression> eiter = new DFIterator<AccessExpression>(exp, AccessExpression.class);
+			NameID nParamID = null;
+			List tosymList = new ArrayList(2);
+			while(eiter.hasNext())
+			{
+				AccessExpression tAccExp = eiter.next();
+				AccessSymbol tAccSym = new AccessSymbol(tAccExp);
+				Symbol tMemSym = tAccSym.getMemberSymbol();
+				if( SymbolTools.isArray(tMemSym) || SymbolTools.isPointer(tMemSym) ) {
+					continue;
+				}
+				Symbol tIRSym = tAccSym.getIRSymbol();
+				Symbol tOIRSym = null;
+				tosymList.clear();
+				if( AnalysisTools.SymbolStatus.OrgSymbolFound(
+						AnalysisTools.findOrgSymbol(tIRSym, refTR, true, null, tosymList, gFuncCallList)) ) {
+					tOIRSym = (Symbol)tosymList.get(0);
+				}
+				if( tOIRSym != null ) {
+					tAccSym = (AccessSymbol)AnalysisTools.replaceIRSymbol(tAccSym, tIRSym, tOIRSym);
+				}
+				StringBuilder str = new StringBuilder(32);
+				str.append("aspen_param_");
+				str.append(TransformTools.buildAccessSymbolName(tAccSym));
+				nParamID = new NameID(str.toString());
+				if( !internalParamMap.containsKey(nParamID) ) {
+					Set<ASPENParam> paramSet = new HashSet<ASPENParam>();
+					ASPENParam aParam = new ASPENParam(nParamID);
+					paramSet.add(aParam);
+					ASPENAnnotation nParamAnnot = new ASPENAnnotation("declare", "_directive");
+					nParamAnnot.put("param", paramSet);
+					AnnotationDeclaration nParamDecl = new AnnotationDeclaration(nParamAnnot);
+					if( internalParamMap.isEmpty() ) {
+						mainTrUnt.addDeclarationBefore(mainTrUnt.getFirstDeclaration(), nParamDecl);
+					} else {
+						mainTrUnt.addDeclarationAfter(mainTrUnt.getFirstDeclaration(), nParamDecl);
+					}
+					internalParamMap.put(nParamID, nParamDecl);
+				}
+				tAccExp.swapWith(nParamID.clone());
+				if( exp.equals(tAccExp) ) {
+					newExp = nParamID.clone();
+				}
+			}
+		}
+		return newExp;
+	}
 	
 	protected boolean containsParamSymbolsOnly(Expression exp) {
 		boolean ret = true;
@@ -1608,7 +1672,7 @@ public class ASPENModelAnalysis extends AnalysisPass {
 			}*/
 			if( !(tObj instanceof PointerSpecifier) && !tObj.equals(Specifier.STATIC) 
 					&& !tObj.equals(Specifier.EXTERN) && !tObj.equals(Specifier.CONST) 
-					&& !(tObj instanceof Declarator)
+					//&& !(tObj instanceof Declarator)
 					&& !tObj.equals(Specifier.RESTRICT) ) {
 				specs.add(tObj);
 			}
@@ -1616,7 +1680,7 @@ public class ASPENModelAnalysis extends AnalysisPass {
 		NameID nParamID = null;
 		if( !specs.isEmpty() ) {
 			StringBuilder str = new StringBuilder(32);
-			str.append("aspen_param_");
+			str.append("aspen_param_sizeof_");
 			for( Object obj : specs ) {
 				str.append(obj.toString());
 			}
@@ -2370,6 +2434,9 @@ public class ASPENModelAnalysis extends AnalysisPass {
 							if( nParamID != null ) {
 								allocatedUnit = nParamID.clone();
 								sizeofExp.swapWith(new IntegerLiteral(1));
+								if( sizeofExp.equals(sizeExp) ) {
+									sizeExp = new IntegerLiteral(1);
+								}
 								allocatedElems = Symbolic.simplify(sizeExp);
 							}
 						} else {

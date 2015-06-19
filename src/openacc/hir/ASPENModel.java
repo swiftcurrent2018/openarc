@@ -206,6 +206,21 @@ public class ASPENModel implements Traversable, ASPENPrintable {
 			}
 		}
     }
+
+	public void addASPENDeclarationFirst(ASPENDeclaration decl) {
+		if( decl instanceof ASPENKernel ) {
+			//Let the input ASPENKernel be the first ASPEN kernel.
+			ASPENKernel firstKernel = getFirstASPENKernelDeclaration();
+			if( firstKernel == null ) {
+				addChild(decl);
+			} else {
+				addASPENDeclarationBefore(firstKernel, decl);
+			}
+		} else {
+			//Let the input ASPEN Param/Data be the first ASPEN declaration.
+			addChild(0, decl);
+		}
+    }
     
     public void addASPENDeclarationBefore(ASPENDeclaration ref_decl, ASPENDeclaration new_decl) {
         int index = Tools.identityIndexOf(children, ref_decl);
