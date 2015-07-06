@@ -365,8 +365,13 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         kernelsTranslationUnit.addDeclarationFirst(accHeaderDecl);
         for( int i=0; i<main_List.size(); i++ ) {
         	Procedure tmain = main_List.get(i);
+        	String tmainName = tmain.getSymbolName();
+        	boolean real_main = false;
+        	if( tmainName.equals("main") || tmainName.equals("MAIN__") ) {
+        		real_main = true;
+        	}
 			if( opt_GenDistOpenACC ) {
-        		if( tmain.getSymbolName().equals("main") ) {
+        		if( real_main ) {
         			tmain.setName("real_main");
         		}
 			}
@@ -377,9 +382,13 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         	/* 2) Insert OpenACC shutdown call at the end of the main()             */
         	/*     - acc_shutdown( acc_device_default );                             */
         	FunctionCall acc_init_call = new FunctionCall(new NameID("acc_init"));
-        	//Using Xeon Phi
-        	if(targetArch == 2)
+        	if(targetArch == 3)
         	{
+        		//Using Altera.
+        		acc_init_call.addArgument(new NameID("acc_device_altera"));
+        	} else if(targetArch == 2)
+        	{
+        		//Using Xeon Phi
         		acc_init_call.addArgument(new NameID("acc_device_xeonphi"));
         	}
         	else
@@ -388,8 +397,13 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         	}
         	acc_init_stmt = new ExpressionStatement(acc_init_call);
         	FunctionCall acc_shutdown_call = new FunctionCall(new NameID("acc_shutdown"));
-        	if(targetArch == 2)
+        	if(targetArch == 3)
         	{
+        		//Using Altera.
+        		acc_init_call.addArgument(new NameID("acc_device_altera"));
+        	} else if(targetArch == 2)
+        	{
+        		//Using Xeon Phi
         		acc_shutdown_call.addArgument(new NameID("acc_device_xeonphi"));
         	}
         	else
@@ -463,57 +477,59 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 
         		return_list.add(stmt);
         	}
-        	for( Statement rstmt : return_list ) {
-        		CompoundStatement rParent = (CompoundStatement)rstmt.getParent();
-        		if( (rParent == null) || !(rParent instanceof CompoundStatement) ) {
-        			Tools.exit("[ERROR in ACC2OPENCLTranslator.OpenCLInitializer()] can't find " +
-        					"a parent statment of a return statement, "  + rstmt);
+        	if( real_main ) {
+        		for( Statement rstmt : return_list ) {
+        			CompoundStatement rParent = (CompoundStatement)rstmt.getParent();
+        			if( (rParent == null) || !(rParent instanceof CompoundStatement) ) {
+        				Tools.exit("[ERROR in ACC2OPENCLTranslator.OpenCLInitializer()] can't find " +
+        						"a parent statment of a return statement, "  + rstmt);
+        			}
+        			if( opt_PrintConfigurations ) {
+        				rParent.addStatementBefore(rstmt, (Statement)confPrintStmt.clone());
+        				for(Statement confStmt : confPrintStmts) {
+        					rParent.addStatementBefore(rstmt, (Statement)confStmt.clone());
+        				}
+        				rParent.addStatementBefore(rstmt, (Statement)optPrintStmt.clone());
+        				for(Statement optStmt : optPrintStmts) {
+        					rParent.addStatementBefore(rstmt, (Statement)optStmt.clone());
+        				}
+        			}
+        			if( !found_acc_shutdown_call ) {
+        				flushStmt = (ExpressionStatement)acc_shutdown_stmt.clone();
+        				rParent.addStatementBefore(rstmt, flushStmt);
+        				FunctionCall shutdown_call = (FunctionCall)flushStmt.getExpression();
+        				acc_shutdown_list.add(shutdown_call);
+        			}
+        			if( enableCustomProfiling ) {
+        				FunctionCall pfcall = new FunctionCall(new NameID("HI_profile_shutdown"));
+        				pfcall.addArgument(new StringLiteral("Program"));
+        				rParent.addStatementBefore(rstmt, new ExpressionStatement(pfcall));
+        			}
         		}
-        		if( opt_PrintConfigurations ) {
-        			rParent.addStatementBefore(rstmt, (Statement)confPrintStmt.clone());
+        		////////////////////////////////////////////////////////////
+        		// If main() does not have any explicit return statement, //
+        		// add OpenACC shutdown call at the end of the main().    //
+        		////////////////////////////////////////////////////////////
+        		if( return_list.size() == 0 ) {
+        			mainBody.addStatement((Statement)confPrintStmt.clone());
         			for(Statement confStmt : confPrintStmts) {
-        				rParent.addStatementBefore(rstmt, (Statement)confStmt.clone());
+        				mainBody.addStatement((Statement)confStmt.clone());
         			}
-        			rParent.addStatementBefore(rstmt, (Statement)optPrintStmt.clone());
+        			mainBody.addStatement((Statement)optPrintStmt.clone());
         			for(Statement optStmt : optPrintStmts) {
-        				rParent.addStatementBefore(rstmt, (Statement)optStmt.clone());
+        				mainBody.addStatement((Statement)optStmt.clone());
         			}
-        		}
-        		if( !found_acc_shutdown_call ) {
-        			flushStmt = (ExpressionStatement)acc_shutdown_stmt.clone();
-        			rParent.addStatementBefore(rstmt, flushStmt);
-        			FunctionCall shutdown_call = (FunctionCall)flushStmt.getExpression();
-        			acc_shutdown_list.add(shutdown_call);
-        		}
-        		if( enableCustomProfiling ) {
-        			FunctionCall pfcall = new FunctionCall(new NameID("HI_profile_shutdown"));
-        			pfcall.addArgument(new StringLiteral("Program"));
-        			rParent.addStatementBefore(rstmt, new ExpressionStatement(pfcall));
-        		}
-        	}
-        	////////////////////////////////////////////////////////////
-        	// If main() does not have any explicit return statement, //
-        	// add OpenACC shutdown call at the end of the main().    //
-        	////////////////////////////////////////////////////////////
-        	if( return_list.size() == 0 ) {
-        		mainBody.addStatement((Statement)confPrintStmt.clone());
-        		for(Statement confStmt : confPrintStmts) {
-        			mainBody.addStatement((Statement)confStmt.clone());
-        		}
-        		mainBody.addStatement((Statement)optPrintStmt.clone());
-        		for(Statement optStmt : optPrintStmts) {
-        			mainBody.addStatement((Statement)optStmt.clone());
-        		}
-        		if( !found_acc_shutdown_call ) {
-        			flushStmt = (ExpressionStatement)acc_shutdown_stmt.clone();
-        			mainBody.addStatement(flushStmt);
-        			FunctionCall shutdown_call = (FunctionCall)flushStmt.getExpression();
-        			acc_shutdown_list.add(shutdown_call);
-        		}
-        		if( enableCustomProfiling ) {
-        			FunctionCall pfcall = new FunctionCall(new NameID("HI_profile_shutdown"));
-        			pfcall.addArgument(new StringLiteral("Program"));
-        			mainBody.addStatement(new ExpressionStatement(pfcall));
+        			if( !found_acc_shutdown_call ) {
+        				flushStmt = (ExpressionStatement)acc_shutdown_stmt.clone();
+        				mainBody.addStatement(flushStmt);
+        				FunctionCall shutdown_call = (FunctionCall)flushStmt.getExpression();
+        				acc_shutdown_list.add(shutdown_call);
+        			}
+        			if( enableCustomProfiling ) {
+        				FunctionCall pfcall = new FunctionCall(new NameID("HI_profile_shutdown"));
+        				pfcall.addArgument(new StringLiteral("Program"));
+        				mainBody.addStatement(new ExpressionStatement(pfcall));
+        			}
         		}
         	}
         }
@@ -3303,8 +3319,25 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					Expression newExp = null;
 					Expression fArg = fCall.getArgument(0);
 					String fArgStr = fArg.toString();
-					if( fArgStr.equals("acc_device_default") || fArgStr.equals("acc_device_not_host") ||
-							fArgStr.equals("acc_device_nvidia") || fArgStr.equals("acc_device_gpu") ) {
+					if( fArgStr.equals("acc_device_altera") ) {
+						if(targetArch == 3) {
+							newExp = new IntegerLiteral(1);
+						} else {
+							newExp = new IntegerLiteral(0);
+						}
+					} else if( fArgStr.equals("acc_device_xeonphi") ) {
+						if(targetArch == 2) {
+							newExp = new IntegerLiteral(1);
+						} else {
+							newExp = new IntegerLiteral(0);
+						}
+					} else if( fArgStr.equals("acc_device_nvidia") || fArgStr.equals("acc_device_radeon") || fArgStr.equals("acc_device_gpu") ) {
+						if(targetArch == 1) {
+							newExp = new IntegerLiteral(1);
+						} else {
+							newExp = new IntegerLiteral(0);
+						}
+					} else if( fArgStr.equals("acc_device_default") || fArgStr.equals("acc_device_not_host") ) {
 						newExp = new IntegerLiteral(1);
 					} else if( fArgStr.equals("acc_device_host") || fArgStr.equals("acc_device_none") ) {
 						newExp = new IntegerLiteral(0);

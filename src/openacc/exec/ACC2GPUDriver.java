@@ -109,13 +109,15 @@ public class ACC2GPUDriver extends Driver
         "Set a target architecture: \n" +
         "        =0 for CUDA\n" +
         "        =1 for general OpenCL \n" +
-        "        =2 for Xeon Phi with OpenCL");
+        "        =2 for Xeon Phi with OpenCL \n" +
+        "        =3 for Altera with OpenCL \n" +
+        "If not set, the target is decided by OPENARC_ARCH env variable." );
 		optionsWithIntArgument.add("targetArch");
 
-        options.add(options.UTILITY, "omp2acc",
+        options.add(options.UTILITY, "omp2acc", "N",
                 "Generate OpenACC program from OpenMP 4.0 program: \n" + 
-        "        =0 disable this option\n" +
-        "        =1 enable this option (default)");
+        "        =0 disable this option (default)\n" +
+        "        =1 enable this option");
 		optionsWithIntArgument.add("omp2acc");
 	    
 		options.add(options.ANALYSIS, "AccAnalysisOnly", "N",

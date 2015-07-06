@@ -379,22 +379,27 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
         
         for( int i = 0; i < main_List.size(); i++ ) {
         	Procedure tmain = main_List.get(i);
+        	String tmainName = tmain.getSymbolName();
+        	boolean real_main = false;
+        	if( tmainName.equals("main") || tmainName.equals("MAIN__") ) {
+        		real_main = true;
+        	}
 			if( opt_GenDistOpenACC ) {
-        		if( tmain.getSymbolName().equals("main") ) {
+        		if( real_main ) {
         			tmain.setName("real_main");
         		}
 			}
         	TranslationUnit tu = main_TrUnt_List.get(i);
 			String iFileName = tu.getOutputFilename();
         	/* 1) Insert OpenACC initialization call at the beginning of the main() */
-        	/*     - acc_init( acc_device_default );                                 */
+        	/*     - acc_init( acc_device_nvidia );                                 */
         	/* 2) Insert OpenACC shutdown call at the end of the main()             */
-        	/*     - acc_shutdown( acc_device_default );                             */
+        	/*     - acc_shutdown( acc_device_nvidia );                             */
         	FunctionCall acc_init_call = new FunctionCall(new NameID("acc_init"));
-        	acc_init_call.addArgument(new NameID("acc_device_default"));
+        	acc_init_call.addArgument(new NameID("acc_device_nvidia"));
         	acc_init_stmt = new ExpressionStatement(acc_init_call);
         	FunctionCall acc_shutdown_call = new FunctionCall(new NameID("acc_shutdown"));
-        	acc_shutdown_call.addArgument(new NameID("acc_device_default"));
+        	acc_shutdown_call.addArgument(new NameID("acc_device_nvidia"));
         	acc_shutdown_stmt = new ExpressionStatement(acc_shutdown_call);
         	FunctionCall optPrintCall = new FunctionCall(new NameID("printf"));
         	optPrintCall.addArgument(new StringLiteral( "/**********************/ \\n" + 
@@ -462,57 +467,62 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 
         		return_list.add(stmt);
         	}
-        	for( Statement rstmt : return_list ) {
-        		CompoundStatement rParent = (CompoundStatement)rstmt.getParent();
-        		if( (rParent == null) || !(rParent instanceof CompoundStatement) ) {
-        			Tools.exit("[ERROR in ACC2CUDATranslator.CUDAInitializer()] can't find " +
-        					"a parent statment of a return statement, "  + rstmt);
-        		}
-        		if( opt_PrintConfigurations ) {
-        			rParent.addStatementBefore(rstmt, (Statement)confPrintStmt.clone());
-        			for(Statement confStmt : confPrintStmts) {
-        				rParent.addStatementBefore(rstmt, (Statement)confStmt.clone());
+        	if( real_main ) {
+        		//Insert shutdown statements only to the real main function.
+        		for( Statement rstmt : return_list ) {
+        			CompoundStatement rParent = (CompoundStatement)rstmt.getParent();
+        			if( (rParent == null) || !(rParent instanceof CompoundStatement) ) {
+        				Tools.exit("[ERROR in ACC2CUDATranslator.CUDAInitializer()] can't find " +
+        						"a parent statment of a return statement, "  + rstmt);
         			}
-        			rParent.addStatementBefore(rstmt, (Statement)optPrintStmt.clone());
-        			for(Statement optStmt : optPrintStmts) {
-        				rParent.addStatementBefore(rstmt, (Statement)optStmt.clone());
+        			if( opt_PrintConfigurations ) {
+        				rParent.addStatementBefore(rstmt, (Statement)confPrintStmt.clone());
+        				for(Statement confStmt : confPrintStmts) {
+        					rParent.addStatementBefore(rstmt, (Statement)confStmt.clone());
+        				}
+        				rParent.addStatementBefore(rstmt, (Statement)optPrintStmt.clone());
+        				for(Statement optStmt : optPrintStmts) {
+        					rParent.addStatementBefore(rstmt, (Statement)optStmt.clone());
+        				}
+        			}
+        			if( !found_acc_shutdown_call ) {
+        				flushStmt = (ExpressionStatement)acc_shutdown_stmt.clone();
+        				rParent.addStatementBefore(rstmt, flushStmt);
+        				FunctionCall shutdown_call = (FunctionCall)flushStmt.getExpression();
+        				acc_shutdown_list.add(shutdown_call);
+        			}
+        			if( enableCustomProfiling ) {
+        				FunctionCall pfcall = new FunctionCall(new NameID("HI_profile_shutdown"));
+        				pfcall.addArgument(new StringLiteral("Program"));
+        				rParent.addStatementBefore(rstmt, new ExpressionStatement(pfcall));
         			}
         		}
-        		if( !found_acc_shutdown_call ) {
-        			flushStmt = (ExpressionStatement)acc_shutdown_stmt.clone();
-        			rParent.addStatementBefore(rstmt, flushStmt);
-        			FunctionCall shutdown_call = (FunctionCall)flushStmt.getExpression();
-        			acc_shutdown_list.add(shutdown_call);
-        		}
-        		if( enableCustomProfiling ) {
-        			FunctionCall pfcall = new FunctionCall(new NameID("HI_profile_shutdown"));
-        			pfcall.addArgument(new StringLiteral("Program"));
-        			rParent.addStatementBefore(rstmt, new ExpressionStatement(pfcall));
-        		}
-        	}
-        	////////////////////////////////////////////////////////////
-        	// If main() does not have any explicit return statement, //
-        	// add OpenACC shutdown call at the end of the main().    //
-        	////////////////////////////////////////////////////////////
-        	if( return_list.size() == 0 ) {
-        		mainBody.addStatement((Statement)confPrintStmt.clone());
-        		for(Statement confStmt : confPrintStmts) {
-        			mainBody.addStatement((Statement)confStmt.clone());
-        		}
-        		mainBody.addStatement((Statement)optPrintStmt.clone());
-        		for(Statement optStmt : optPrintStmts) {
-        			mainBody.addStatement((Statement)optStmt.clone());
-        		}
-        		if( !found_acc_shutdown_call ) {
-        			flushStmt = (ExpressionStatement)acc_shutdown_stmt.clone();
-        			mainBody.addStatement(flushStmt);
-        			FunctionCall shutdown_call = (FunctionCall)flushStmt.getExpression();
-        			acc_shutdown_list.add(shutdown_call);
-        		}
-        		if( enableCustomProfiling ) {
-        			FunctionCall pfcall = new FunctionCall(new NameID("HI_profile_shutdown"));
-        			pfcall.addArgument(new StringLiteral("Program"));
-        			mainBody.addStatement(new ExpressionStatement(pfcall));
+        		////////////////////////////////////////////////////////////
+        		// If main() does not have any explicit return statement, //
+        		// add OpenACC shutdown call at the end of the main().    //
+        		////////////////////////////////////////////////////////////
+        		if( return_list.size() == 0 ) {
+        			if( opt_PrintConfigurations ) {
+        				mainBody.addStatement((Statement)confPrintStmt.clone());
+        				for(Statement confStmt : confPrintStmts) {
+        					mainBody.addStatement((Statement)confStmt.clone());
+        				}
+        				mainBody.addStatement((Statement)optPrintStmt.clone());
+        				for(Statement optStmt : optPrintStmts) {
+        					mainBody.addStatement((Statement)optStmt.clone());
+        				}
+        			}
+        			if( !found_acc_shutdown_call ) {
+        				flushStmt = (ExpressionStatement)acc_shutdown_stmt.clone();
+        				mainBody.addStatement(flushStmt);
+        				FunctionCall shutdown_call = (FunctionCall)flushStmt.getExpression();
+        				acc_shutdown_list.add(shutdown_call);
+        			}
+        			if( enableCustomProfiling ) {
+        				FunctionCall pfcall = new FunctionCall(new NameID("HI_profile_shutdown"));
+        				pfcall.addArgument(new StringLiteral("Program"));
+        				mainBody.addStatement(new ExpressionStatement(pfcall));
+        			}
         		}
         	}
         }

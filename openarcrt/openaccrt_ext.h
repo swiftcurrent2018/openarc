@@ -71,7 +71,7 @@ private:
 	void release_freed_device_memory();
 public:
 	//[DEBUG] changed to non-static variable.
-    std::vector<std::string> kernelNameList;
+    std::set<std::string> kernelNameSet;
 
     //A map of pinned memory and its usage count. If count value is 0, then the runtime can unpin the host memory.
     static std::map<CUdeviceptr,int> pinnedHostMemCounter;
@@ -83,9 +83,9 @@ public:
     CUcontext cuContext;
     CUmodule cuModule;
 
-    CudaDriver(acc_device_t devType, int devNum, std::vector<std::string>kernelNames, HostConf_t *conf, int numDevices);
+    CudaDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices);
     HI_error_t init();
-    HI_error_t HI_register_kernels(std::vector<std::string>kernelNames);
+    HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
     HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
     HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
@@ -169,16 +169,16 @@ private:
 
 public:
 	//[DEBUG] changed to non-static variable.
-    std::vector<std::string> kernelNameList;
+    std::set<std::string> kernelNameSet;
     cl_platform_id clPlatform;
     cl_device_id clDevice;
     static cl_context clContext;
     cl_command_queue clQueue;
     cl_program clProgram;
 
-    OpenCLDriver(acc_device_t devType, int devNum, std::vector<std::string>kernelNames, HostConf_t *conf, int numDevices);
+    OpenCLDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices);
     HI_error_t init();
-    HI_error_t HI_register_kernels(std::vector<std::string>kernelNames);
+    HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
     HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
     HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
@@ -271,7 +271,8 @@ public:
 #else
     kernelmapopencl_t kernelsMap;
 #endif
-    std::vector<std::string> kernelnames;
+    static std::set<std::string> HI_kernelnames;
+    std::set<std::string> kernelnames;
 	//[CAUTION] Device instances (Accelerator_t objects) in devMap is shared 
 	//by multiple host threads.
     static devmap_t devMap;
@@ -383,7 +384,9 @@ public:
     void HI_reset();
     void setDefaultDevice();
     void setDefaultDevNum();
+    void initKernelNames();
     void initKernelNames(int kernels, std::string kernelNames[]);
+    void addKernelNames(int kernels, std::string kernelNames[]);
 
     int genOCL;
     void setTranslationType();

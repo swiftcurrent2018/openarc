@@ -6,9 +6,6 @@
 
 static const char *openarcrt_verbosity_env = "OPENARCRT_VERBOSITY";
 
-int HI_num_kernels;
-std::string *HI_kernelNames;
-
 int get_thread_id() {
 #ifdef _OPENMP
     int thread_id = omp_get_thread_num();
@@ -59,7 +56,13 @@ int acc_get_num_devices( acc_device_t devtype ) {
     } else if( devtype == acc_device_host ) {
         count = 1;
     } else if( devtype == acc_device_xeonphi ) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
+        count = OpenCLDriver::HI_get_num_devices(devtype);
+#else
+        count = 0;
+#endif
+    } else if( devtype == acc_device_altera ) {
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
         count = OpenCLDriver::HI_get_num_devices(devtype);
 #else
         count = 0;
@@ -101,11 +104,16 @@ void acc_set_device_type( acc_device_t devtype ) {
         tconf->acc_device_type_var = acc_device_gpu;
         tconf->isOnAccDevice = 1;
     } else if ( (devtype == acc_device_not_host) || (devtype == acc_device_default) ) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+        tconf->acc_device_type_var = acc_device_altera;
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 2
         tconf->acc_device_type_var = acc_device_xeonphi;
 #else
         tconf->acc_device_type_var = acc_device_gpu;
 #endif
+        tconf->isOnAccDevice = 1;
+    } else if ( devtype == acc_device_altera ) {
+        tconf->acc_device_type_var = acc_device_altera;
         tconf->isOnAccDevice = 1;
     } else if ( devtype == acc_device_xeonphi ) {
         tconf->acc_device_type_var = acc_device_xeonphi;
@@ -219,7 +227,7 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
             	tconf->device->createKernelArgMap();
         	}
 		}
-    } else if( devtype == acc_device_xeonphi ) {
+    } else if( (devtype == acc_device_xeonphi) || (devtype == acc_device_altera) ) {
 		int numDevs = HostConf::devMap.at(devtype).size();
 		if( numDevs <= devnum ) {
 			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
@@ -230,7 +238,7 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
 #endif
 		}
         tconf->device = HostConf::devMap.at(devtype).at(devnum);
-        tconf->acc_device_type_var = acc_device_xeonphi;
+        tconf->acc_device_type_var = devtype;
         tconf->acc_device_num_var = devnum;
 #ifdef _OPENMP
 		#pragma omp critical(acc_set_device_num_critical)
@@ -323,21 +331,6 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
         fprintf(stderr, "[ERROR in acc_set_device_num()] Not supported device type %d; exit!\n", devtype);
         exit(1);
     }
-    /*
-    if( tconf->isOnAccDevice > 0 ) {
-
-    	CUDA device number starts from 0, but OpenACC device number starts
-    	from 1. (0 is for default device in OpenACC.)
-    	From OpenACC V2.0, device number starts from 0; we will follow the
-    	new rule.
-
-    	if( devnum >= 0 ) {
-    		cudaSetDevice(devnum);
-    	} else {
-    		fprintf(stderr, "[ERROR in acc_set_device_num()] Not supported device number: %d; exit!\n", devnum);
-    		exit(1);
-    	}
-    }*/
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_set_device_num(%d, %d)\n", devnum, devtype);
@@ -365,7 +358,9 @@ int acc_get_device_num( acc_device_t devtype ) {
 	int return_data;
     HostConf_t * tconf = getHostConf();
     if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
-            (devtype == acc_device_default) || (devtype == acc_device_radeon) || (devtype == acc_device_gpu) || (devtype == acc_device_xeonphi)  ) {
+            (devtype == acc_device_default) || (devtype == acc_device_radeon) || 
+			(devtype == acc_device_gpu) || (devtype == acc_device_xeonphi) || 
+			(devtype == acc_device_altera) ) {
         return_data = tconf->acc_device_num_var;
     } else if( devtype == acc_device_host ) {
         return_data = tconf->acc_device_num_var;
@@ -514,8 +509,6 @@ void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[] ) {
 		fprintf(stderr, "[OPENARCRT-INFO] enter acc_init()\n");
 	}
 #endif
-	HI_num_kernels = kernels;
-	HI_kernelNames = kernelNames;
     HostConf_t * tconf = getInitHostConf();
     //Set device type.
     if( (devtype == acc_device_default) || (devtype == acc_device_not_host) ) {
@@ -535,8 +528,10 @@ void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[] ) {
     	tconf->initKernelNames(kernels, kernelNames);
 		tconf->HI_init_done = 1;
     	tconf->HI_init(DEVICE_NUM_UNDEFINED);
-	} else if( tconf->HI_kernels_registered == 0 ) {
-    	tconf->initKernelNames(kernels, kernelNames);
+	} else {
+	//} else if( tconf->HI_kernels_registered == 0 ) {
+		//acc_init() can be called multiple times.
+    	tconf->addKernelNames(kernels, kernelNames);
 		tconf->HI_kernels_registered = 1;
 		tconf->device->HI_register_kernels(tconf->kernelnames);
 	}
@@ -564,7 +559,6 @@ void acc_init( acc_device_t devtype ) {
 		fprintf(stderr, "[OPENARCRT-INFO] enter acc_init()\n");
 	}
 #endif
-	HI_num_kernels = 0;
     HostConf_t * tconf = getInitHostConf();
     //Set device type.
     if( (devtype == acc_device_default) || (devtype == acc_device_not_host) ) {
@@ -604,7 +598,8 @@ void acc_shutdown( acc_device_t devtype ) {
     }
     if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
             (devtype == acc_device_default) || (devtype == acc_device_radeon) 
-            || (devtype == acc_device_xeonphi) || (devtype == acc_device_gpu) ) {
+            || (devtype == acc_device_xeonphi) || (devtype == acc_device_gpu) 
+			|| (devtype == acc_device_altera) ) {
         if( tconf->device->init_done == 1 ) {
             fflush(stdout);
             fflush(stderr);
@@ -632,7 +627,7 @@ void acc_shutdown( acc_device_t devtype ) {
 
 //DEBUG: below implementation can be called only by host threads.
 //Call to this function within a GPU kernel should be overwritten
-//by OpenACC-to-CUDA translator.
+//by OpenACC-to-Device translator.
 int acc_on_device( acc_device_t devtype ) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
@@ -643,7 +638,8 @@ int acc_on_device( acc_device_t devtype ) {
     //TODO:
     if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
             (devtype == acc_device_default) || (devtype == acc_device_radeon)
-            || (devtype == acc_device_xeonphi)) {
+            || (devtype == acc_device_xeonphi) || (devtype == acc_device_altera) 
+			|| (devtype == acc_device_gpu) ) {
         //return tconf->isOnAccDevice;
         return 0;
     } else if( devtype == acc_device_host ) {

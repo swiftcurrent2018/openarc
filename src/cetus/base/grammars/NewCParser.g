@@ -605,6 +605,7 @@ functionStorageClassSpecifier returns [Specifier type]
         ;
 
 
+// [NVL support added by Joel E. Denny]
 typeQualifier returns [Specifier tqual]
 {tqual=null;}
         :
@@ -616,6 +617,12 @@ typeQualifier returns [Specifier tqual]
         |
         "restrict"
 {tqual = Specifier.RESTRICT;}
+        |
+        "__nvl__"
+{tqual = Specifier.NVL;}
+        |
+        "__nvl_wp__"
+{tqual = Specifier.NVL_WP;}
         ;
 
 
@@ -1254,6 +1261,7 @@ System.out.println("");
 
 
 // add a pointer to the type list
+// [NVL support added by Joel E. Denny]
 pointerGroup returns [List bp]
 {
 bp = new ArrayList();
@@ -1261,6 +1269,8 @@ Specifier temp = null;
 boolean b_const = false;
 boolean b_volatile = false;
 boolean b_restrict = false;
+boolean b_nvl = false;
+boolean b_nvl_wp = false;
 }
         :
         (
@@ -1275,28 +1285,94 @@ else if (temp == Specifier.VOLATILE)
   b_volatile = true;
 else if (temp == Specifier.RESTRICT)
   b_restrict = true;
+else if (temp == Specifier.NVL)
+  b_nvl = true;
+else if (temp == Specifier.NVL_WP)
+  b_nvl_wp = true;
 }
         )*
 {
-if (b_const && b_restrict && b_volatile)
+// 5 quals
+if (b_const && b_restrict && b_volatile && b_nvl && b_nvl_wp)
+  bp.add(PointerSpecifier.CONST_RESTRICT_VOLATILE_NVL_NVL_WP);
+
+// 4 quals
+else if (b_const && b_restrict && b_volatile && b_nvl)
+  bp.add(PointerSpecifier.CONST_RESTRICT_VOLATILE_NVL);
+else if (b_const && b_restrict && b_volatile && b_nvl_wp)
+  bp.add(PointerSpecifier.CONST_RESTRICT_VOLATILE_NVL_WP);
+else if (b_const && b_restrict && b_nvl && b_nvl_wp)
+  bp.add(PointerSpecifier.CONST_RESTRICT_NVL_NVL_WP);
+else if (b_const && b_volatile && b_nvl && b_nvl_wp)
+  bp.add(PointerSpecifier.CONST_VOLATILE_NVL_NVL_WP);
+else if (b_restrict && b_volatile && b_nvl && b_nvl_wp)
+  bp.add(PointerSpecifier.RESTRICT_VOLATILE_NVL_NVL_WP);
+
+// 3 quals
+else if (b_const && b_restrict && b_volatile)
   bp.add(PointerSpecifier.CONST_RESTRICT_VOLATILE);
-else if (b_const && b_volatile)
-  bp.add(PointerSpecifier.CONST_VOLATILE);
+else if (b_const && b_restrict && b_nvl)
+  bp.add(PointerSpecifier.CONST_RESTRICT_NVL);
+else if (b_const && b_volatile && b_nvl)
+  bp.add(PointerSpecifier.CONST_VOLATILE_NVL);
+else if (b_restrict && b_volatile && b_nvl)
+  bp.add(PointerSpecifier.RESTRICT_VOLATILE_NVL);
+else if (b_const && b_restrict && b_nvl_wp)
+  bp.add(PointerSpecifier.CONST_RESTRICT_NVL_WP);
+else if (b_const && b_volatile && b_nvl_wp)
+  bp.add(PointerSpecifier.CONST_VOLATILE_NVL_WP);
+else if (b_restrict && b_volatile && b_nvl_wp)
+  bp.add(PointerSpecifier.RESTRICT_VOLATILE_NVL_WP);
+else if (b_const && b_nvl && b_nvl_wp)
+  bp.add(PointerSpecifier.CONST_NVL_NVL_WP);
+else if (b_restrict && b_nvl && b_nvl_wp)
+  bp.add(PointerSpecifier.RESTRICT_NVL_NVL_WP);
+else if (b_volatile && b_nvl && b_nvl_wp)
+  bp.add(PointerSpecifier.VOLATILE_NVL_NVL_WP);
+
+// 2 quals
 else if (b_const && b_restrict)
   bp.add(PointerSpecifier.CONST_RESTRICT);
+else if (b_const && b_volatile)
+  bp.add(PointerSpecifier.CONST_VOLATILE);
 else if (b_restrict && b_volatile)
   bp.add(PointerSpecifier.RESTRICT_VOLATILE);
+else if (b_const && b_nvl)
+  bp.add(PointerSpecifier.CONST_NVL);
+else if (b_restrict && b_nvl)
+  bp.add(PointerSpecifier.RESTRICT_NVL);
+else if (b_volatile && b_nvl)
+  bp.add(PointerSpecifier.VOLATILE_NVL);
+else if (b_const && b_nvl_wp)
+  bp.add(PointerSpecifier.CONST_NVL_WP);
+else if (b_restrict && b_nvl_wp)
+  bp.add(PointerSpecifier.RESTRICT_NVL_WP);
+else if (b_volatile && b_nvl_wp)
+  bp.add(PointerSpecifier.VOLATILE_NVL_WP);
+else if (b_nvl && b_nvl_wp)
+  bp.add(PointerSpecifier.NVL_NVL_WP);
+
+// 1 qual
 else if (b_const)
   bp.add(PointerSpecifier.CONST);
 else if (b_restrict)
   bp.add(PointerSpecifier.RESTRICT);
 else if (b_volatile)
   bp.add(PointerSpecifier.VOLATILE);
+else if (b_nvl)
+  bp.add(PointerSpecifier.NVL);
+else if (b_nvl_wp)
+  bp.add(PointerSpecifier.NVL_WP);
+
+// 0 quals
 else
   bp.add(PointerSpecifier.UNQUALIFIED);
+
 b_const = false;
 b_volatile = false;
 b_restrict = false;
+b_nvl = false;
+b_nvl_wp = false;
 }
         )+
         ;

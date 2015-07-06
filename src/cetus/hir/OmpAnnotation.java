@@ -15,19 +15,22 @@ public class OmpAnnotation extends PragmaAnnotation {
     // this list.
     private static final List<String> keywords = Arrays.asList(
             // directives
-            "parallel", "for", "sections", "section", "single", "task",
+    		"end", "declare", "target", "data", "update", "teams", "distribute",
+            "parallel", "for", "simd", "sections", "section", "single", "task",
             "master", "critical", "barrier", "taskwait", "atomic", "flush",
-            "ordered", "threadprivate",
+            "ordered", "threadprivate", 
             // clauses
             "if", "num_threads", "default", "shared", "private", "firstprivate",
             "lastprivate", "reduction", "copyin", "copyprivate", "schedule",
-            "collapse", "nowait");
+            "collapse", "nowait", "device", "map",
+            "num_teams", "thread_limit", "dist_schedule");
 
     // Keywords that need values
     private static final List<String> key_needs_value = Arrays.asList(
             "if", "num_threads", "default", "shared", "private", "firstprivate",
             "lastprivate", "reduction", "copyin", "copyprivate", "schedule",
-            "collapse", "flush", "threadprivate");
+            "collapse", "flush", "threadprivate", "device", "map",
+            "num_teams", "thread_limit", "dist_schedule");
 
     // OpenMP keywords not listed here will be printed at the end.
 
@@ -95,9 +98,17 @@ public class OmpAnnotation extends PragmaAnnotation {
         }
         // Remaining directives/clauses.
         for (String key : my_keys) {
-            str.append(" ");
-            str.append(key);
-            printValue(key, str);
+        	if( key.equals("to") || key.equals("from") || key.equals("tofrom") || key.equals("alloc") ) {
+        		str.append(" map(");
+        		str.append(key);
+        		str.append(": ");
+        		str.append(PrintTools.collectionToString((Collection) get(key), ", "));
+        		str.append(")");
+        	} else {
+        		str.append(" ");
+        		str.append(key);
+        		printValue(key, str);
+        	}
         }
         return str.toString();
     }

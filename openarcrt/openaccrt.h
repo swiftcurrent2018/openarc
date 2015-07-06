@@ -96,10 +96,8 @@ typedef std::map<int, sizemap_t *> asynchostsizemap_t;
 typedef std::map<const void *, HI_memstatus_t> memstatusmap_t;
 
 extern int HI_openarcrt_verbosity;
-extern int HI_num_kernels;
 extern int HI_hostinit_done;
 extern int HI_num_hostthreads;
-extern std::string *HI_kernelNames;
 
 //[CAUTION] For each device, there exists only one Accelerator object,
 //and thus accessing Accelerator members are not thread-safe.
@@ -153,7 +151,7 @@ public:
     virtual HI_error_t destroy()=0;
 
     // Kernel Execution
-    virtual HI_error_t HI_register_kernels(std::vector<std::string>kernelNames) = 0;
+    virtual HI_error_t HI_register_kernels(std::set<std::string>kernelNames) = 0;
     virtual HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args) = 0;
     virtual HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type) = 0;
     virtual HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE) = 0;

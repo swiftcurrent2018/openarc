@@ -18,6 +18,8 @@
 #        =0 for CUDA
 #        =1 for general OpenCL 
 #        =2 for Xeon Phi with OpenCL
+#        =3 for Altera with OpenCL 
+#If not set, the target is decided by OPENARC_ARCH env variable.
 #Option: AccAnalysisOnly
 #AccAnalysisOnly=N
 #Conduct OpenACC analysis only and exit if option value > 0

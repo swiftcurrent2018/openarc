@@ -799,6 +799,7 @@ public class OmpParser {
 
     private static void parse_omp_target_teams_distribute_parallel_for() {
         PrintTools.println("OmpParser is parsing [parallel for] clause", 2);
+        addToMap("parallel", "true");
         addToMap("for", "true");
         if (check("simd")) {
             eat();
@@ -1021,6 +1022,7 @@ public class OmpParser {
 
     private static void parse_omp_teams_distribute_parallel_for() {
         PrintTools.println("OmpParser is parsing [parallel for] clause", 2);
+        addToMap("parallel", "true");
         addToMap("for", "true");
         if (check("simd")) {
             eat();

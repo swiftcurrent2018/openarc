@@ -12,14 +12,14 @@
 
 //[DEBUG] commented out since they are no more static.
 //std::map<std::string, CUfunction> CudaDriver::kernelMap;
-//std::vector<std::string> CudaDriver::kernelNameList;
+//std::set<std::string> CudaDriver::kernelNameSet;
 std::map<CUdeviceptr,int> CudaDriver::pinnedHostMemCounter;
 std::vector<const void *> CudaDriver::hostMemToUnpin;
 
 ///////////////////////////
 // Device Initialization //
 ///////////////////////////
-CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::vector<std::string>kernelNames, HostConf_t *conf, int numDevices) {
+CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::CudaDriver(%d, %d)\n", devType, devNum);
@@ -28,18 +28,9 @@ CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::vector<std::string
     dev = devType;
     device_num = devNum;
 	num_devices = numDevices;
-//Moved to init()
-/*
-    cudaDeviceProp deviceProp;
-    cudaError_t cuResult = cudaGetDeviceProperties(&deviceProp, device_num);
 
-    int thread_id = get_thread_id();
-    fprintf(stderr, "CUDA : Host Thread %d initializes device %d: %s\n", thread_id, device_num, deviceProp.name);
-*/
-
-    for (std::vector<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
-        //kernelMap[*it]= 0;
-        kernelNameList.push_back(*it);
+    for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
+        kernelNameSet.insert(*it);
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -224,7 +215,7 @@ HI_error_t CudaDriver::createKernelArgMap() {
     cuCtxSetCurrent(cuContext);
     std::map<std::string, kernelParams_t*> kernelArgs;
     std::map<std::string, CUfunction> kernelMap;
-    for(std::vector<std::string>::iterator it=kernelNameList.begin(); it!=kernelNameList.end(); ++it) {
+    for(std::set<std::string>::iterator it=kernelNameSet.begin(); it!=kernelNameSet.end(); ++it) {
         // Create argument mapping for the kernel
         const char *kernelName = (*it).c_str();
         CUfunction cuFunc;
@@ -250,37 +241,32 @@ HI_error_t CudaDriver::createKernelArgMap() {
     return HI_success;
 }
 
-HI_error_t CudaDriver::HI_register_kernels(std::vector<std::string> kernelNames) {
+HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_register_kernels()\n");
 	}
 #endif
-    CUresult err;
-    for (std::vector<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
-        //kernelMap[*it]= 0;
-        kernelNameList.push_back(*it);
-    }
-    std::map<std::string, kernelParams_t*> kernelArgs;
-    std::map<std::string, CUfunction> kernelMap;
-    for(std::vector<std::string>::iterator it=kernelNameList.begin(); it!=kernelNameList.end(); ++it) {
-        // Create argument mapping for the kernel
-        const char *kernelName = (*it).c_str();
-        CUfunction cuFunc;
-		kernelParams_t *kernelParams = new kernelParams_t;
-		kernelParams->num_args = 0;
-        kernelArgs.insert(std::pair<std::string, kernelParams_t*>(std::string(kernelName), kernelParams));
-        err = cuModuleGetFunction(&cuFunc, cuModule, kernelName);
-        if (err != CUDA_SUCCESS) {
-            fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Function Load FAIL on %s\n", kernelName);
-			exit(1);
-        }
-        kernelMap[*it] = cuFunc;
-    }
-
     HostConf_t * tconf = getHostConf();
-    tconf->kernelArgsMap[this] = kernelArgs;
-    tconf->kernelsMap[this]=kernelMap;
+    CUresult err;
+    for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
+		if( kernelNameSet.count(*it) == 0 ) {
+			//Add a new kernel to add.
+        	kernelNameSet.insert(*it);
+        	// Create argument mapping for the kernel
+        	const char *kernelName = (*it).c_str();
+        	CUfunction cuFunc;
+			kernelParams_t *kernelParams = new kernelParams_t;
+			kernelParams->num_args = 0;
+        	(tconf->kernelArgsMap[this]).insert(std::pair<std::string, kernelParams_t*>(std::string(kernelName), kernelParams));
+        	err = cuModuleGetFunction(&cuFunc, cuModule, kernelName);
+        	if (err != CUDA_SUCCESS) {
+            	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Function Load FAIL on %s\n", kernelName);
+				exit(1);
+        	}
+        	(tconf->kernelsMap[this])[*it] = cuFunc;
+		}
+    }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_register_kernels()\n");

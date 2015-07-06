@@ -17,8 +17,10 @@ static const char *openarcrt_prepinhostmemory_env = "OPENARCRT_PREPINHOSTMEM";
 static const char *NVIDIA = "NVIDIA";
 static const char *RADEON = "RADEON";
 static const char *XEONPHI = "XEONPHI";
+static const char *ALTERA = "ALTERA";
 
 devmap_t HostConf::devMap;
+std::set<std::string> HostConf::HI_kernelnames;
 
 int HI_hostinit_done = 0;
 int HI_openarcrt_verbosity = 0;
@@ -110,15 +112,15 @@ void HI_hostinit(int numhostthreads) {
             currentListSize = hostConfList.size();
             for( int i=currentListSize; i<newListSize; i++ ) {
                 HostConf_t * tconf = new HostConf_t;
+				tconf->threadID=i;
                 tconf->setDefaultDevNum();
                 tconf->setDefaultDevice();
                 tconf->createHostTables();
-				tconf->initKernelNames(HI_num_kernels, HI_kernelNames);
+				tconf->initKernelNames();
 				tconf->use_unifiedmemory = HI_use_unifiedmemory;
 				tconf->prepin_host_memory = HI_prepin_host_memory;
                 //tconf->HI_init_done=1;
                 tconf->asyncID_offset=i*MAX_NUM_QUEUES_PER_THREAD;
-				tconf->threadID=i;
                 hostConfList.push_back(tconf);
             }
 			HI_num_hostthreads = newListSize;
@@ -263,7 +265,9 @@ void HostConf::setDefaultDevice() {
     envVar = getenv(acc_device_type_env);
     if( envVar == NULL ) {
 		user_set_device_type_var = acc_device_default;
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+        acc_device_type_var = acc_device_altera;
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 2
         acc_device_type_var = acc_device_xeonphi;
 #else
         acc_device_type_var = acc_device_gpu;
@@ -278,11 +282,16 @@ void HostConf::setDefaultDevice() {
             acc_device_type_var = acc_device_gpu;
         } else if( strcmp(envVarU, "ACC_DEVICE_DEFAULT") == 0 ) {
 			user_set_device_type_var = acc_device_default;
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+        	acc_device_type_var = acc_device_altera;
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 2
         	acc_device_type_var = acc_device_xeonphi;
 #else
         	acc_device_type_var = acc_device_gpu;
 #endif
+        } else if( strcmp(envVarU, ALTERA) == 0 ) {
+			user_set_device_type_var = acc_device_altera;
+            acc_device_type_var = acc_device_altera;
         } else if( strcmp(envVarU, XEONPHI) == 0 ) {
 			user_set_device_type_var = acc_device_xeonphi;
             acc_device_type_var = acc_device_xeonphi;
@@ -294,7 +303,9 @@ void HostConf::setDefaultDevice() {
             acc_device_type_var = acc_device_host;
         } else if( strcmp(envVarU, "ACC_DEVICE_NOT_HOST") == 0 ) {
 			user_set_device_type_var = acc_device_not_host;
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+        	acc_device_type_var = acc_device_altera;
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 2
         	acc_device_type_var = acc_device_xeonphi;
 #else
         	acc_device_type_var = acc_device_gpu;
@@ -328,7 +339,8 @@ void HostConf::setDefaultDevNum() {
     //acc_set_device_num(dev, devtype);
     if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
             (devtype == acc_device_default) || (devtype == acc_device_radeon) || 
-            (devtype == acc_device_gpu) || (devtype == acc_device_xeonphi) ) {
+            (devtype == acc_device_gpu) || (devtype == acc_device_xeonphi) ||
+			(devtype == acc_device_altera) ) {
         acc_device_num_var = dev;
     } else if( devtype == acc_device_host ) {
         acc_device_num_var = dev;
@@ -336,22 +348,6 @@ void HostConf::setDefaultDevNum() {
         fprintf(stderr, "[ERROR in setDefaultDevNum()] Not supported device type %d; exit!\n", devtype);
         exit(1);
     }
-//Below may not work since this method is called within a contructor.
-    /*
-        if( isOnAccDevice > 0 ) {
-     		//CUDA device number starts from 0, but OpenACC device number starts
-     		//from 1. (0 is for default device in OpenACC.)
-            if( dev == 0 ) {
-                cudaSetDevice(dev);
-            } else if( dev > 0 ) {
-                cudaSetDevice((dev-1));
-            } else {
-                fprintf(stderr, "[ERROR in setDefaultDevNum()] Not supported device number: %d; exit!\n", dev);
-                exit(1);
-            }
-        }
-    */
-
 }
 
 void HostConf::setTranslationType()
@@ -432,7 +428,7 @@ void HostConf::HI_init(int devNum) {
     totalRegKernelArgTime = 0.0;
 	KernelCNTMap.clear();
 	KernelTimingMap.clear();
-    for (std::vector<std::string>::iterator it = kernelnames.begin() ; it != kernelnames.end(); ++it) {
+    for (std::set<std::string>::iterator it = kernelnames.begin() ; it != kernelnames.end(); ++it) {
         //const char *kernelName = (*it).c_str();
         //fprintf(stderr, "[HI_init()] Kernel name = %s\n", kernelName);
 		KernelCNTMap[*it] = 0;
@@ -1509,11 +1505,37 @@ int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
 
 
 void HostConf::initKernelNames(int kernels, std::string kernelNames[]) {
-	//[FIXME] kernel names should be added only if they do not exist.
     for(int i= 0 ; i< kernels; i++) {
-        kernelnames.push_back(kernelNames[i]);
+        kernelnames.insert(kernelNames[i]);
+		if( threadID == 0 ) {
+			//Only the master thread updates the static kernelname set.
+			HostConf::HI_kernelnames.insert(kernelNames[i]);
+		}
     }
+}
 
+//Non-master threads initialize kernelnames using the static kernelname set.
+void HostConf::initKernelNames() {
+    for (std::set<std::string>::iterator it = HostConf::HI_kernelnames.begin() ; it != HostConf::HI_kernelnames.end(); ++it) {
+        kernelnames.insert(*it);
+    }   
+}
+
+void HostConf::addKernelNames(int kernels, std::string kernelNames[]) {
+    for(int i= 0 ; i< kernels; i++) {
+		std::string tName = kernelNames[i];
+		if( kernelnames.count(tName) == 0 ) {
+        	kernelnames.insert(tName);
+			if( threadID == 0 ) {
+				//Only the master thread updates the static kernelname set.
+				HostConf::HI_kernelnames.insert(kernelNames[i]);
+			}
+#ifdef _OPENARC_PROFILE_
+			KernelCNTMap[tName] = 0;
+			KernelTimingMap[tName] = 0.0;
+#endif
+		}
+    }
 }
 
 
@@ -1531,7 +1553,7 @@ void HI_check_read(const void * hostPtr, acc_device_t dtype, const char * varNam
         (*hostmemstatusmap)[hostPtr] = HI_notstale;
         (*devicememstatusmap)[hostPtr] = HI_notstale;
     }
-    if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu)) {
+    if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu) || (dtype == acc_device_xeonphi) || (dtype == acc_device_altera) ) {
         HI_memstatus_t devicestatus = (*devicememstatusmap)[hostPtr];
         if( devicestatus == HI_stale ) {
             //printf("[DEBUG-ERROR] variable %32s should be copied from host to device for %64s.\n", varName, refName);
@@ -1564,7 +1586,7 @@ void HI_check_write(const void * hostPtr, acc_device_t dtype, const char * varNa
         (*hostmemstatusmap)[hostPtr] = HI_notstale;
         (*devicememstatusmap)[hostPtr] = HI_notstale;
     }
-    if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu)) {
+    if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu) || (dtype == acc_device_xeonphi) || (dtype == acc_device_altera) ) {
         HI_memstatus_t devicestatus = (*devicememstatusmap)[hostPtr];
         if( devicestatus == HI_stale ) {
             //printf("[DEBUG-WARNING] variable %32s should be copied from host to device for %64s unless it is completely overwritten.\n", varName, refName);
@@ -1606,7 +1628,7 @@ void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t stat
         (*hostmemstatusmap)[hostPtr] = HI_notstale;
         (*devicememstatusmap)[hostPtr] = HI_notstale;
     }
-    if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu)) {
+    if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu) || (dtype == acc_device_xeonphi) || (dtype == acc_device_altera) ) {
         HI_memstatus_t devicestatus = (*devicememstatusmap)[hostPtr];
         if( status == HI_notstale ) {
             if( devicestatus == HI_notstale ) {
@@ -1661,7 +1683,7 @@ void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t st
     //acc_device_t devType = acc_get_device_type();
     acc_device_t devType = tconf->acc_device_type_var;
     int devNum = acc_get_device_num(devType);
-    if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu)) {
+    if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu) || (dtype == acc_device_xeonphi) || (dtype == acc_device_altera) ) {
         memstatusmap_t * devicememstatusmap = tconf->devicememstatusmaptable;
         //HI_memstatus_t devicestatus = (*devicememstatusmap)[hostPtr];
         if( status == HI_stale ) {

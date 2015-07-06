@@ -104,7 +104,7 @@ kernel compilation or clBuildProgram options for JIT OpenCL kernel compilation).
   header files, path to the header files may need to be specified to the backend
   OpenCL compiler.
 
-        export OPENARC_JITOPTION="-I ."
+        export OPENARC_JITOPTION="-I . -I $openarc/openarcrt"
 
 * Environment variable, OPENARCRT_VERBOSITY, is used to set the verbosity
 level of profiling by the OpenARC runtime.

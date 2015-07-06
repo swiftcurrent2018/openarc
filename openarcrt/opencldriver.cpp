@@ -5,7 +5,7 @@
 
 #define MAX_SOURCE_SIZE (0x100000)
 //[DEBUG] commented out since it is no more static.
-//std::vector<std::string> OpenCLDriver::kernelNameList;
+//std::set<std::string> OpenCLDriver::kernelNameSet;
 
 cl_context OpenCLDriver_t::clContext;
 
@@ -15,7 +15,7 @@ char * deblank(char *str)
 
   for(; *str != '\0'; ++str)
   {
-    if(*str != ' ')
+    if((*str != ' ') && (*str != ':'))
       *put++ = *str;
   }
   *put = '\0';
@@ -26,7 +26,7 @@ char * deblank(char *str)
 ///////////////////////////
 // Device Initialization //
 ///////////////////////////
-OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::vector<std::string>kernelNames, HostConf_t *conf, int numDevices) {
+OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::OpenCLDriver(%d, %d)\n", devType, devNum);
@@ -35,27 +35,9 @@ OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::vector<std::st
     dev = devType;
     device_num = devNum;
 	num_devices = numDevices;
-//Moved to init();
-/*
-    cl_device_id devices[numDevices];
-    clGetPlatformIDs(1, &clPlatform, NULL);
-    
-    if(devType == acc_device_xeonphi)
-		clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ACCELERATOR, numDevices, devices, NULL);
-    else 
-		clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
-		
-    clDevice = devices[devNum];
-    char cBuffer[1024];
-    clGetDeviceInfo(clDevice, CL_DEVICE_NAME, sizeof(cBuffer), &cBuffer, NULL);
-    int thread_id = get_thread_id();
-    fprintf(stderr, "OpenCL : Host Thread %d initializes device %d: %s\n", thread_id, device_num, cBuffer);
-*/
 
-    for (std::vector<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
-        //const char *kernelName = (*it).c_str();
-		//fprintf(stderr, "[OpenCLDriver()] Kernel name = %s\n", kernelName);
-        kernelNameList.push_back(*it);
+    for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
+        kernelNameSet.insert(*it);
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -78,10 +60,13 @@ HI_error_t OpenCLDriver::init() {
     cl_device_id devices[num_devices];
     clGetPlatformIDs(1, &clPlatform, NULL);
     
-    if(dev == acc_device_xeonphi)
+    if(dev == acc_device_altera) {
+		clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
+	} else if(dev == acc_device_xeonphi) {
 		clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ACCELERATOR, num_devices, devices, NULL);
-    else 
+	} else  {
 		clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_GPU, num_devices, devices, NULL);
+	}
 
     HostConf_t * tconf = getHostConf();
 	if( tconf->use_unifiedmemory > 0 ) {
@@ -130,71 +115,81 @@ HI_error_t OpenCLDriver::init() {
     char* cBufferN;
     clGetDeviceInfo(clDevice, CL_DEVICE_NAME, sizeof(cBuffer), &cBuffer, NULL);
 	cBufferN = deblank(cBuffer); //Remove spaces.
-    std::string binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".ptx");
+    std::string binaryName;
+    if(dev == acc_device_altera) {
+    	binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".aocx");
+	} else {
+    	binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".ptx");
+	}
 
     //Build the program from source if the binary file is not found
     if( access( binaryName.c_str(), F_OK ) == -1 ) {
+    	if(dev == acc_device_altera) {
+			//For Altera target, only precompiled binary file is used; no online compilation.
+           fprintf(stderr, "[ERROR in OpenCLDriver::init()] AOCX file '%s' does not exist; exit\n", binaryName.c_str());
+			exit(1);
+		} else {
+			if( strstr(source_str, kernel_keyword) != NULL ) { 
+				//Compile the kernel file only if a kernel exists.
+        		clProgram = clCreateProgramWithSource(clContext, 1, (const char **)&source_str, (const size_t *)&source_size, &err);
+        		if(err != CL_SUCCESS) {
+            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL program with error %d (OPENCL Device)\n", err);
+					exit(1);
+        		}
 
-		if( strstr(source_str, kernel_keyword) != NULL ) { 
-			//Compile the kernel file only if a kernel exists.
-        	clProgram = clCreateProgramWithSource(clContext, 1, (const char **)&source_str, (const size_t *)&source_size, &err);
-        	if(err != CL_SUCCESS) {
-            	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL program with error %d (OPENCL Device)\n", err);
-				exit(1);
-        	}
-
-			char *envVar;
-			envVar = getenv("OPENARC_JITOPTION");
-       		err = clBuildProgram(clProgram, 1, &clDevice, envVar, NULL, NULL);
-        	if(err != CL_SUCCESS)
-        	{
-            	printf("[ERROR in OpenCLDriver::init()] Error in clBuildProgram, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
-            	if (err == CL_BUILD_PROGRAM_FAILURE)
-            	{
-                	// Determine the size of the log
-                	size_t log_size;
-                	clGetProgramBuildInfo(clProgram, clDevice, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+				char *envVar;
+				envVar = getenv("OPENARC_JITOPTION");
+       			err = clBuildProgram(clProgram, 1, &clDevice, envVar, NULL, NULL);
+        		if(err != CL_SUCCESS)
+				{
+            		printf("[ERROR in OpenCLDriver::init()] Error in clBuildProgram, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+            		if (err == CL_BUILD_PROGRAM_FAILURE)
+            		{
+                		// Determine the size of the log
+                		size_t log_size;
+                		clGetProgramBuildInfo(clProgram, clDevice, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
 	
-                	// Allocate memory for the log
-                	char *log = (char *) malloc(log_size);
+                		// Allocate memory for the log
+                		char *log = (char *) malloc(log_size);
 	
-                	// Get the log
-                	clGetProgramBuildInfo(clProgram, clDevice, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+                		// Get the log
+                		clGetProgramBuildInfo(clProgram, clDevice, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
 	
-                	// Print the log
-                	printf("%s\n", log);
-            	}
-            	exit(1);
-        	}
+                		// Print the log
+                		printf("%s\n", log);
+            		}
+            		exit(1);
+        		}
 
 #if 0 /* disabled by JK */
-        	size_t size;
-        	err = clGetProgramInfo( clProgram, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &size, NULL );
-        	if(err != CL_SUCCESS) {
-            	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to get OPENCL program info error %d (OPENCL Device)\n", err);
-				exit(1);
-        	}
+        		size_t size;
+        		err = clGetProgramInfo( clProgram, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &size, NULL );
+        		if(err != CL_SUCCESS) {
+            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to get OPENCL program info error %d (OPENCL Device)\n", err);
+					exit(1);
+        		}
 
-        	unsigned char * binary = new unsigned char [size];
+        		unsigned char * binary = new unsigned char [size];
 
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
-        	err = clGetProgramInfo( clProgram, CL_PROGRAM_BINARIES, size, &binary, NULL );
+        		err = clGetProgramInfo( clProgram, CL_PROGRAM_BINARIES, size, &binary, NULL );
 #else
-        	err = clGetProgramInfo(clProgram, CL_PROGRAM_BINARIES, sizeof(unsigned char *), &binary, NULL);
+        		err = clGetProgramInfo(clProgram, CL_PROGRAM_BINARIES, sizeof(unsigned char *), &binary, NULL);
 #endif
 
-        	if(err != CL_SUCCESS) {
-            	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to dump OPENCL program binary error %d (OPENCL Device)\n", err);
-				exit(1);
-        	}
+        		if(err != CL_SUCCESS) {
+            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to dump OPENCL program binary error %d (OPENCL Device)\n", err);
+					exit(1);
+        		}
 
-        	FILE * fpbin = fopen(binaryName.c_str(), "wb" );
-        	fwrite(binary, 1 , size, fpbin);
-        	fclose(fpbin);
-        	delete[] binary;
+        		FILE * fpbin = fopen(binaryName.c_str(), "wb" );
+        		fwrite(binary, 1 , size, fpbin);
+        		fclose(fpbin);
+        		delete[] binary;
 #endif
-		} else {
-			clProgram = NULL;
+			} else {
+				clProgram = NULL;
+			}
 		}
     } // Binary file is found; build the program from it
     else {
@@ -360,7 +355,7 @@ HI_error_t OpenCLDriver::createKernelArgMap() {
     std::map<std::string, cl_kernel> kernelMap;
 	std::map<std::string, kernelParams_t*> kernelArgs;
     //find all kernels and insert them in the map for the corresponding device
-    for(std::vector<std::string>::iterator it=kernelNameList.begin(); it!=kernelNameList.end(); ++it) {
+    for(std::set<std::string>::iterator it=kernelNameSet.begin(); it!=kernelNameSet.end(); ++it) {
         cl_kernel clFunc;
         const char *kernelName = (*it).c_str();
         clFunc = clCreateKernel(clProgram, kernelName, &err);
@@ -387,40 +382,35 @@ HI_error_t OpenCLDriver::createKernelArgMap() {
     return HI_success;
 }
 
-HI_error_t OpenCLDriver::HI_register_kernels(std::vector<std::string> kernelNames) {
+HI_error_t OpenCLDriver::HI_register_kernels(std::set<std::string> kernelNames) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_register_kernels()\n");
 	}
 #endif
-    for (std::vector<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
-        //const char *kernelName = (*it).c_str();
-		//fprintf(stderr, "[OpenCLDriver()] Kernel name = %s\n", kernelName);
-        kernelNameList.push_back(*it);
-    }
     HostConf_t * tconf = getHostConf();
-    cl_int err;
-	std::map<std::string, kernelParams_t*> kernelArgs;
-    std::map<std::string, cl_kernel> kernelMap;
-    //find all kernels and insert them in the map for the corresponding device
-    for(std::vector<std::string>::iterator it=kernelNameList.begin(); it!=kernelNameList.end(); ++it) {
-        cl_kernel clFunc;
-        const char *kernelName = (*it).c_str();
-        clFunc = clCreateKernel(clProgram, kernelName, &err);
-        if (err != CL_SUCCESS) {
-            fprintf(stderr, "[%d] [ERROR in OpenCLDriver::init()] Function Load FAIL on %s, %d\n", __LINE__, kernelName, err);
-			exit(1);
-        }
-        kernelMap[*it] = clFunc;
+    for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
+		//fprintf(stderr, "[OpenCLDriver()] Kernel name = %s\n", kernelName);
+		if( kernelNameSet.count(*it) == 0 ) {
+			//Add a new kernel to add.
+        	kernelNameSet.insert(*it);
+    		cl_int err;
+        	cl_kernel clFunc;
+        	const char *kernelName = (*it).c_str();
+        	clFunc = clCreateKernel(clProgram, kernelName, &err);
+        	if (err != CL_SUCCESS) {
+            	fprintf(stderr, "[%d] [ERROR in OpenCLDriver::HI_register_kernels()] Function Load FAIL on %s, %d\n", __LINE__, kernelName, err);
+				exit(1);
+        	}
+        	(tconf->kernelsMap[this])[*it] = clFunc;
 
-        // Create argument mapping for the kernel
-		// Below is not used for now.
-		kernelParams_t *kernelParams = new kernelParams_t;
-		kernelParams->num_args = 0;
-		kernelArgs.insert(std::pair<std::string, kernelParams_t*>(std::string(kernelName), kernelParams));
+        	// Create argument mapping for the kernel
+			// Below is not used for now.
+			kernelParams_t *kernelParams = new kernelParams_t;
+			kernelParams->num_args = 0;
+			(tconf->kernelArgsMap[this]).insert(std::pair<std::string, kernelParams_t*>(std::string(kernelName), kernelParams));
+		}
     }
-	tconf->kernelArgsMap[this] = kernelArgs;
-    tconf->kernelsMap[this]=kernelMap;
 
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -437,11 +427,14 @@ int OpenCLDriver::HI_get_num_devices(acc_device_t devType) {
 	}
 #endif
     cl_uint numDevices = 0;
-    if(devType == acc_device_gpu || devType == acc_device_xeonphi) {
+    if(devType == acc_device_gpu || devType == acc_device_xeonphi ||
+		devType == acc_device_altera ) {
         cl_platform_id platform;
         clGetPlatformIDs(1, &platform, NULL);
         cl_int err = CL_SUCCESS;
-        if(devType == acc_device_xeonphi) {
+        if(devType == acc_device_altera) {
+			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
+        } else if(devType == acc_device_xeonphi) {
 			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ACCELERATOR, 0, NULL, &numDevices);
 		} else if(devType == acc_device_gpu) {
 			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
@@ -886,7 +879,8 @@ void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t d
     double ltime = HI_get_localtime();
 #endif
     if(  devType == acc_device_gpu || devType == acc_device_nvidia || 
-    devType == acc_device_radeon || devType == acc_device_xeonphi || devType == acc_device_current) {
+    devType == acc_device_radeon || devType == acc_device_xeonphi || 
+	devType == acc_device_altera || devType == acc_device_current) {
 		if( tempMallocSet.count(*tempPtr) > 0 ) {
 			HI_device_mem_handle_t tHandle;
 			tempMallocSet.erase(*tempPtr);
@@ -950,7 +944,8 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
     double ltime = HI_get_localtime();
 #endif
     if(  devType == acc_device_gpu || devType == acc_device_nvidia || 
-    devType == acc_device_radeon || devType == acc_device_xeonphi || devType == acc_device_current) {
+    devType == acc_device_radeon || devType == acc_device_xeonphi || 
+	devType == acc_device_altera || devType == acc_device_current) {
         if( *tempPtr != 0 ) {
 			HI_device_mem_handle_t tHandle;
 			tempMallocSet.erase(*tempPtr);

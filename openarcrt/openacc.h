@@ -14,7 +14,8 @@ typedef enum {
     acc_device_radeon = 5,
     acc_device_gpu = 6,
     acc_device_xeonphi = 7,
-    acc_device_current = 8
+    acc_device_current = 8,
+    acc_device_altera = 9
 } acc_device_t;
 
 #define h_void void
