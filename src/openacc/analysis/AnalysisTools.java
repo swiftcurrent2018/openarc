@@ -1436,7 +1436,7 @@ public abstract class AnalysisTools {
 								if( !visitedFuncs.contains(tProc.getSymbolName()) ) {
 									visitedFuncs.add(tProc.getSymbolName());
 									tAnnot = ipFindFirstPragmaInParent(at, pragma_cls, searchKeys, includeAll, 
-										fCallList, null);
+										fCallList, visitedFuncs);
 								}
 								if( tAnnot != null ) {
 									ret = tAnnot;

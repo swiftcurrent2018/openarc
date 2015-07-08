@@ -224,7 +224,9 @@ public:
 
     HI_error_t HI_get_device_address(const void *hostPtr, void **devPtrBase, size_t *offset, size_t *size, int asyncID, int tid) {
 		bool emptyTable1 = false;
+#if PRESENT_TABLE_SEARCH_MODE == 0
 		bool emptyTable2 = false;
+#endif
     	addresstable_t *masterAddressTable = masterAddressTableMap[tid];
         int defaultAsyncID = DEFAULT_QUEUE+tid*MAX_NUM_QUEUES_PER_THREAD;
 		addresstable_t::iterator it = masterAddressTable->find(asyncID);
