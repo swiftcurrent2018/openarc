@@ -119,14 +119,34 @@ public class CollapseTransformation extends TransformPass {
 		ForLoop innerLoop = indexedLoops.get(collapseLevel-1);
 		Statement fBody = innerLoop.getBody();
 		CompoundStatement cStmt = null;
-		Statement firstNonDeclStmt = null;
+		Statement tRefStmt = null;
 		if( fBody instanceof CompoundStatement ) {
 			cStmt = (CompoundStatement)fBody;
-			firstNonDeclStmt = IRTools.getFirstNonDeclarationStatement(fBody);
+			tRefStmt = IRTools.getFirstNonDeclarationStatement(fBody);
 		} else {
 			cStmt = new CompoundStatement();
 			cStmt.addStatement(fBody);
-			firstNonDeclStmt = fBody;
+			tRefStmt = fBody;
+		}
+		//If const symbol declaration exists, old index variables may be used in its initialization.
+		//In this case, expression statements assigning the old index variables should be put before
+		//the const symbol declaration.
+		//For simplicity, the new assignment expression statements added at the beginning whenever
+		//const symbol declaration exists.
+		boolean containsConstSymbol = false;
+		Set<Symbol> lSymbolSet = cStmt.getSymbols();
+		for(Symbol lSym : lSymbolSet) {
+			if( SymbolTools.containsSpecifier(lSym, Specifier.CONST) ) {
+				containsConstSymbol = true;
+				break;
+			}
+		}
+		if( containsConstSymbol ) {
+			tRefStmt = (Statement)cStmt.getChildren().get(0);
+		}
+		if( tRefStmt == null ) {
+			Tools.exit("[ERROR in CollapseTransformation] can not find referent statement "
+					+ "to insert old index calculation statements; exit!" + AnalysisTools.getEnclosingContext(accLoop));
 		}
 		ArrayList<Expression> iterspaceList = new ArrayList<Expression>();
 		ArrayList<Expression> lbList = new ArrayList<Expression>();
@@ -200,7 +220,11 @@ public class CollapseTransformation extends TransformPass {
 			}
 			Statement stmt = new ExpressionStatement(new AssignmentExpression(tIndex.clone(), 
 					AssignmentOperator.NORMAL, expr1));
-			cStmt.addStatementBefore(firstNonDeclStmt, stmt);
+			if( containsConstSymbol ) {
+				cStmt.addStatementBefore(tRefStmt, stmt);
+			} else {
+				TransformTools.addStatementBefore(cStmt, tRefStmt, stmt);
+			}
 			if( i == (collapseLevel-1) ) {
 				expr1 = new BinaryExpression(newIndex.clone(), BinaryOperator.DIVIDE, 
 						iterspaceList.get(i).clone());
@@ -216,7 +240,11 @@ public class CollapseTransformation extends TransformPass {
 			}
 			stmt = new ExpressionStatement(new AssignmentExpression(accforIndex.clone(), 
 					AssignmentOperator.NORMAL, expr1));
-			cStmt.addStatementBefore(firstNonDeclStmt, stmt);
+			if( containsConstSymbol ) {
+				cStmt.addStatementBefore(tRefStmt, stmt);
+			} else {
+				TransformTools.addStatementBefore(cStmt, tRefStmt, stmt);
+			}
 			i--;
 		}
 		/////////////////////////////////////////////////////////////////////////
