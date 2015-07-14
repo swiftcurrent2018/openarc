@@ -400,7 +400,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         	if(targetArch == 3)
         	{
         		//Using Altera.
-        		acc_init_call.addArgument(new NameID("acc_device_altera"));
+        		acc_shutdown_call.addArgument(new NameID("acc_device_altera"));
         	} else if(targetArch == 2)
         	{
         		//Using Xeon Phi

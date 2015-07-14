@@ -160,6 +160,18 @@ GFRONTEND_INCLUDES = -I$(OPENARCLIB)
 GFRONTEND_LIBS = -L$(OPENARCLIB) -lcuda
 GFRONTEND_DEBUG = -g
 else
+ifeq ($(OPENARC_ARCH), 3)
+BACKENDCXX = g++
+CC_FLAGS_PREFIX = 
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/opt/altera/14.1/hld/host/include -I/opt/altera/14.1/hld/board/nalla_pcie/include
+GBACKEND_LIBS = -L/opt/altera/14.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/14.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/14.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/14.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+GFRONTEND_DEBUG = -g
+else
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
@@ -170,6 +182,7 @@ GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
 GFRONTEND_LIBS = -L$(OPENARCLIB) -lOpenCL
 GFRONTEND_DEBUG = -g
+endif
 endif
 
 LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu

@@ -10,6 +10,7 @@
 OMP ?= 0
 MODE ?= normal
 DIST ?= 0
+AOCL_BOARD ?= p385_hpc_a7
 
 ifeq ($(DIST),1)
 #OMP should be set to 1 to use dist-OpenACC version.
@@ -119,13 +120,17 @@ $(BENCHMARK)_CPU: $(CSRCS) makedirectories
 $(BENCHMARK)_ACC: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
 	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
 
+COMPILE_KERNEL: $($(CETUS_OUTPUT)/$(KERNLE_FILE)) makedirectories
+	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc -march=emulator --board $(AOCL_BOARD) openarc_kernel.cl; cp openarc_kernel.aocx ../$(TARGET)/openarc_kernel_EmulatorDeviceEmulatedDevice.aocx; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
+	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
+
 makedirectories:
 	mkdir -p $(TARGET)
 
 clean:
 	rm -f *.o *~ confFile.txt TuningOptions.txt;
-	if [ -d ./$(CETUS_OUTPUT) ]; then cd $(CETUS_OUTPUT); rm -f *.o *~; cd ..; fi
-	if [ -d $(TARGET) ]; then rm -f $(BENCHMARK_CPU) $(BENCHMARK_OPENACC) Timer; cd $(TARGET); rm -f openarc_kernel*.ptx $(KERNEL_FILE) binBuilder_$(OPENARCLIB_SUFFIX) Timer; fi
+	if [ -d ./$(CETUS_OUTPUT) ]; then cd $(CETUS_OUTPUT); rm -rf *.o *~ *aoco *aocx openarc_kernel; cd ..; fi
+	if [ -d $(TARGET) ]; then rm -f $(BENCHMARK_CPU) $(BENCHMARK_OPENACC) Timer; cd $(TARGET); rm -f openarc_kernel*.ptx $(KERNEL_FILE) binBuilder_$(OPENARCLIB_SUFFIX) Timer *.aocx; fi
 
 purge: clean
 	rm -rf $(TARGET) $(CETUS_OUTPUT) cetus_input openarcConf.txt *.log
