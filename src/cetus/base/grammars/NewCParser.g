@@ -109,6 +109,7 @@ import antlr.CommonAST;
 import antlr.DumpASTVisitor;
 import java.util.*;
 import cetus.hir.*;
+import static cetus.hir.AttributeSpecifier.Attribute;
 @SuppressWarnings({"unchecked", "cast"})
 }
 
@@ -1133,10 +1134,10 @@ extendedDeclModifier:
 
 // Non standard GCC specific attributes are matched and discarded
 // [Extended by Joel E. Denny to return simple attributes]
-attributeDecl returns [List<String> list]
+attributeDecl returns [List<Attribute> list]
 {
-list = new ArrayList<String>();
-List<String> subList;
+list = new ArrayList<>();
+List<Attribute> subList;
 }
         :
         "__attribute"^
@@ -1153,8 +1154,8 @@ List<String> subList;
 
 
 // [Extended by Joel E. Denny to return simple attributes]
-attributeList returns [List<String> list]
-{list = new ArrayList<String>(); String attr;}
+attributeList returns [List<Attribute> list]
+{list = new ArrayList<>(); Attribute attr;}
         :
         attr = attribute
 {if (attr != null) list.add(attr);}
@@ -1169,14 +1170,14 @@ attributeList returns [List<String> list]
 
 
 // [Extended by Joel E. Denny to return simple attributes]
-attribute returns [String str]
-{str = null;}
+attribute returns [Attribute spec]
+{spec = null;}
         :
         (
         // Word
         (
             id:ID
-{str = id.getText();}
+{spec = new Attribute(id.getText());}
             //| declSpecifiers
             |
             storageClassSpecifier
@@ -1749,15 +1750,16 @@ while (diter.hasNext()) {
 // support for K&R style declaration: "dcount" is counting the number of
 // declaration in old style.
 // [Extended by Joel E. Denny to collect simple attributes]
-List<String> attrs = new ArrayList<String>();
+List<Attribute> attrs = new ArrayList<>();
 List dspec_new = new ArrayList();
 for (Object obj : dspec) {
-    if (obj instanceof String)
-        attrs.add((String)obj);
+    if (obj instanceof Attribute)
+        attrs.add((Attribute)obj);
     else
         dspec_new.add(obj);
 }
-curFunc = new Procedure(dspec_new, bdecl, stmt, dcount>0, attrs);
+curFunc = new Procedure(dspec_new, bdecl, stmt, dcount>0,
+                        attrs.isEmpty() ? null : new AttributeSpecifier(attrs));
 PrintTools.printStatus("Creating Procedure: ",1);
 PrintTools.printlnStatus(bdecl,1);
 // already handled in constructor
@@ -1773,7 +1775,7 @@ dspec = new ArrayList();
 Specifier type=null;
 Specifier tqual=null;
 Specifier tspec=null;
-List<String> attrs;
+List<Attribute> attrs;
 }
         :
         (

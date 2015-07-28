@@ -713,7 +713,7 @@ public abstract class TransformTools {
 	 * @return
 	 */
 	public static Identifier declareClonedVariable(Traversable where, Symbol inSym, String name, List<Specifier> removeSpecs,
-			List<Specifier> addSpecs, boolean removeLeftMostDim) {
+			List<Specifier> addSpecs, boolean removeLeftMostDim, boolean addRestrictQualifier) {
 		NameID id = new NameID(name);
 		Identifier newID = null;
 		List specs = null;
@@ -748,7 +748,19 @@ public abstract class TransformTools {
 				for (int i = 0; i < specs.size(); i++) {
 					Object spec = specs.get(i);
 					if (spec instanceof PointerSpecifier) {
-						declarator_specs.add(spec);
+						if( addRestrictQualifier ) {
+							if( spec.equals(PointerSpecifier.UNQUALIFIED) ) {
+								declarator_specs.add(PointerSpecifier.RESTRICT);
+							} else if( spec.equals(PointerSpecifier.CONST) ) {
+								declarator_specs.add(PointerSpecifier.CONST_RESTRICT);
+							} else if( spec.equals(PointerSpecifier.CONST_VOLATILE) ) {
+								declarator_specs.add(PointerSpecifier.CONST_RESTRICT_VOLATILE);
+							} else {
+								declarator_specs.add(spec);
+							}
+						} else {
+							declarator_specs.add(spec);
+						}
 					} else {
 						declaration_specs.add(spec);
 					}

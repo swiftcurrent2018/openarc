@@ -31,6 +31,7 @@ deviceptr( list )
 private( list ) 
 firstprivate( list ) 
 
+
 #pragma acc kernels [clause[[,] clause]...]
 	structured block
 
@@ -51,6 +52,7 @@ pcopyout( list )
 present_or_create( list ) 
 pcreate( list ) 
 deviceptr( list ) 
+
 
 #pragma acc data [clause[[,] clause]...]
 	structured block
@@ -86,15 +88,18 @@ independent
 private( list )
 reduction( operator:list )
 
+
 #pragma acc parallel loop [clause[[,] clause]...]
 	for loop
 
 where clause is any clause allowed on a parallel or loop directive.
 
+
 #pragma acc kernels loop [clause[[,] clause]...]
 	for loop
 
 where clause is any clause allowed on a kernels or loop directive.
+
 
 #pragma acc declare declclause [[,] declclause]...
 
@@ -115,6 +120,7 @@ pcreate( list )
 deviceptr( list ) 
 device_resident( list ) 
 
+
 #pragma acc update clause[[,] clause]...
 
 where clause is one of the following:
@@ -123,13 +129,16 @@ device( list )
 if( condition )
 async [( scalar-integer-expression )]
 
+
 #pragma acc wait [( scalar-integer-expression )]
+
 
 #pragma acc host_data [clause[[,] clause]...]
 	structured block
 
 where clause is one of the following:
 use_device( condition )
+
 
 **************************************************
 ** List of OpenACC constructs not yet supported **
@@ -140,7 +149,7 @@ use_device( condition )
 ** List of OpenACC constructs added as experimental features **
 ***************************************************************
 #pragma acc barrier //replaced with device-specific local synchronization call 
-					//(e.g., CUDA "__syncthreads()").
+					//(e.g., in CUDA, "__syncthreads()").
 
 
 *********************************
@@ -179,6 +188,17 @@ constant(list)    // R/O shared scalar or array data in the list are allocated
 noconstant(list)  // Variables in the list will not be allocated on CUDA constant memory
 global(list)      // Worker-private variables in the list are allocated on the 
 				  // global memory using array expansion.
+//openarc cuda directives can be used for OpenCL targets too; the compiler 
+//may ignore some clauses if not applicable to the target OpenCL device.
+
+
+#pragma openarc opencl [clause[[,] clause]...]
+	structured block
+
+where clause is one of the following
+num_simd_work_items(exp)  //Set number of work-items executed in an SIMD fashion; used only for Altera OpenCL devices.
+num_compute_units(exp)  //Set number of compute units that the Altera OpenCL compiler should create to execute work groups; used only for Altera OpenCL devices.
+
 
 #pragma openarc transform [clause[[,] clause]...]
 	structured block
@@ -191,8 +211,10 @@ noreductionunroll(list)
 noploopswap
 noloopcollapse
 
+
 #pragma openarc ainfo procname(proc-name) kernelid(kernel-id)
 	structured block
+//Internally used by the compiler to label each compute region.
 
 
 #pragma openarc resilience [clause[[,] clause]...]
@@ -207,11 +229,13 @@ num_ftbits(scalar-integer-expression)
 repeat(scalar-integer-expression)
 ftthread(scalar-integer-expression)
 
+
 #pragma openarc ftinject [clause[[,] clause]...]
 
 where clause is one of the following
 ftdata(list)
 ftthread(scalar-integer-expression)
+
 
 #pragma openarc ftregion [clause[[,] clause]...]
 	structured block
@@ -219,6 +243,7 @@ ftthread(scalar-integer-expression)
 where clause is one of the following
 ftdata(list)
 ftthread(scalar-integer-expression)
+
 
 #pragma openarc profile region label(name) [clause[[,] clause]...]
 	structured block
@@ -230,6 +255,7 @@ event(list) //a list consists of expressions
 verbosity(arg) //an arg is a non-negative integer where
 			   //0 is the least verbose mode. 
 
+
 #pragma openarc enter profile region label(name) [clause[[,] clause]...]
 
 where clause is one of the following
@@ -239,7 +265,9 @@ event(list) //a list consists of expressions
 verbosity(arg) //an arg is a non-negative integer where
 			   //0 is the least verbose mode. 
 
+
 #pragma openarc exit profile region label(name)
+
 
 #pragma openarc profile track label(name) [clause[[,] clause]...]
 	structured block
@@ -251,12 +279,14 @@ profcond(expression)
 mode(list) 	//a list consists of the following:
 			//memory, instructions, occupancy, memorytransfer, all
 
+
 #pragma openarc profile measure label(name) [clause[[,] clause]...]
 
 where clause is one of the following
 event(list) //a list consists of expressions
 induction(induction-expression)
 profcond(expression) 
+
 
 ***************************************************************
 ** OpenARC Internal Directives (used internally by compiler) **
@@ -275,7 +305,6 @@ accdeviceptr(list) // The list contains deviceptr symbols.
 accreadonly(list) // The list contains R/O symbols.
 rcreate(list) 	// The list contains reduction symbols whose GPU memory will 
 				//be allocated at the attached annotatable.
-
 iterspace(exp) // exp is the iteration size expression for a gang loop.
 gangdim(integer) // Contains the dimension of the attached gang loop. In a triply 
 				 // nested gang loops, the outermost gang loop will have 
@@ -336,10 +365,13 @@ innergang		//Indicate that the attached loop is the inner loop of a stripmined g
 **********************************************************
 #pragma aspen enter modelregion [label(model-name)]
 
+
 #pragma aspen exit modelregion [label(model-name)]
+
 
 #pragma aspen modelregion [label(model-name)]
 //atached to structured block
+
 
 ///////////
 //Example//

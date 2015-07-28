@@ -2859,8 +2859,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		Map<Symbol, Set<SubArray>> shrdArryOnRegMap = new HashMap<Symbol, Set<SubArray>>();
 		Set<SubArray> ROShrdArryOnRegSet = new HashSet<SubArray>();
 		
+		////////////////////////////////////////////////////////////////
+		// Extract OpenCL directives attached to this compute region. //
+		////////////////////////////////////////////////////////////////
+		
 		
 		boolean noloopcollapse = false;
+		Expression num_compute_units = null;
+		Expression num_simd_work_items = null;
 		Declaration tLastACCDecl = OpenACCHeaderEndMap.get(parentTrUnt);
 		
 		List<ACCAnnotation> accAnnots = region.getAnnotations(ACCAnnotation.class);
@@ -3017,6 +3023,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 */				String sData = (String)cannot.get("noloopcollapse");
 				if( sData != null ) {
 					noloopcollapse = true;
+				}
+				Expression tArgExp = (Expression)cannot.get("num_simd_work_items");
+				if( tArgExp != null ) {
+					num_simd_work_items = tArgExp;
+				}
+				tArgExp = (Expression)cannot.get("num_compute_units");
+				if( tArgExp != null ) {
+					num_compute_units = tArgExp;
 				}
 			}
 		}
@@ -3662,7 +3676,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				!AnalysisTools.ipContainPragmas(region, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null)) {
 			ACC2GPUTranslationTools.seqKernelLoopTransformation(cProc, (ForLoop)region, cRegionKind, ifCond, asyncID, confRefStmt,
 					preList, postList, prefixStmts, postscriptStmts, call_to_new_proc, new_proc, main_TrUnt, 
-					OpenACCHeaderEndMap, IRSymbolOnly, opt_addSafetyCheckingCode, targetModel );
+					OpenACCHeaderEndMap, IRSymbolOnly, opt_addSafetyCheckingCode, targetModel, opt_AssumeNoAliasing);
 		}
 
 		//////////////////////////////////////////////////////////////////////////
@@ -3775,7 +3789,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			if( accDevicePtrSet.contains(sharedSym) ) {
 				//Create a kernel parameter for the shared array variable.
 				ArrayList addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
-				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true);
+				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true, opt_AssumeNoAliasing);
 				callerProcSymSet.add(kParamVar.getSymbol());
 				if( dimension == 1 ) {
 					call_to_new_proc.addArgument(hostVar.clone());
@@ -3895,7 +3909,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				//Create a kernel parameter for the shared array variable.
 				//Add __global specifier for device memory
 				ArrayList addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
-				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true);
+				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true, opt_AssumeNoAliasing);
 				Symbol kParamSym = kParamVar.getSymbol();
 				callerProcSymSet.add(kParamSym);
 				// Insert argument to the kernel function call
@@ -4003,6 +4017,27 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
             );
             TransformTools.addStatementAfter(confRefParent, dimBlock_stmt, new ExpressionStatement(assignmentExpression));
         }
+
+        //Set reqd_work_group_size attribute to the kernel procedure.
+        //e.g., __attribute__((reqd_work_group_size(128,1,1))
+        //Used for Altera OpenCL.
+        List<Expression> wg_size = new ArrayList<Expression>(3);
+        for( int m=0; m<3; m++ ) {
+        	wg_size.add(num_workers.get(m).clone());
+        }
+        AttributeSpecifier kernel_attributes = new AttributeSpecifier(new AttributeSpecifier.Attribute("reqd_work_group_size", wg_size));
+        if( targetArch == 3 ) {
+        	//Add num_simd_work_items and num_compute_unit attributes, which are used only for Altera OpenCL.
+        	if( (num_simd_work_items != null) && (num_simd_work_items instanceof IntegerLiteral) ) {
+        		AttributeSpecifier.Attribute tAttribute = new AttributeSpecifier.Attribute("num_simd_work_items", num_simd_work_items);
+        		kernel_attributes.addAttribute(tAttribute);
+        	}
+        	if( (num_compute_units != null) && (num_compute_units instanceof IntegerLiteral) ) {
+        		AttributeSpecifier.Attribute tAttribute = new AttributeSpecifier.Attribute("num_compute_units", num_compute_units);
+        		kernel_attributes.addAttribute(tAttribute);
+        	}
+        }
+        new_proc.setAttributeSpecifier(kernel_attributes);
 
 		AssignmentExpression assignExp = new AssignmentExpression(numBlocks.clone(), AssignmentOperator.NORMAL, totalnumgangs);
 		ExpressionStatement estmt = new ExpressionStatement(assignExp);
@@ -4489,7 +4524,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		Traversable parent = kernelCall_stmt.getParent();
 		
 		//Convert worksharing loops into if-statements. 
-		OpenCLTranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers);
+		OpenCLTranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers, opt_skipKernelLoopBoundChecking);
 		
 		if( opt_forceSyncKernelCall ) {
 			//FunctionCall syncCall = new FunctionCall(new NameID("cudaThreadSynchronize"));

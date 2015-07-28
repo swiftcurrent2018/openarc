@@ -38,6 +38,7 @@ public class acc2gpu extends CodeGenPass
 	private boolean globalGMallocOpt = false;
 	private boolean addSafetyCheckingCode = false;
 	private boolean disableStatic2GlobalConversion = false;
+	private boolean assumeNoAliasingAmongKernelArgs = false;
 	private int doNotRemoveUnusedSymbols = 0;
 	//private boolean kernelCallingProcCloning = false;
 	private boolean MemTrOptOnLoops = false;
@@ -55,7 +56,7 @@ public class acc2gpu extends CodeGenPass
 	private String tuningConfDir = null;
 	private boolean IRSymbolOnly = true;
 	private Map<String, String> env = null;
-	private int unrollFactor = 0;
+	private int unrollFactor = 1;
 	private int OPENARC_ARCH = 0;
 	
 	public acc2gpu(Program program, HashMap<String, HashMap<String, Object>> uDirectives,
@@ -245,6 +246,11 @@ public class acc2gpu extends CodeGenPass
 		value = Driver.getOptionValue("loopUnrollFactor");
 		if( value != null ) {
 			unrollFactor = Integer.valueOf(value).intValue();
+		}
+
+		value = Driver.getOptionValue("assumeNoAliasingAmongKernelArgs");
+		if( value != null ) {
+			assumeNoAliasingAmongKernelArgs = true;
 		}
 		
 /*		value = Driver.getOptionValue("tinline");
@@ -506,7 +512,7 @@ public class acc2gpu extends CodeGenPass
 		//in a function called in a compute region.
 		//ACCAnalysis.shared_analysis() put all global symbols accessed in called functions,
 		//but these should be explicitly passed as parameters to the functions.
-		TransformPass.run(new GlobalVariableParameterization(program, true));
+		TransformPass.run(new GlobalVariableParameterization(program, true, assumeNoAliasingAmongKernelArgs));
 		
 		//Normalize OpenACC gang/worker/vector loops since the following passes such as 
 		//ComputeRegionConfAnalysis works only on loops with stride 1.
@@ -588,9 +594,11 @@ public class acc2gpu extends CodeGenPass
 		TransformPass.run(new CollapseTransformation(program));
 
 
-		/////////////////////////////////////////////
-		//Unroll loops                             //
-		/////////////////////////////////////////////
+		/////////////////////////////////////////////////////////
+		//Unroll loops if unrollFactor is positive integer.    //
+		//(default value = 1, which will unroll only if unroll //
+		//OpenARC clause exists.)                              //
+		/////////////////////////////////////////////////////////
 		if(unrollFactor > 0) {
 			TransformPass.run(new LoopUnrollTransformation(program, unrollFactor));
 		}

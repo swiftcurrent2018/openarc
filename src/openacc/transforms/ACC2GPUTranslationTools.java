@@ -833,7 +833,7 @@ public abstract class ACC2GPUTranslationTools {
 			CompoundStatement prefixStmts, CompoundStatement postscriptStmts,
 			FunctionCall call_to_new_proc, Procedure new_proc, TranslationUnit main_TrUnt, 
 			Map<TranslationUnit, Declaration> OpenACCHeaderEndMap, boolean IRSymbolOnly,
-			boolean opt_addSafetyCheckingCode, int targetModel ) {
+			boolean opt_addSafetyCheckingCode, int targetModel, boolean assumeNoAliasing ) {
 		CompoundStatement scope = null;
 		CompoundStatement regionParent = (CompoundStatement)seqLoop.getParent();
 
@@ -1237,9 +1237,9 @@ public abstract class ACC2GPUTranslationTools {
 
 					} else {
 						if( (redOp == null) || ((redOp != null) && workerPrivOnGlobal) ) {
-							lpriv_var = TransformTools.declareClonedVariable(new_proc, privSym, localWPSymName, removeSpecs, null, true);
+							lpriv_var = TransformTools.declareClonedVariable(new_proc, privSym, localWPSymName, removeSpecs, null, true, assumeNoAliasing);
 						} else {
-							lred_var = TransformTools.declareClonedVariable(new_proc, privSym, localRedSymName, removeSpecs, null, true);
+							lred_var = TransformTools.declareClonedVariable(new_proc, privSym, localRedSymName, removeSpecs, null, true, assumeNoAliasing);
 						}
 
 						// Insert argument to the kernel function call

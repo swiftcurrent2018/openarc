@@ -1821,6 +1821,39 @@ public class ACCParser {
 			}
 		}
 	}
+
+	/**
+	 * OpenARC opencl directive 
+	 * 
+	 * #pragma openarc opencl [clause[[,] clause]...]
+	 * 		structured-block
+	 * 
+	 * where clause is one of the following
+	 * 		num_simd_work_items(exp) 
+	 * 		num_compute_units(exp) 
+	 */
+	private static void parse_arc_opencl()
+	{
+		PrintTools.println("ACCParser is parsing [opencl] directive", 3);
+		addToMap("opencl", "_directive");
+		while (end_of_token() == false) 
+		{
+			String tok = get_token();
+			if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+			if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+			String clause = "token_" + tok;
+			PrintTools.println("clause=" + clause, 3);
+			try {
+				switch (opencl_clause.valueOf(clause)) {
+				case token_num_simd_work_items	:	parse_acc_confclause(tok); break;
+				case token_num_compute_units	:	parse_acc_confclause(tok); break;
+				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
+				}
+			} catch( Exception e) {
+				ACCParserError("unexpected or wrong token found (" + tok + ")");
+			}
+		}
+	}
 	
 	/**
 	 * OpenARC transform directive 
@@ -1856,7 +1889,7 @@ public class ACCParser {
 				case token_noploopswap	:	parse_acc_noargclause(tok); break;
 				case token_noloopcollapse	:	parse_acc_noargclause(tok); break;
 				case token_permute		: parse_expressionlist(tok); break;
-				case token_unroll		: parse_unroll(tok); break;
+				case token_unroll		: parse_acc_confclause(tok); break;
 				case token_transpose	: parse_arc_clause_with_subarrayconf(tok); break;
 				case token_redim	: parse_arc_clause_with_subarrayconf(tok); break;
 				case token_expand	: parse_arc_clause_with_subarrayconf(tok); break;
@@ -1899,6 +1932,7 @@ public class ACCParser {
 			switch (arc_directives.valueOf(construct)) {
 			case arc_ainfo 		: parse_arc_ainfo(); return true;
 			case arc_cuda 		: parse_arc_cuda(); return true;
+			case arc_opencl 		: parse_arc_opencl(); return true;
 			case arc_transform 		: parse_arc_transform(); return true;
 			case arc_resilience 	: parse_arc_resilience(); return true;
 			case arc_ftregion 	: parse_arc_ftregion(); return true;
@@ -1970,6 +2004,10 @@ public class ACCParser {
 	 * 		vector [( scalar-integer-expression )]
 	 * 		seq
 	 * 		independent
+	 * 		permute
+	 * 		unroll
+	 * 		num_simd_work_items
+	 * 		num_compute_units
 	 * --------------------------------------------------------------- */
 
 	public static HashMap<String,HashMap<String, Object>> parse_userdirective(String[] str_array)
@@ -2036,6 +2074,7 @@ public class ACCParser {
 				case token_conditionalsrc		: parse_acc_dataclause(tok); break;
 				case token_enclosingloops		: parse_acc_dataclause(tok); break;
 				case token_permute		: parse_expressionlist(tok); break;
+				case token_unroll		:	parse_acc_confclause(tok); break;
 				case token_if		:	parse_acc_confclause(tok); break;
 				case token_async	:	parse_acc_optionalconfclause(tok); break;
 				case token_num_gangs		:	parse_acc_confclause(tok); break;
@@ -2064,6 +2103,8 @@ public class ACCParser {
 				case token_vector		: parse_acc_optionalconfclause(tok); break;
 				case token_seq		: parse_acc_noargclause(tok); break;
 				case token_independent		: parse_acc_noargclause(tok); break;
+				case token_num_simd_work_items		:	parse_acc_confclause(tok); break;
+				case token_num_compute_units		:	parse_acc_confclause(tok); break;
 				default : ACCParserError("NoSuchUserConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -2684,20 +2725,6 @@ public class ACCParser {
 		match(")");
 		addToMap(clause, set);
 	}
-
-
-  private static void parse_unroll(String clause)
-  {
-    PrintTools.println("ACCParser is parsing ["+clause+"] clause", 3);
-    match("(");
-    Expression exp = parse_expression("(", ")", 1);
-    match(")");
-    if( exp == null ) {
-      ACCParserError("No valid argument is found for the clause, " + clause);
-    } else {
-      addToMap(clause, exp);
-    }
-  }
 
 	private static void parse_acc_declaredataclause(String clause)
 	{
@@ -3664,6 +3691,7 @@ public class ACCParser {
 	{
 		arc_ainfo,
 		arc_cuda, 
+		arc_opencl, 
 		arc_resilience,
 		arc_ftregion,
 		arc_ftinject,
@@ -3734,6 +3762,12 @@ public class ACCParser {
 		token_constant,
 		token_noconstant,
 		token_global
+	}
+
+	public static enum opencl_clause
+	{
+		token_num_simd_work_items,
+		token_num_compute_units
 	}
 	
 	public static enum transform_clause
@@ -3830,7 +3864,9 @@ public class ACCParser {
 		token_conditionalsrc,
 		token_enclosingloops,
 		token_permute,
-		token_unroll
+		token_unroll,
+		token_num_simd_work_items,
+		token_num_compute_units
 	}
 	
 	public static enum cuda_tuningconf

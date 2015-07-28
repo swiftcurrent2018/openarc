@@ -37,10 +37,17 @@ public class ARCAnnotation extends PragmaAnnotation
  * 		noconstant(list)
  *      global(list)
  * <p>
+ * #pragma openarc opencl [clause[[,] clause]...]
+ * <p>     
+ * where clause is one of the following
+ *      num_simd_work_items(exp)
+ *      num_compute_units(exp)
+ * <p>     
  * #pragma openarc transform [clause[[,] clause]...]
  * <p>     
  * where clause is one of the following
  *      permute(list)
+ *      unroll(exp)
  *      noreductionunroll(list)
  *      transpose(list-of-subarray-with-conflist)
  *      redim(list-of-subarray-with-conflist)
@@ -135,12 +142,12 @@ public class ARCAnnotation extends PragmaAnnotation
 		new HashSet<String>(Arrays.asList(
 		"registerRO", "registerRW", "sharedRO", "sharedRW", "global", 
 		"texture", "constant", "noconstant", "noreductionunroll",
-		"procname", "kernelid",
+		"procname", "kernelid", "unroll",
 		"noregister", "noshared", "notexture", "enclosingloops",
 		"multisrccg", "multisrcgc", "conditionalsrc", "permute", 
 		"ftdata", "mode", "event", 
 		"transpose", "redim", "expand", "redim_transpose", "expand_transpose",
-		"transpose_expand"));
+		"transpose_expand", "num_simd_work_items", "num_compute_units"));
 
 	// Pragmas used with optional value
 	private static final Set<String> optional_values = 
@@ -149,7 +156,7 @@ public class ARCAnnotation extends PragmaAnnotation
 	//List used to set print orders.
 	//Clauses not listed here may be printed in a random order.
 	private static final List<String> print_order =
-			new ArrayList<String>(Arrays.asList( "ainfo", "enter", "exit",  "cuda",
+			new ArrayList<String>(Arrays.asList( "ainfo", "enter", "exit",  "cuda", "opencl",
 					"transform", "transpose", "redim", "expand", "redim_transpose", "expand_transpose",
 					"transpose_expand",
 					"profile", "region", "measure", "track", "if", "resilience", 
@@ -158,12 +165,12 @@ public class ARCAnnotation extends PragmaAnnotation
 	
 	// List of OpenARC directives.
 	public static final Set<String> OpenARCDirectiveSet = new HashSet(Arrays.asList(
-			"ainfo", "cuda", "enter", "exit", "profile", "datalayout", 
+			"ainfo", "cuda", "opencl", "enter", "exit", "profile", "datalayout", 
 			"ftregion", "ftinject", "resilience", "transform"));
 	
 	// Directives attached to structured blocks
 	public static final Set<String> directivesForStructuredBlock = new HashSet(Arrays.asList(
-			"ainfo", "cuda", "profile", "resilience", "ftregion", "transform" )); 
+			"ainfo", "cuda", "opencl", "profile", "resilience", "ftregion", "transform" )); 
 	
 	// Clauses that have a list as arguments.
 	public static final Set<String> collectionClauses = collection_values;
@@ -195,6 +202,11 @@ public class ARCAnnotation extends PragmaAnnotation
 	// CUDA data clauses that affect memory allocation
 	public static final Set<String> cudaMDataClauses = new HashSet(Arrays.asList("texture", "notexture", 
 			"constant", "noconstant", "global" ));
+
+	// OpenCL clauses
+	public static final Set<String> openclClauses = new HashSet(Arrays.asList(
+		"num_simd_work_items", "num_compute_units" 
+		));
 	
 	// OpenARC clauses that should be printed in the order as specified in the input program.
 	private static final Set<String> inOrderClauses = new HashSet(Arrays.asList("enclosingloops", "permute", "gangconf",

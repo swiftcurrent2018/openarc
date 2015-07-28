@@ -298,6 +298,9 @@
 #Option: printConfigurations
 #printConfigurations
 #Generate output codes to print applied configurations/optimizations at the program exit
+#Option: assumeNoAliasingAmongKernelArgs
+#assumeNoAliasingAmongKernelArgs
+#Assume that there is no aliasing among kernel arguments
 #NOPTIONDESC#
 ############################################################################
 # Translation configuration #
@@ -396,4 +399,5 @@ disableWorkShareLoopCollapsing
 #AccParallelization=N
 #SkipGPUTranslation=N
 #ASPENModelGen=mode=N
+#assumeNoAliasingAmongKernelArgs
 #NOPTION#

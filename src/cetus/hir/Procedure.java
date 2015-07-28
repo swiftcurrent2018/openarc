@@ -46,8 +46,8 @@ public final class Procedure extends Declaration
     /** Original source was declared in old sytle */
     private boolean is_old_style_function;
 
-    /** GNU-style attributes. [Added by Joel E. Denny] */
-    private List<String> attributes;
+    /** GNU-style attributes or null. [Added by Joel E. Denny] */
+    private AttributeSpecifier attrSpec;
 
     /**
     * Creates a constructor definition (declaration plus body).
@@ -74,7 +74,7 @@ public final class Procedure extends Declaration
         for (int i = 0; i < params.size(); i++) {
             SymbolTools.addSymbols(this, params.get(i));
         }
-        this.attributes = null;
+        this.attrSpec = null;
     }
 
     /**
@@ -110,7 +110,7 @@ public final class Procedure extends Declaration
                 SymbolTools.addSymbols(this, params.get(i));
             }
         }
-        this.attributes = null;
+        this.attrSpec = null;
     }
 
     /** Constructor that can preserve the old style of the declaration */
@@ -120,10 +120,10 @@ public final class Procedure extends Declaration
     }
     public Procedure(List specs, Declarator declarator,
                      CompoundStatement body, boolean is_old_style_function,
-                     List<String> attrs) {
+                     AttributeSpecifier attrSpec) {
         this(specs, declarator, body);
         this.is_old_style_function = is_old_style_function;
-        this.attributes = attrs;
+        this.attrSpec = attrSpec;
     }
 
     /**
@@ -156,7 +156,7 @@ public final class Procedure extends Declaration
                 SymbolTools.addSymbols(this, params.get(i));
             }
         }
-        this.attributes = null;
+        this.attrSpec = null;
     }
 
     /**
@@ -215,14 +215,9 @@ public final class Procedure extends Declaration
         }
         PrintTools.printListWithSeparator(p.specs, o, " ");
         o.print(" ");
-        if (p.attributes != null && !p.attributes.isEmpty()) {
-            o.print(" __attribute__((");
-            for (int i = 0; i < p.attributes.size(); ++i) {
-              if (i > 0)
-                o.print(", ");
-              o.print(p.attributes.get(i));
-            }
-            o.print(")) ");
+        if (p.attrSpec != null) {
+            p.attrSpec.print(o);
+            o.print(" ");
         }
         if (enable_old_style_function && p.is_old_style_function) {
             PrintTools.printList(p.declarator.getSpecifiers(), o);
@@ -410,8 +405,12 @@ public final class Procedure extends Declaration
         return specs;
     }
 
-    public List<String> getAttributes() {
-        return attributes != null ? attributes : new ArrayList<String>();
+    public AttributeSpecifier getAttributeSpecifier() {
+        return attrSpec;
+    }
+    
+    public void setAttributeSpecifier(AttributeSpecifier attrib) {
+    	this.attrSpec = attrib;
     }
 
     /** Returns a clone of the procedure. */
@@ -422,9 +421,7 @@ public final class Procedure extends Declaration
         if (specs != null) {
             p.specs = new ArrayList(specs);
         }
-        if (attributes != null) {
-            p.attributes = new ArrayList<String>(attributes);
-        }
+        p.attrSpec = attrSpec == null ? null : attrSpec.clone();
         if (declarator != null) {
             p.declarator = declarator.clone();
         }

@@ -4213,7 +4213,7 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 	
 	protected static void worksharingLoopTransformation(Procedure cProc, CompoundStatement kernelRegion, 
 			Statement region, String cRegionKind,
-			int defaultNumWorkers) {
+			int defaultNumWorkers, boolean opt_skipKernelLoopBoundChecking) {
 		PrintTools.println("[worksharingLoopTransformation() begins]", 2);
 		List<ACCAnnotation> lAnnots = AnalysisTools.ipCollectPragmas(kernelRegion, ACCAnnotation.class, "loop", null);
 		if( lAnnots == null ) {
@@ -4491,15 +4491,21 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 				pParent.addStatementBefore(ploop, thrmapstmt);
 			
 				boolean addBoundaryCheck = true;
-				//[DEBUG] To disable the below optimization, comment out the following code:
-				if( (lb != null) && (ub != null) ) {
-					//If the iteration size matches number of gangs of the pure gang loop or number of workers of the
-					//pure worker loop, we don't need to add boundary-checkeing code.
-					Expression itrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
-					if( isGangLoop && (!isWorkerLoop) && (num_gangs != null) && (itrSize.equals(num_gangs)) ) {
-						addBoundaryCheck = false;
-					} else if( (!isGangLoop) && isWorkerLoop && (num_workers != null) && (itrSize.equals(num_workers)) ) {
-						addBoundaryCheck = false;
+				if( opt_skipKernelLoopBoundChecking ) {
+					addBoundaryCheck = false;
+				} else {
+					//[DEBUG] To disable the below optimization, comment out the following code:
+					if( (lb != null) && (ub != null) ) {
+						//If the iteration size matches number of gangs of the pure gang loop or number of workers of the
+						//pure worker loop, we don't need to add boundary-checkeing code.
+						Expression itrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+						if( isGangLoop && (!isWorkerLoop) && (num_gangs != null) && (itrSize.equals(num_gangs)) ) {
+							addBoundaryCheck = false;
+						} else if( (!isGangLoop) && isWorkerLoop && (num_workers != null) && (itrSize.equals(num_workers)) ) {
+							addBoundaryCheck = false;
+						} else if( isGangLoop && isWorkerLoop && (num_gangs != null) && (num_workers != null) && (itrSize.equals(Symbolic.simplify(Symbolic.multiply(num_gangs, num_workers)))) ) {
+							addBoundaryCheck = false;
+						}
 					}
 				}
 				if( addBoundaryCheck ) {

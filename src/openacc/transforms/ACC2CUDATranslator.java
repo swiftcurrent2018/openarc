@@ -4794,7 +4794,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				!AnalysisTools.ipContainPragmas(region, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null)) {
 			ACC2GPUTranslationTools.seqKernelLoopTransformation(cProc, (ForLoop)region, cRegionKind, ifCond, asyncID, confRefStmt,
 					preList, postList, prefixStmts, postscriptStmts, call_to_new_proc, new_proc, main_TrUnt, 
-					OpenACCHeaderEndMap, IRSymbolOnly, opt_addSafetyCheckingCode, targetModel );
+					OpenACCHeaderEndMap, IRSymbolOnly, opt_addSafetyCheckingCode, targetModel, opt_AssumeNoAliasing);
 		}
 
 		//////////////////////////////////////////////////////////////////////////
@@ -4902,7 +4902,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			
 			if( accDevicePtrSet.contains(sharedSym) ) {
 				//Create a kernel parameter for the shared array variable.
-				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, null, true);
+				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, null, true, opt_AssumeNoAliasing);
 				callerProcSymSet.add(kParamVar.getSymbol());
 				if( dimension == 1 ) {
 					call_to_new_proc.addArgument(hostVar.clone());
@@ -5078,7 +5078,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				//We done need to insert scalar symbol to callerProcSymSet.
 			} else {
 				//Create a kernel parameter for the shared array variable.
-				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, null, true);
+				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, null, true, opt_AssumeNoAliasing);
 				Symbol kParamSym = kParamVar.getSymbol();
 				callerProcSymSet.add(kParamSym);
 				// Insert argument to the kernel function call
@@ -5131,7 +5131,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 								"; exit the program!\nEnclosing procedure: " + 
 								cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
 					}
-					Identifier paramPitchVar = TransformTools.declareClonedVariable(new_proc, pitchSym, pitchSym.getSymbolName(), removeSpecs, null, true);
+					Identifier paramPitchVar = TransformTools.declareClonedVariable(new_proc, pitchSym, pitchSym.getSymbolName(), removeSpecs, null, true, opt_AssumeNoAliasing);
 					Identifier pitchVar = new Identifier(pitchSym);
 					call_to_new_proc.addArgument(pitchVar.clone());
 					/* 
@@ -5707,7 +5707,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		Traversable parent = kernelCall_stmt.getParent();
 		
 		//Convert worksharing loops into if-statements. 
-		CUDATranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers);
+		CUDATranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers, opt_skipKernelLoopBoundChecking);
 		
 		if( opt_forceSyncKernelCall ) {
 			//FunctionCall syncCall = new FunctionCall(new NameID("cudaThreadSynchronize"));

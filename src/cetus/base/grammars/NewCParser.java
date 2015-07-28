@@ -21,6 +21,7 @@ import antlr.CommonAST;
 import antlr.DumpASTVisitor;
 import java.util.*;
 import cetus.hir.*;
+import static cetus.hir.AttributeSpecifier.Attribute;
 @SuppressWarnings({"unchecked", "cast"})
 
 public class NewCParser extends antlr.LLkParser       implements NEWCTokenTypes
@@ -828,15 +829,17 @@ inputState.guessing--;
 				// support for K&R style declaration: "dcount" is counting the number of
 				// declaration in old style.
 				// [Extended by Joel E. Denny to collect simple attributes]
-				List<String> attrs = new ArrayList<String>();
+				List<Attribute> attrs = new ArrayList<>();
 				List dspec_new = new ArrayList();
 				for (Object obj : dspec) {
-				if (obj instanceof String)
-				attrs.add((String)obj);
+				if (obj instanceof Attribute) {
+				attrs.add((Attribute)obj);
+				}
 				else
 				dspec_new.add(obj);
 				}
-				curFunc = new Procedure(dspec_new, bdecl, stmt, dcount>0, attrs);
+				curFunc = new Procedure(dspec_new, bdecl, stmt, dcount>0,
+				attrs.isEmpty() ? null : new AttributeSpecifier(attrs));
 				PrintTools.printStatus("Creating Procedure: ",1);
 				PrintTools.printlnStatus(bdecl,1);
 				// already handled in constructor
@@ -947,7 +950,7 @@ inputState.guessing--;
 		Specifier type=null;
 		Specifier tqual=null;
 		Specifier tspec=null;
-		List<String> attrs;
+		List<Attribute> attrs;
 		
 		
 		try {      // for error handling
@@ -1895,12 +1898,12 @@ inputState.guessing--;
 		return types;
 	}
 	
-	public final List<String>  attributeDecl() throws RecognitionException, TokenStreamException {
-		List<String> list;
+	public final List<Attribute>  attributeDecl() throws RecognitionException, TokenStreamException {
+		List<Attribute> list;
 		
 		
-		list = new ArrayList<String>();
-		List<String> subList;
+		list = new ArrayList<>();
+		List<Attribute> subList;
 		
 		
 		try {      // for error handling
@@ -3247,10 +3250,10 @@ inputState.guessing--;
 		}
 	}
 	
-	public final List<String>  attributeList() throws RecognitionException, TokenStreamException {
-		List<String> list;
+	public final List<Attribute>  attributeList() throws RecognitionException, TokenStreamException {
+		List<Attribute> list;
 		
-		list = new ArrayList<String>(); String attr;
+		list = new ArrayList<>(); Attribute attr;
 		
 		try {      // for error handling
 			attr=attribute();
@@ -3322,11 +3325,11 @@ inputState.guessing--;
 		return name;
 	}
 	
-	public final String  attribute() throws RecognitionException, TokenStreamException {
-		String str;
+	public final Attribute  attribute() throws RecognitionException, TokenStreamException {
+		Attribute spec;
 		
 		Token  id = null;
-		str = null;
+		spec = null;
 		
 		try {      // for error handling
 			{
@@ -3351,7 +3354,7 @@ inputState.guessing--;
 					id = LT(1);
 					match(ID);
 					if ( inputState.guessing==0 ) {
-						str = id.getText();
+						spec = new Attribute(id.getText());
 					}
 					break;
 				}
@@ -3468,7 +3471,7 @@ inputState.guessing--;
 			  throw ex;
 			}
 		}
-		return str;
+		return spec;
 	}
 	
 	public final Declarator  initDecl() throws RecognitionException, TokenStreamException {

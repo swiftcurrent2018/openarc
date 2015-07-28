@@ -54,6 +54,8 @@ public abstract class ACC2GPUTranslator {
 	protected boolean opt_MemTrOptOnLoops = false;
 	protected boolean opt_GenDistOpenACC = false;
 	protected boolean opt_PrintConfigurations = false;
+	protected boolean opt_AssumeNoAliasing = false;
+	protected boolean opt_skipKernelLoopBoundChecking = false;
 	
 	protected int defaultNumWorkers = 128;
 	protected int maxNumGangs = 0; //0 if undefined.
@@ -384,6 +386,13 @@ public abstract class ACC2GPUTranslator {
 			optPrintStmts.add( new ExpressionStatement(assmNnZrTrLpsPrintCall) );
 		}
 
+		value = Driver.getOptionValue("assumeNoAliasingAmongKernelArgs");
+		if( value != null ) {
+			FunctionCall assmNoAliasingPrintCall = new FunctionCall(new NameID("printf"));
+			assmNoAliasingPrintCall.addArgument(new StringLiteral("====> Assume that there is no aliasing among kernel arguments.\\n"));
+			optPrintStmts.add( new ExpressionStatement(assmNoAliasingPrintCall) );
+		}
+
 		value = Driver.getOptionValue("UEPRemovalOptLevel");
 		if( value != null ) {
 			FunctionCall UEPRemovalCall = new FunctionCall(new NameID("printf"));
@@ -482,6 +491,16 @@ public abstract class ACC2GPUTranslator {
 			{
 				targetArch = Integer.valueOf(value).intValue();
 			}
+		}
+
+		value = Driver.getOptionValue("assumeNoAliasingAmongKernelArgs");
+		if( value != null ) {
+			opt_AssumeNoAliasing = true;
+		}
+
+		value = Driver.getOptionValue("skipKernelLoopBoundChecking");
+		if( value != null ) {
+			opt_skipKernelLoopBoundChecking = true;
 		}
 		
 		OpenACCHeaderEndMap = new HashMap<TranslationUnit, Declaration>();

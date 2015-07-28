@@ -313,6 +313,17 @@
 #Option: printConfigurations
 #printConfigurations
 #Generate output codes to print applied configurations/optimizations at the program exit
+#Option: alias
+#alias=N
+#Specify level of alias analysis
+#      =0 disable alias analysis (assume no alias)
+#      =1 advanced interprocedural analysis (default)
+#         Uses interprocedural points-to analysis
+#      =2 assume no alias when points-to analysis is too conservative
+#      =3 assume all locations are aliased
+#Option: assumeNoAliasingAmongKernelArgs
+#assumeNoAliasingAmongKernelArgs
+#Assume that there is no aliasing among kernel arguments
 #NOPTIONDESC#
 ############################################################################
 # Translation configuration #
@@ -328,7 +339,6 @@ showInternalAnnotations=1
 AccPrivatization=1
 AccReduction=1
 #assumeNonZeroTripLoops
-#
 #MemTrOptOnLoops
 #gpuMallocOptLevel
 #gpuMemTrOptLevel
@@ -410,4 +420,5 @@ defaultNumWorkers=64
 #AccParallelization=N
 #SkipGPUTranslation=N
 #ASPENModelGen=mode=N
+#assumeNoAliasingAmongKernelArgs
 #NOPTION#

@@ -215,7 +215,7 @@ public abstract class OpenCLTranslationTools {
 
     protected static void worksharingLoopTransformation(Procedure cProc, CompoundStatement kernelRegion,
 			Statement region, String cRegionKind,
-			int defaultNumWorkers) {
+			int defaultNumWorkers, boolean opt_skipKernelLoopBoundChecking) {
 		PrintTools.println("[worksharingLoopTransformation() begins]", 2);
 		List<ACCAnnotation> lAnnots = AnalysisTools.ipCollectPragmas(kernelRegion, ACCAnnotation.class, "loop", null);
 		if( lAnnots == null ) {
@@ -226,10 +226,13 @@ public abstract class OpenCLTranslationTools {
 			if( at instanceof ForLoop ) {
 				Expression num_gangs = null;
 				Expression num_workers = null;
+				List<Expression> tconfList = null;
 				ForLoop ploop = (ForLoop)at;
 				ACCAnnotation tAnnot = at.getAnnotation(ACCAnnotation.class, "gang");
 				boolean isGangLoop = false;
 				boolean outermostloop = false;
+				boolean is1DGangLoop = false;
+				boolean is1DWorkerLoop = false;
 				if( tAnnot != null ) {
 					isGangLoop = true;
 					outermostloop = true;
@@ -250,6 +253,20 @@ public abstract class OpenCLTranslationTools {
 					} else {
 						Tools.exit("[ERROR in OpenCLTranslationTools.worksharingLoopTransformation()] internal gangdim clause is missing.\n" +
 								"Enclosing Procedure: " + cProc.getSymbolName() + "\nACCAnnotation: " + lAnnot + "\n");
+					}
+				}
+				tAnnot = at.getAnnotation(ACCAnnotation.class, "gangconf");
+				if( tAnnot != null ) {
+					tconfList = tAnnot.get("gangconf");
+					if( (tconfList != null) && (tconfList.size() == 1) ) {
+						is1DGangLoop = true;
+					}
+				}
+				tAnnot = at.getAnnotation(ACCAnnotation.class, "workerconf");
+				if( tAnnot != null ) {
+					tconfList = tAnnot.get("workerconf");
+					if( (tconfList != null) && (tconfList.size() == 1) ) {
+						is1DWorkerLoop = true;
 					}
 				}
 				tAnnot = at.getAnnotation(ACCAnnotation.class, "worker");
@@ -469,9 +486,14 @@ public abstract class OpenCLTranslationTools {
 				Expression base = null;
 				if( isGangLoop ) {
 					if( isWorkerLoop ) {
+						if( is1DGangLoop && is1DWorkerLoop ) {
+							//base = get_global_id(0);
+							base = new NameID("get_global_id(0)");
+						} else {
 						//base = tid + bid * num_workers;
 						base = new BinaryExpression(tid, BinaryOperator.ADD, 
 								new BinaryExpression(bid, BinaryOperator.MULTIPLY, num_workers.clone()));
+						}
 					} else {
 						base = bid;
 					}
@@ -491,15 +513,21 @@ public abstract class OpenCLTranslationTools {
 				pParent.addStatementBefore(ploop, thrmapstmt);
 			
 				boolean addBoundaryCheck = true;
-				//[DEBUG] To disable the below optimization, comment out the following code:
-				if( (lb != null) && (ub != null) ) {
-					//If the iteration size matches number of gangs of the pure gang loop or number of workers of the
-					//pure worker loop, we don't need to add boundary-checkeing code.
-					Expression itrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
-					if( isGangLoop && (!isWorkerLoop) && (num_gangs != null) && (itrSize.equals(num_gangs)) ) {
-						addBoundaryCheck = false;
-					} else if( (!isGangLoop) && isWorkerLoop && (num_workers != null) && (itrSize.equals(num_workers)) ) {
-						addBoundaryCheck = false;
+				if( opt_skipKernelLoopBoundChecking ) {
+					addBoundaryCheck = false;
+				} else {
+					//[DEBUG] To disable the below optimization, comment out the following code:
+					if( (lb != null) && (ub != null) ) {
+						//If the iteration size matches number of gangs of the pure gang loop or number of workers of the
+						//pure worker loop, we don't need to add boundary-checking code.
+						Expression itrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+						if( isGangLoop && (!isWorkerLoop) && (num_gangs != null) && (itrSize.equals(num_gangs)) ) {
+							addBoundaryCheck = false;
+						} else if( (!isGangLoop) && isWorkerLoop && (num_workers != null) && (itrSize.equals(num_workers)) ) {
+							addBoundaryCheck = false;
+						} else if( isGangLoop && isWorkerLoop && (num_gangs != null) && (num_workers != null) && (itrSize.equals(Symbolic.simplify(Symbolic.multiply(num_gangs, num_workers)))) ) {
+							addBoundaryCheck = false;
+						}
 					}
 				}
 				if( addBoundaryCheck ) {

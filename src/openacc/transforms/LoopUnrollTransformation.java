@@ -61,6 +61,14 @@ public class LoopUnrollTransformation extends TransformPass {
       }
 
       for( ForLoop f : forLoops) {
+        ARCAnnotation arcAnnots = f.getAnnotation(ARCAnnotation.class, "transform");
+        boolean containUnrollClause = false;
+        if( (arcAnnots != null) && arcAnnots.containsKey("unroll")) {
+        	containUnrollClause = true;
+        }
+        if( !containUnrollClause && (unrollFactor <= 1) ) {
+        	continue;
+        }
     	//Fixed by T.Hoshino Sep.12 2014  =================
     	ForLoop newFor = f.clone();
         //=================================================
@@ -68,41 +76,48 @@ public class LoopUnrollTransformation extends TransformPass {
         ACCAnnotation seqAnnots = f.getAnnotation(ACCAnnotation.class, "seq");
         //Perform unrolling if the loop does not have OpenACC clauses, or has a sequential clause
         if(loopAnnots == null || seqAnnots != null) {
-          LoopInfo forLoopInfo = new LoopInfo(f);
-          Expression index = forLoopInfo.getLoopIndex();
-          Statement loopBody = f.getBody().clone();
-          //Perform unrolling only if the increment is 1
-          if(forLoopInfo.getLoopIncrement().toString().equals("1")) {
-            //Check if there is a cuda unroll pragma
-            ACCAnnotation cudaAnnots = f.getAnnotation(ACCAnnotation.class, "cuda");
-            int factor = unrollFactor;
-            if(cudaAnnots != null)  {
-              if(cudaAnnots.containsKey("unroll")) {
-                factor = Integer.parseInt(cudaAnnots.get("unroll").toString());
-              }
-            }
+        	LoopInfo forLoopInfo = new LoopInfo(f);
+        	Expression index = forLoopInfo.getLoopIndex();
+        	Statement loopBody = f.getBody().clone();
+        	//Perform unrolling only if the increment is 1
+        	if(forLoopInfo.getLoopIncrement().toString().equals("1")) {
+        		//Check if there is an openarc transform unroll pragma
+        		long factor = unrollFactor;
+        		if(containUnrollClause) {
+        			//factor = Integer.parseInt(arcAnnots.get("unroll").toString());
+        			Expression factorExp = arcAnnots.get("unroll");
+        			if( factorExp instanceof IntegerLiteral ) {
+        				factor = ((IntegerLiteral)factorExp).getValue();
+        			} else {
+        				//Skip the unrolling.
+        				PrintTools.println("[WARNING in LoopUnrollingTransformation] Current implementation allows only integer unrolling factor; "
+        						+ "the following unroll clause will be ignored.\n"
+        						+ "OpenARC annotation: " + arcAnnots + AnalysisTools.getEnclosingAnnotationContext(arcAnnots), 0);
+        				factor = 0;
+        			}
+        		}
 
-            if(factor > 1) {
-            	//[FIXME] below transformation works only if unrolling factor evenly divides into 
-            	//the number of iterations.
-              for(int i=1; i< factor; i++) {
-                Statement newBody = loopBody.clone();
-                BinaryExpression newIndex = new BinaryExpression(index.clone(), BinaryOperator.ADD,
-                        new IntegerLiteral(i));
-                IRTools.replaceAll(newBody,index, newIndex);
-                ((CompoundStatement)f.getBody()).addStatement(newBody);
-              }
-              AssignmentExpression newStep = new AssignmentExpression( index.clone(),
-                      AssignmentOperator.NORMAL, new BinaryExpression(index.clone(), BinaryOperator.ADD,
-                      new IntegerLiteral(factor)) );
-              f.setStep(newStep);
-              //Fixed by T.Hoshino Sep.12 2014  =================
-              newFor.setInitialStatement(null);
-              Statement parent = (Statement) f.getParent();
-              ((CompoundStatement)parent).addStatementAfter(f, newFor);
-              //=================================================
-            }
-          }
+        		if(factor > 1) {
+        			//[FIXME] below transformation works only if unrolling factor evenly divides into 
+        			//the number of iterations.
+        			for(int i=1; i< factor; i++) {
+        				Statement newBody = loopBody.clone();
+        				BinaryExpression newIndex = new BinaryExpression(index.clone(), BinaryOperator.ADD,
+        						new IntegerLiteral(i));
+        				IRTools.replaceAll(newBody,index, newIndex);
+        				((CompoundStatement)f.getBody()).addStatement(newBody);
+        			}
+        			AssignmentExpression newStep = new AssignmentExpression( index.clone(),
+        					AssignmentOperator.NORMAL, new BinaryExpression(index.clone(), BinaryOperator.ADD,
+        							new IntegerLiteral(factor)) );
+        			f.setStep(newStep);
+        			//Fixed by T.Hoshino Sep.12 2014  =================
+        			newFor.setInitialStatement(null);
+        			Statement parent = (Statement) f.getParent();
+        			((CompoundStatement)parent).addStatementAfter(f, newFor);
+        			//=================================================
+        		}
+        	}
         }
         
       }

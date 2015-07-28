@@ -173,24 +173,28 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 									((double)((IntegerLiteral)numWorkers).getValue()) );
 							numGangs = new IntegerLiteral(gsize);
 						} else {
-							List<Specifier> specs = new ArrayList<Specifier>(1);
-							specs.add(Specifier.FLOAT);
-							Expression floatsize1 = new Typecast(specs, iterspace.clone());
-							Expression floatsize2;
-							if( numWorkers instanceof IntegerLiteral ) {
-								floatsize2 = new FloatLiteral((double)((IntegerLiteral)numWorkers.clone()).getValue(), "F");
+							if( (numWorkers instanceof IntegerLiteral) && (((IntegerLiteral)numWorkers).getValue() == 1) ) {
+								numGangs = iterspace.clone();
 							} else {
-								specs = new ArrayList<Specifier>(1);
+								List<Specifier> specs = new ArrayList<Specifier>(1);
 								specs.add(Specifier.FLOAT);
-								floatsize2 = new Typecast(specs, numWorkers.clone());
+								Expression floatsize1 = new Typecast(specs, iterspace.clone());
+								Expression floatsize2;
+								if( numWorkers instanceof IntegerLiteral ) {
+									floatsize2 = new FloatLiteral((double)((IntegerLiteral)numWorkers.clone()).getValue(), "F");
+								} else {
+									specs = new ArrayList<Specifier>(1);
+									specs.add(Specifier.FLOAT);
+									floatsize2 = new Typecast(specs, numWorkers.clone());
+								}
+								FunctionCall ceilfunc = new FunctionCall(new NameID("ceil"));
+								Expression argExp = Symbolic.divide(floatsize1, floatsize2); 
+								ceilfunc.addArgument(argExp);
+								//numGangs = ceilfunc;
+								specs = new ArrayList<Specifier>(1);
+								specs.add(Specifier.INT);
+								numGangs = new Typecast(specs, ceilfunc);
 							}
-							FunctionCall ceilfunc = new FunctionCall(new NameID("ceil"));
-							Expression argExp = Symbolic.divide(floatsize1, floatsize2); 
-							ceilfunc.addArgument(argExp);
-							//numGangs = ceilfunc;
-							specs = new ArrayList<Specifier>(1);
-							specs.add(Specifier.INT);
-							numGangs = new Typecast(specs, ceilfunc);
 						}
 					}
 					// If maxNumGangs is set, the actual number of gangs should be min(numGangs, maxNumGangs).
@@ -482,24 +486,28 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 										((double)((IntegerLiteral)num_workers).getValue()) );
 								tnum_gangs = new IntegerLiteral(gsize);
 							} else {
-								List<Specifier> specs = new ArrayList<Specifier>(1);
-								specs.add(Specifier.FLOAT);
-								Expression floatsize1 = new Typecast(specs, iterspace.clone());
-								Expression floatsize2;
-								if( num_workers instanceof IntegerLiteral ) {
-									floatsize2 = new FloatLiteral((double)((IntegerLiteral)num_workers.clone()).getValue(), "F");
+								if( (num_workers instanceof IntegerLiteral) && (((IntegerLiteral)num_workers).getValue() == 1) ) {
+									tnum_gangs = iterspace.clone();
 								} else {
-									specs = new ArrayList<Specifier>(1);
+									List<Specifier> specs = new ArrayList<Specifier>(1);
 									specs.add(Specifier.FLOAT);
-									floatsize2 = new Typecast(specs, num_workers.clone());
+									Expression floatsize1 = new Typecast(specs, iterspace.clone());
+									Expression floatsize2;
+									if( num_workers instanceof IntegerLiteral ) {
+										floatsize2 = new FloatLiteral((double)((IntegerLiteral)num_workers.clone()).getValue(), "F");
+									} else {
+										specs = new ArrayList<Specifier>(1);
+										specs.add(Specifier.FLOAT);
+										floatsize2 = new Typecast(specs, num_workers.clone());
+									}
+									FunctionCall ceilfunc = new FunctionCall(new NameID("ceil"));
+									Expression argExp = Symbolic.divide(floatsize1, floatsize2); 
+									ceilfunc.addArgument(argExp);
+									//numGangs = ceilfunc;
+									specs = new ArrayList<Specifier>(1);
+									specs.add(Specifier.INT);
+									tnum_gangs = new Typecast(specs, ceilfunc);
 								}
-								FunctionCall ceilfunc = new FunctionCall(new NameID("ceil"));
-								Expression argExp = Symbolic.divide(floatsize1, floatsize2); 
-								ceilfunc.addArgument(argExp);
-								//numGangs = ceilfunc;
-								specs = new ArrayList<Specifier>(1);
-								specs.add(Specifier.INT);
-								tnum_gangs = new Typecast(specs, ceilfunc);
 							}
 						} else {
 							tnum_gangs = iterspace;

@@ -311,6 +311,9 @@
 #Option: printConfigurations
 #printConfigurations
 #Generate output codes to print applied configurations/optimizations at the program exit
+#Option: assumeNoAliasingAmongKernelArgs
+#assumeNoAliasingAmongKernelArgs
+#Assume that there is no aliasing among kernel arguments
 #NOPTIONDESC#
 ############################################################################
 # Translation configuration #
@@ -408,4 +411,5 @@ addIncludePath=__openarcrt__
 #AccParallelization=N
 #SkipGPUTranslation=N
 #ASPENModelGen=mode=N
+#assumeNoAliasingAmongKernelArgs
 #NOPTION#

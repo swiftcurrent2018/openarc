@@ -229,6 +229,12 @@ public class ACC2GPUDriver extends Driver
 		
 		options.add(options.UTILITY, "assumeNonZeroTripLoops",
 		"Assume that all loops have non-zero iterations");
+
+		options.add(options.UTILITY, "assumeNoAliasingAmongKernelArgs",
+		"Assume that there is no aliasing among kernel arguments");
+
+		options.add(options.UTILITY, "skipKernelLoopBoundChecking",
+		"Skip kernel-loop-boundary-checking code when generating a device kernel; it is safe only if total number of workers equals to that of the kernel loop iterations");
 		
 		options.add(options.UTILITY, "programVerification", "N",
         "Perform program verfication for debugging; \n" +

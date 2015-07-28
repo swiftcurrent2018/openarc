@@ -63,13 +63,15 @@ import cetus.transforms.TransformPass;
 public class GlobalVariableParameterization extends TransformPass {
 	private Map<Procedure, Set<Symbol>> proc2gsymMap;
 	private boolean IRSymbolOnly;
+	private boolean AssumeNoAliasingAmongKernelArgs = false;
 
 	/**
 	 * @param program
 	 */
-	public GlobalVariableParameterization(Program program, boolean IRSymOnly) {
+	public GlobalVariableParameterization(Program program, boolean IRSymOnly, boolean NoAliasing) {
 		super(program);
 		IRSymbolOnly = IRSymOnly;
+		AssumeNoAliasingAmongKernelArgs = NoAliasing;
 	}
 
 	/* (non-Javadoc)
@@ -365,7 +367,7 @@ public class GlobalVariableParameterization extends TransformPass {
 												(Identifier)kParamVar.clone());
 									}
 								} else {
-									kParamVar = TransformTools.declareClonedVariable(new_proc, gSym, symNameBase, removeSpecs, null, true);
+									kParamVar = TransformTools.declareClonedVariable(new_proc, gSym, symNameBase, removeSpecs, null, true, AssumeNoAliasingAmongKernelArgs);
 									replaceExp = kParamVar.clone();
 								}
 								gsymParamMap.put(gSym, kParamVar.getSymbol());
