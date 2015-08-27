@@ -114,6 +114,8 @@ public final class ParserTools
                 (tokenList.get(0).getType() == token_type.preincrement) ||
                 (tokenList.get(0).getType() == token_type.predecrement) ||
                 (tokenList.get(0).getType() == token_type.dereference) ||
+                (tokenList.get(0).getType() == token_type.addressof) ||
+                (tokenList.get(0).getType() == token_type.bitwisenot) ||
                 (tokenList.get(1).getType() == token_type.postincrement) ||
                 (tokenList.get(1).getType() == token_type.postdecrement) ||
                 (tokenList.get(0).getType() == token_type.logicalnot)))
@@ -139,6 +141,8 @@ public final class ParserTools
                 		(tokenList.get(0).getType() == token_type.preincrement) ||
                 		(tokenList.get(0).getType() == token_type.predecrement) ||
                 		(tokenList.get(0).getType() == token_type.dereference) ||
+                		(tokenList.get(0).getType() == token_type.addressof) ||
+                		(tokenList.get(0).getType() == token_type.bitwisenot) ||
                 		(tokenList.get(0).getType() == token_type.logicalnot)) &&
                 	(tokenList.get(1).getType() == token_type.leftparenthesis) &&
                 	(tokenList.get(tokenList.size()-1).getType() == token_type.rightparenthesis)
@@ -190,7 +194,9 @@ public final class ParserTools
     	case preincrement: op = UnaryOperator.PRE_INCREMENT; break;
     	case predecrement: op = UnaryOperator.PRE_DECREMENT; break;
     	case dereference: op = UnaryOperator.DEREFERENCE; break;
+    	case addressof: op = UnaryOperator.ADDRESS_OF; break;
     	case logicalnot: op = UnaryOperator.LOGICAL_NEGATION; break;
+    	case bitwisenot: op = UnaryOperator.BITWISE_COMPLEMENT; break;
     	}
     	Expression ex = null;
     	if( op != null ) {
@@ -299,6 +305,141 @@ public final class ParserTools
 
         int parentCount = 0;
         int op_idx = 0;
+        // Finding the operator of the BinaryExpression (||)
+        while (op_idx < token_array.length)
+        {
+        	token_type tType = token_array[op_idx].getType();
+        	// Found the operator
+        	if(((tType == token_type.logicalor)) && parentCount == 0 && op_idx > 0)
+        		break;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount--;
+        	op_idx++;
+        }
+
+        if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
+        	op = BinaryOperator.LOGICAL_OR;
+        	lhs = tokensToExpression(tokenList.subList(0, op_idx));
+        	rhs = tokensToExpression(tokenList.subList(op_idx+1, tokenList.size()));
+        	if( (lhs == null) || (rhs == null ) ) {
+        		return null;
+        	} else {
+        		return new BinaryExpression(lhs, op, rhs);
+        	}
+        }
+
+        parentCount = 0;
+        op_idx = 0;
+        // Finding the operator of the BinaryExpression (&&)
+        while (op_idx < token_array.length)
+        {
+        	token_type tType = token_array[op_idx].getType();
+        	// Found the operator
+        	if(((tType == token_type.logicaland)) && parentCount == 0 && op_idx > 0)
+        		break;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount--;
+        	op_idx++;
+        }
+
+        if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
+        	op = BinaryOperator.LOGICAL_AND;
+        	lhs = tokensToExpression(tokenList.subList(0, op_idx));
+        	rhs = tokensToExpression(tokenList.subList(op_idx+1, tokenList.size()));
+        	if( (lhs == null) || (rhs == null ) ) {
+        		return null;
+        	} else {
+        		return new BinaryExpression(lhs, op, rhs);
+        	}
+        }
+
+        parentCount = 0;
+        op_idx = 0;
+        // Finding the operator of the BinaryExpression (|)
+        while (op_idx < token_array.length)
+        {
+        	token_type tType = token_array[op_idx].getType();
+        	// Found the operator
+        	if(((tType == token_type.bitwiseor)) && parentCount == 0 && op_idx > 0)
+        		break;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount--;
+        	op_idx++;
+        }
+
+        if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
+        	op = BinaryOperator.BITWISE_INCLUSIVE_OR;
+        	lhs = tokensToExpression(tokenList.subList(0, op_idx));
+        	rhs = tokensToExpression(tokenList.subList(op_idx+1, tokenList.size()));
+        	if( (lhs == null) || (rhs == null ) ) {
+        		return null;
+        	} else {
+        		return new BinaryExpression(lhs, op, rhs);
+        	}
+        }
+
+        parentCount = 0;
+        op_idx = 0;
+        // Finding the operator of the BinaryExpression (^)
+        while (op_idx < token_array.length)
+        {
+        	token_type tType = token_array[op_idx].getType();
+        	// Found the operator
+        	if(((tType == token_type.bitwisexor)) && parentCount == 0 && op_idx > 0)
+        		break;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount--;
+        	op_idx++;
+        }
+
+        if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
+        	op = BinaryOperator.BITWISE_EXCLUSIVE_OR;
+        	lhs = tokensToExpression(tokenList.subList(0, op_idx));
+        	rhs = tokensToExpression(tokenList.subList(op_idx+1, tokenList.size()));
+        	if( (lhs == null) || (rhs == null ) ) {
+        		return null;
+        	} else {
+        		return new BinaryExpression(lhs, op, rhs);
+        	}
+        }
+
+        parentCount = 0;
+        op_idx = 0;
+        // Finding the operator of the BinaryExpression (&)
+        while (op_idx < token_array.length)
+        {
+        	token_type tType = token_array[op_idx].getType();
+        	// Found the operator
+        	if(((tType == token_type.bitwiseand)) && parentCount == 0 && op_idx > 0)
+        		break;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount--;
+        	op_idx++;
+        }
+
+        if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
+        	op = BinaryOperator.BITWISE_AND;
+        	lhs = tokensToExpression(tokenList.subList(0, op_idx));
+        	rhs = tokensToExpression(tokenList.subList(op_idx+1, tokenList.size()));
+        	if( (lhs == null) || (rhs == null ) ) {
+        		return null;
+        	} else {
+        		return new BinaryExpression(lhs, op, rhs);
+        	}
+        }
+
+        parentCount = 0;
+        op_idx = 0;
         // Finding the operator of the BinaryExpression (==, !=)
         while (op_idx < token_array.length)
         {
@@ -595,16 +736,28 @@ public final class ParserTools
                     		(prevToken.type == token_type.intconstant)) {tType = token_type.postdecrement;} else {tType = token_type.predecrement;}; 
                     		prevToken = new Token(tType, code.substring(base_ptr, ptr+2));ptr++;} 
                     	else {prevToken = new Token(token_type.subtract, code.substring(base_ptr,ptr+1));}; tokenList.add(prevToken); break;
-                    case '*': token_type tType = null; if( (prevToken.type == token_type.leftparenthesis) || 
+                    case '~': prevToken = new Token(token_type.bitwisenot, code.substring(base_ptr,ptr+1)); tokenList.add(prevToken); break;
+                    case '*': {token_type tType = null; if( (prevToken.type == token_type.leftparenthesis) || 
                     		(prevToken.type == token_type.leftbracket) || (prevToken.type == token_type.logicalnot) ||
                     		(prevToken.type == token_type.preincrement) || (prevToken.type == token_type.predecrement) ||
                     		(prevToken.type == token_type.comma) || (prevToken.type == token_type.semicolon) ||
                     		(prevToken.type == token_type.dereference) ) {tType = token_type.dereference;}
                     	else {tType = token_type.multiply;}; prevToken = new Token(tType, code.substring(base_ptr,ptr+1)); 
+                    	tokenList.add(prevToken);} break;
+                    case '&': if( code_array[ptr+1] == '&' ) {prevToken = new Token(token_type.logicaland, 
+                    		code.substring(base_ptr, ptr+2)); ptr++;} 
+                    		else if( (prevToken.type == token_type.leftparenthesis) || 
+                    		(prevToken.type == token_type.leftbracket) || (prevToken.type == token_type.logicalnot) ||
+                    		(prevToken.type == token_type.preincrement) || (prevToken.type == token_type.predecrement) ||
+                    		(prevToken.type == token_type.comma) || (prevToken.type == token_type.semicolon) ||
+                    		(prevToken.type == token_type.dereference) ) {prevToken = new Token(token_type.addressof, code.substring(base_ptr, ptr+1));}
+                    	else {prevToken = new Token(token_type.bitwiseand, code.substring(base_ptr,ptr+1));} 
                     	tokenList.add(prevToken); break;
                     case '/': prevToken = new Token(token_type.divide, code.substring(base_ptr,ptr+1)); tokenList.add(prevToken); break;
                     case '!': if( code_array[ptr+1] == '=' ) {prevToken = new Token(token_type.NE, code.substring(base_ptr, ptr+2));ptr++;} 
                     	else {prevToken = new Token(token_type.logicalnot, code.substring(base_ptr,ptr+1));}; tokenList.add(prevToken); break;
+                    case '|': if( code_array[ptr+1] == '|' ) {prevToken = new Token(token_type.logicalor, code.substring(base_ptr, ptr+2));ptr++;} 
+                    	else {prevToken = new Token(token_type.bitwiseor, code.substring(base_ptr,ptr+1));}; tokenList.add(prevToken); break;
                     case '<': if( code_array[ptr+1] == '<' ) {prevToken = new Token(token_type.leftshift, code.substring(base_ptr, ptr+2));ptr++;} 
                     	else if( code_array[ptr+1] == '=' ) {prevToken = new Token(token_type.LE, code.substring(base_ptr, ptr+2));ptr++;} 
                     	else {prevToken = new Token(token_type.LT, code.substring(base_ptr,ptr+1));}; tokenList.add(prevToken); break;
@@ -613,6 +766,7 @@ public final class ParserTools
                     	else {prevToken = new Token(token_type.GT, code.substring(base_ptr,ptr+1));}; tokenList.add(prevToken); break;
                     case '=': if( code_array[ptr+1] == '=' ) {prevToken = new Token(token_type.EQ, code.substring(base_ptr, ptr+2));ptr++;} 
                     	else {prevToken = new Token(token_type.directassign, code.substring(base_ptr,ptr+1));}; tokenList.add(prevToken); break;
+                    case '^': prevToken = new Token(token_type.bitwisexor, code.substring(base_ptr,ptr+1)); tokenList.add(prevToken); break;
                     case ',':prevToken = new Token(token_type.comma, code.substring(base_ptr,ptr+1)); tokenList.add(prevToken); break;
                     case ';':prevToken = new Token(token_type.semicolon, code.substring(base_ptr,ptr+1)); tokenList.add(prevToken); break;
                     default: return null;//Tools.exit("[ParserTools] cannot recognize token: " + code_array[ptr]);break;
@@ -647,15 +801,13 @@ enum token_type
     rightbracket,
     preincrement,
     predecrement,
-    logicalnot,
     dereference,
+    addressof,
     multiply,
     divide,
     modulo,
     add,
     subtract,
-    leftshift,
-    rightshift,
     LT,
     LE,
     GT,
@@ -664,7 +816,16 @@ enum token_type
     NE,
     directassign,
     comma,
-    semicolon
+    semicolon,
+    logicalnot,
+    logicaland,
+    logicalor,
+    bitwisenot,
+    bitwiseand,
+    bitwiseor,
+    bitwisexor,
+    leftshift,
+    rightshift
 }
 
 /**

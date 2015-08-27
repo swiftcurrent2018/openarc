@@ -365,7 +365,22 @@ public class Driver {
                     } else {
                         preprocessor = false;
                         // use the value from the command line
-                        setOptionValue(option_name, opt.substring(eq + 1));
+                        //[Modified by Seyong Lee]
+                        //setOptionValue(option_name, opt.substring(eq + 1));
+                        if( getOptionValue(option_name) == null ) {
+                        	setOptionValue(option_name, opt.substring(eq + 1));
+                        } else {
+                        	if( option_name.equals("macro") ) {
+                        		//Allow multiple instances for the macro option
+                        		String tMacro = opt.substring(eq + 1);
+                        		String newMacro = getOptionValue("macro") + "," + tMacro;
+                        		setOptionValue("macro", newMacro);
+                        	} else {
+                        		//Overwrite for other options.
+                        		setOptionValue(option_name, opt.substring(eq + 1));
+                        	}
+
+                        }
                     }
                 } else if (preprocessor) {
                     setOptionValue("preprocessor",

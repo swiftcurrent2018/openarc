@@ -36,5 +36,7 @@ $(OPENARC_CC): $(OPENARC_CC_IN) $(COMMON_DEPS)
 	sed \
 	  -e 's|@CC@|$(call cmd2abs, $(CC))|g' \
 	  -e 's|@CPP@|$(call cmd2abs, $(CPP))|g' \
+	  -e 's|@PMEMOBJ_INCLUDES@|$(PMEMOBJ_INCLUDES)|g' \
+	  -e 's|@PMEMOBJ_LIBDIR@|$(PMEMOBJ_LIBDIR)|g' \
 	$< >> $@
 	chmod +x $@

@@ -1294,7 +1294,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						}
 						checkCall.addArgument(new NameID("acc_device_host"));
 						checkCall.addArgument(new NameID("HI_maystale"));
-						checkCall.addArgument(new NameID("INT_MIN"));
+						//checkCall.addArgument(new NameID("INT_MIN"));
+						checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
 						cStmt.addStatementAfter((Statement)at, new ExpressionStatement(checkCall));
 					}
 				}
@@ -1322,7 +1323,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						}
 						checkCall.addArgument(new NameID("acc_device_host"));
 						checkCall.addArgument(new NameID("HI_notstale"));
-						checkCall.addArgument(new NameID("INT_MIN"));
+						//checkCall.addArgument(new NameID("INT_MIN"));
+						checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
 						cStmt.addStatementAfter((Statement)at, new ExpressionStatement(checkCall));
 					}
 				}*/
@@ -2191,7 +2193,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					setStatusCall.addArgument(new NameID("acc_device_gpu"));
 					setStatusCall.addArgument(new NameID("HI_stale"));
 					if( asyncExp == null ) {
-						setStatusCall.addArgument(new NameID("INT_MIN"));
+						//setStatusCall.addArgument(new NameID("INT_MIN"));
+						setStatusCall.addArgument(new NameID("DEFAULT_QUEUE"));
 					} else {
 						setStatusCall.addArgument(asyncExp.clone());
 					}
@@ -4303,7 +4306,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						}
 						checkCall.addArgument(new NameID("acc_device_host"));
 						checkCall.addArgument(new NameID("HI_maystale"));
-						checkCall.addArgument(new NameID("INT_MIN"));
+						//checkCall.addArgument(new NameID("INT_MIN"));
+						checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
 						cStmt.addStatementAfter(region, new ExpressionStatement(checkCall));
 					}
 				}
@@ -4331,7 +4335,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						}
 						checkCall.addArgument(new NameID("acc_device_host"));
 						checkCall.addArgument(new NameID("HI_notstale"));
-						checkCall.addArgument(new NameID("INT_MIN"));
+						//checkCall.addArgument(new NameID("INT_MIN"));
+						checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
 						cStmt.addStatementAfter(region, new ExpressionStatement(checkCall));
 					}
 				}

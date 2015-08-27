@@ -764,6 +764,7 @@ public class FaultInjectionTransformation extends TransformPass {
 						Statement ftregion = (Statement)ftRAnnot.getAnnotatable();
 						List<Statement> childList = findChildStatements(ftregion, true);
 						int num_stmts = childList.size();
+						num_stmts += 1; //Fault may be injected right after the last child statement.
 						IntegerLiteral tInt = ftRAnnot.get("ftregion");
 						String iposName = "ipos__" + symNameBase + "_FR" + tInt.toString();
 						Symbol iposSym = tiposMap.get(iposName);
@@ -873,6 +874,7 @@ public class FaultInjectionTransformation extends TransformPass {
 					CompoundStatement ftParent = (CompoundStatement)ftregion.getParent();
 					List<Statement> childList = findChildStatements(ftregion, true);
 					int num_stmts = childList.size();
+					num_stmts += 1; //Fault may be injected right after the last child statement.
 					Set<Symbol> l_tftsymbols = ftRAnnot.get("tftsymbols");
 					if( l_tftsymbols != null ) {
 						for( Symbol ftSym : l_tftsymbols ) {
@@ -949,7 +951,12 @@ public class FaultInjectionTransformation extends TransformPass {
 								fCall.addArgument(new Typecast(types, pointerExp));
 							}
 							for( int i=0; i<num_stmts; i++ ) {
-								Statement cChild = childList.get(i);
+								Statement cChild = null;
+								if( i == num_stmts-1 ) {
+									cChild = childList.get(i-1);
+								} else {
+									cChild = childList.get(i);
+								}
 								CompoundStatement pStmt = (CompoundStatement)cChild.getParent();
 								CompoundStatement ifBody = new CompoundStatement();
 								Expression tCondExp = new BinaryExpression(new Identifier(iposSym), 
@@ -980,8 +987,13 @@ public class FaultInjectionTransformation extends TransformPass {
 										AssignmentOperator.NORMAL, new IntegerLiteral(-1)));
 								ifBody.addStatement(eStmt);
 								//[DEBUG] ft-inject statement will be inserted before a target statement.
-								//pStmt.addStatementAfter(cChild, ifStmt);
-								pStmt.addStatementBefore(cChild, ifStmt);
+								//except for the last target statement, where ft-inject statement will be inserted
+								//both before and after the target statement.
+								if( i == num_stmts-1 ) {
+									pStmt.addStatementAfter(cChild, ifStmt);
+								} else {
+									pStmt.addStatementBefore(cChild, ifStmt);
+								}
 							}
 						}
 					}

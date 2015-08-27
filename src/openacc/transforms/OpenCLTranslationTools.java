@@ -43,7 +43,7 @@ public abstract class OpenCLTranslationTools {
 		// Create a parameter Declaration for the kernel function
 		// Change the scalar variable to a pointer type 
 		typeSpecs.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
-		VariableDeclarator kParam_declarator = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, 
+		VariableDeclarator kParam_declarator = new VariableDeclarator(PointerSpecifier.RESTRICT, 
 				new NameID(symNameBase));
 		VariableDeclaration kParam_decl = new VariableDeclaration(typeSpecs,
 				kParam_declarator);
@@ -486,14 +486,15 @@ public abstract class OpenCLTranslationTools {
 				Expression base = null;
 				if( isGangLoop ) {
 					if( isWorkerLoop ) {
-						if( is1DGangLoop && is1DWorkerLoop ) {
+/*						if( is1DGangLoop && is1DWorkerLoop ) {
 							//base = get_global_id(0);
 							base = new NameID("get_global_id(0)");
 						} else {
 						//base = tid + bid * num_workers;
 						base = new BinaryExpression(tid, BinaryOperator.ADD, 
 								new BinaryExpression(bid, BinaryOperator.MULTIPLY, num_workers.clone()));
-						}
+						}*/
+						base = new NameID("get_global_id("+(gangdim-1)+")");
 					} else {
 						base = bid;
 					}
@@ -1981,8 +1982,8 @@ public abstract class OpenCLTranslationTools {
         } else {
             // Create a parameter Declaration for the kernel function
             // Change the scalar variable to a pointer type
-            // ex: float *lprev_x;
-            pointerV_declarator = new VariableDeclarator(PointerSpecifier.UNQUALIFIED,
+            // ex: float * restrict lprev_x;
+            pointerV_declarator = new VariableDeclarator(PointerSpecifier.RESTRICT,
                     new NameID(symName));
             typeSpecs.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
 			pointerV_decl = new VariableDeclaration(typeSpecs,
@@ -3493,7 +3494,8 @@ public abstract class OpenCLTranslationTools {
                         }
                         setStatusCall.addArgument(new NameID("acc_device_current"));
                         setStatusCall.addArgument(new NameID("HI_stale"));
-                        setStatusCall.addArgument(new NameID("INT_MIN"));
+                        //setStatusCall.addArgument(new NameID("INT_MIN"));
+						setStatusCall.addArgument(new NameID("DEFAULT_QUEUE"));
                         resetStatusCallStmt = new ExpressionStatement(setStatusCall);
                     }
 
@@ -3741,6 +3743,7 @@ public abstract class OpenCLTranslationTools {
             }
             Expression condition = new BinaryExpression(tid.clone(), BinaryOperator.COMPARE_EQ,
                     new IntegerLiteral(0));
+            condition.setParens(false);
             //[DEBUG] If this is pure worker loop, the assignment statement should be put at the end of
             //the worker loop.
             if( !workerIfBody.getChildren().isEmpty() ) {
@@ -4020,6 +4023,7 @@ public abstract class OpenCLTranslationTools {
                     }
                     condition = new BinaryExpression(tid.clone(),
                             BinaryOperator.COMPARE_LT, new IntegerLiteral(_bsize_) );
+                    condition.setParens(false);
                     ifstmt = new IfStatement(condition, ifBody);
                     //scope.addStatement(ifstmt);
                     if( usePostList ) {
@@ -4207,6 +4211,7 @@ public abstract class OpenCLTranslationTools {
             }
             condition = new BinaryExpression(tid.clone(), BinaryOperator.COMPARE_LT,
                     (Identifier)index_var2.clone());
+            condition.setParens(false);
             loopbody.addStatement( new IfStatement(condition, ifBody) );
             assignex = new AssignmentExpression( (Identifier)oddNum.clone(), AssignmentOperator.NORMAL,
                     new BinaryExpression((Identifier)oldSize.clone(), BinaryOperator.BITWISE_AND,
@@ -4276,18 +4281,20 @@ public abstract class OpenCLTranslationTools {
             }
             condition = new BinaryExpression(tid.clone(), BinaryOperator.COMPARE_EQ,
                     new IntegerLiteral(0));
+            condition.setParens(false);
             ifstmt = new IfStatement(condition, ifBody);
             condition = new BinaryExpression( (Identifier)oddNum.clone(), BinaryOperator.COMPARE_EQ,
                     new IntegerLiteral(1));
+            condition.setParens(false);
             loopbody.addStatement( new IfStatement(condition, ifstmt) );
             estmt = new ExpressionStatement(
                     new AssignmentExpression((Expression)oldSize.clone(),
                             AssignmentOperator.NORMAL, (Identifier)index_var2.clone()));
             loopbody.addStatement( estmt );
             //loopbody.addStatement((Statement)syncCallStmt.clone());
-            Statement condStmt = new IfStatement(
-                    new BinaryExpression(index_var2.clone(), BinaryOperator.COMPARE_GT, new IntegerLiteral(SIMDWidth)),
-                    syncCallStmt.clone());
+            condition = new BinaryExpression(index_var2.clone(), BinaryOperator.COMPARE_GT, new IntegerLiteral(SIMDWidth));
+            condition.setParens(false);
+            Statement condStmt = new IfStatement(condition, syncCallStmt.clone());
             loopbody.addStatement(condStmt);
             //scope.addStatement(reductionLoop);
             if( usePostList ) {
@@ -4381,6 +4388,7 @@ public abstract class OpenCLTranslationTools {
             }
             condition = new BinaryExpression(tid.clone(), BinaryOperator.COMPARE_EQ,
                     new IntegerLiteral(0));
+            condition.setParens(false);
             IfStatement nIfStmt = new IfStatement(condition, ifBody);
             //scope.addStatement( nIfStmt );
             if( usePostList ) {

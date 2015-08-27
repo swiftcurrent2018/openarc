@@ -970,6 +970,9 @@ public class ACCParser {
 				case token_num_ftbits		: parse_acc_confclause(token); break;
 				case token_repeat		: parse_acc_confclause(token); break;
 				case token_ftthread		: parse_acc_confclause(token); break;
+				case token_ftkind		:	parse_conf_stringset(token); break;
+				case token_ftprofile		:	parse_acc_confclause(token); break;
+				case token_ftpredict		:	parse_acc_confclause(token); break;
 				default : ACCParserError("NoSuchResilienceConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -1005,6 +1008,7 @@ public class ACCParser {
 				switch (resilience_clause.valueOf(clause)) {
 				case token_ftdata		:	parse_acc_dataclause(token); break;
 				case token_ftthread		: parse_acc_confclause(token); break;
+				case token_ftkind		:	parse_conf_stringset(token); break;
 				default : ACCParserError("NoSuchFtregionConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -3583,7 +3587,7 @@ public class ACCParser {
 		System.out.println("Syntax Error in OpenACC Directive Parsing: " + text);
 		System.out.println(display_tokens());
 		System.out.println("Exit the OpenACC translator!!");
-		System.exit(0);
+		System.exit(1);
 	}
 
 	private static void addToMap(String key, String new_str)
@@ -3796,7 +3800,10 @@ public class ACCParser {
 		token_num_faults,
 		token_num_ftbits,
 		token_repeat,
-		token_ftthread
+		token_ftthread,
+		token_ftkind,
+		token_ftprofile,
+		token_ftpredict
 	}
 	
 	public static enum profile_clause

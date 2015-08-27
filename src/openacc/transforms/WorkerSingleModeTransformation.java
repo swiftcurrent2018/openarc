@@ -403,8 +403,9 @@ public class WorkerSingleModeTransformation extends TransformPass {
 						tParent.removeChild(tChild);
 						ifBody.addStatement((Statement)tChild);
 					}
-					ifStmt = new IfStatement(new BinaryExpression(threadID.clone(), BinaryOperator.COMPARE_EQ,
-							new IntegerLiteral(0)), ifBody);
+					Expression condition = new BinaryExpression(threadID.clone(), BinaryOperator.COMPARE_EQ, new IntegerLiteral(0));
+					condition.setParens(false);
+					ifStmt = new IfStatement(condition, ifBody);
 					if( prevStmt == null ) {
 						if( tParent.countStatements() == 0 ) {
 							tParent.addStatement(ifStmt);

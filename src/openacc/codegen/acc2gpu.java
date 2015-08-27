@@ -621,7 +621,7 @@ public class acc2gpu extends CodeGenPass
             a2cpass.start();
             PrintTools.println("[ACC2OPENCLTranslator] end", 0);
             PrintTools.println("[OpenCLArrayFlattener] begin", 0);
-            OpenCLArrayFlattener arrayFlattener = new OpenCLArrayFlattener(program);
+            OpenCLArrayFlattener arrayFlattener = new OpenCLArrayFlattener(program, assumeNoAliasingAmongKernelArgs);
             arrayFlattener.start();
             PrintTools.println("[OpenCLArrayFlattener] end", 0);
             PrintTools.println("[OpenCLTranslationTools] begin", 0);

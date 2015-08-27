@@ -1,5 +1,7 @@
 # This is a very early attempt to wrap OpenARC+LLVM in a cc-like wrapper
 # script.  It does not yet support all features of a traditional C compiler.
+# Moreover, it does not always correctly quote command-line options it
+# passes through to other commands.
 
 use strict;
 use warnings;
@@ -10,6 +12,8 @@ use FindBin qw($RealBin);
 my $CPP = '@CPP@';
 my $CC = '@CC@';
 my $CETUS_OUTDIR = 'cetus_output';
+my $PMEMOBJ_INCLUDES = '@PMEMOBJ_INCLUDES@';
+my $PMEMOBJ_LIBDIR = '@PMEMOBJ_LIBDIR@';
 
 my $LLVM_BIN = "$RealBin/../llvm/install/bin";
 my $LLVM_LLC = "$LLVM_BIN/llc";
@@ -21,13 +25,15 @@ sub main {
   print STDERR "$0: called with args: @ARGV\n";
 
   # clean up
-  run("rm -f ".shesc($CETUS_OUTDIR)."/*.bc"." ".shesc($CETUS_OUTDIR)."/*.o",
+  run("rm -rf ".shesc($CETUS_OUTDIR)
+      ." && mkdir -p ".shesc($CETUS_OUTDIR)."/opt",
       "Cetus output directory cleanup");
 
   # parse args
+  my $arcOpts = "";
   my $outOptFile;
-  my $cppOpts = " -I$RealBin/../nvl/include";
-  my $ldOpts = " -L$RealBin/../nvl/rt";
+  my $cppOpts = " -I. -D_OPENARC_";
+  my $ldOpts = "";
   my $llcOpts = "";
   my $inCFileArgs = "";
   my $inOFileArgs = "";
@@ -37,6 +43,15 @@ sub main {
     if ($arg eq "-o") {
       die if $#_ < ++$argi;
       $outOptFile = $_[$argi];
+    }
+    elsif ($arg =~ /^-Warc,/) {
+      # This is like gcc's "-Wl," except it passes its argument to OpenARC
+      # instead of the linker.
+      my $optArg = substr $arg, 6;
+      $arcOpts .= " " . shesc($optArg);
+    }
+    elsif ($arg eq "-ffitl") {
+      $arcOpts .= " -enableFaultInjection";
     }
     elsif ($arg =~ /^-D/ || $arg =~ /^-I/ || $arg =~ /^-U/) {
       my $opt = substr $arg, 0, 2;
@@ -68,6 +83,10 @@ sub main {
       $inCFileArgs .= " " . shesc($arg);
     }
   }
+  $cppOpts .= " -I$RealBin/../openarcrt -I$RealBin/../nvl/include";
+  if ($PMEMOBJ_INCLUDES) { $cppOpts .= " -I$PMEMOBJ_INCLUDES"; }
+  $ldOpts .= " -L$RealBin/../openarcrt -L$RealBin/../nvl/rt";
+  if ($PMEMOBJ_LIBDIR) { $ldOpts .= " -L$PMEMOBJ_LIBDIR"; }
 
   # run openarc and llc
   my $outFiles = "";
@@ -75,27 +94,32 @@ sub main {
     my $cmd
       = shesc("$RealBin/openarc")
         . " -outdir=".shesc($CETUS_OUTDIR)
-        . " -preprocessor=".shesc($CPP." -I. -D_OPENARC_ $cppOpts")
+        . " -preprocessor=".shesc($CPP.$cppOpts)
         . " -emitLLVM"
+        . $arcOpts
         . "$inCFileArgs";
     run($cmd, "openarc");
     for my $file (<$CETUS_OUTDIR/*.bc>) {
+      my $fileBase = $file; # no dir and no extension
+      $fileBase =~ s/(?:.*\/)?([^.]*|.*\.)(?:.*)?/$1/;
       my $outFile;
       if ($compileOnly && $outOptFile) {
         $outFile = $outOptFile;
       }
       else {
-        $outFile = $file;
-        $outFile =~ s/(?:.*\/)?([^.]*|.*\.)(?:.*)?/$1.o/;
+        $outFile = "$fileBase.o";
         if (!$compileOnly) {
           $outFile = "$CETUS_OUTDIR/$outFile";
         }
       }
       $outFiles .= " ".shesc($outFile);
-      $cmd = shesc($LLVM_OPT)." -nvl ".shesc($file)
-             ." | ".shesc($LLVM_LLC)." -filetype=obj".$llcOpts
+      my $optFile = "$CETUS_OUTDIR/opt/$fileBase.bc";
+      $cmd = shesc($LLVM_OPT)." -fitl -nvl ".shesc($file)
+             ." -o ".shesc($optFile);
+      run($cmd, "opt for $file");
+      $cmd = shesc($LLVM_LLC)." -filetype=obj".$llcOpts." ".shesc($optFile)
              ." -o ".shesc($outFile);
-      run($cmd, "opt and llc for $file");
+      run($cmd, "llc for $file");
     }
   }
 

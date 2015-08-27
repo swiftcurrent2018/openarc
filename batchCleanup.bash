@@ -67,6 +67,7 @@ do
 
 	if [ "$TARGET" = "benchmarks" ]; then
 		echo "==> Clean up benchmarks in the test directory"
+		rm -f "$openarc/*.log" "$openarc/test/bin/*.log"
 		if [ -d "$openarc/test/benchmarks" ]; then
 			cd $openarc/test/benchmarks/openacc
 			benchmarks=( `find . -mindepth 2 -maxdepth 2 -type d` )

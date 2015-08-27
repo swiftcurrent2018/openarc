@@ -1241,8 +1241,10 @@ public abstract class TransformTools {
 		///////////////////////////////////////////////////////
 		Expression initValue = null;
 		if( redOp.equals(ReductionOperator.ADD) ) {
-			if(specList.contains(Specifier.FLOAT) || specList.contains(Specifier.DOUBLE)) {
-				initValue = new FloatLiteral(0.0f, "F");
+			if(specList.contains(Specifier.FLOAT)) {
+				initValue = new FloatLiteral(0.0, "F");
+			} else if(specList.contains(Specifier.DOUBLE)) {
+				initValue = new FloatLiteral(0.0);
 			} else {
 				initValue = new IntegerLiteral(0);
 			}
@@ -1251,8 +1253,10 @@ public abstract class TransformTools {
 				|| redOp.equals(ReductionOperator.LOGICAL_OR) ) {
 			initValue = new IntegerLiteral(0);
 		} else if( redOp.equals(ReductionOperator.MULTIPLY) ) {
-			if(specList.contains(Specifier.FLOAT) || specList.contains(Specifier.DOUBLE)) {
-				initValue = new FloatLiteral(1.0f, "F");
+			if(specList.contains(Specifier.FLOAT)) {
+				initValue = new FloatLiteral(1.0, "F");
+			} else if(specList.contains(Specifier.DOUBLE)) {
+				initValue = new FloatLiteral(1.0);
 			} else {
 				initValue = new IntegerLiteral(1);
 			}

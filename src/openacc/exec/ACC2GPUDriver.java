@@ -8,8 +8,10 @@ import cetus.hir.*;
 import cetus.transforms.*;
 import cetus.codegen.*;
 import cetus.exec.*;
+import openacc.analysis.ACCAnalysis;
 import openacc.analysis.ACCParser;
 import openacc.codegen.*;
+import openacc.transforms.ACCAnnotationParser;
 
 /**
  * <b> ACC2GPUDriver </b> implements the command line parser and controls pass ordering.
@@ -259,7 +261,8 @@ public class ACC2GPUDriver extends Driver
 		options.add(options.UTILITY, "enableFaultInjection",
 		"Enable directive-based fault injection; otherwise, fault-injection-related direcitves are ignored.\n" +
 		"(If this option is set to 0 (enableFaultInjection=0), faults will be injected to each GPU thread; otherwise, faults " +
-		"will be injected to only one GPU thread in each kernel.)");
+		"will be injected to only one GPU thread in each kernel. If -emitLLVM is also specified, fault injection is enabled, " +
+		"but the -enableFaultInjection argument is ignored.)");
 		
 		options.add(options.UTILITY, "enableCustomProfiling",
 		"Enable directive-based custom profiling; otherwise, profile-related directives are ignored.");
@@ -787,9 +790,12 @@ public class ACC2GPUDriver extends Driver
 				targetTriple     = i < arr.length ? arr[i++] : "";
 				targetDataLayout = i < arr.length ? arr[i++] : "";
 			}
+			TransformPass.run(new ACCAnnotationParser(program));
+			ACCAnalysis.updateSymbolsInACCAnnotations(program, null);
 			try {
-				buildLLVM = BuildLLVMDelegate.make(targetTriple, targetDataLayout,
-				                                   program, debugLLVM, WerrorLLVM);
+				buildLLVM = BuildLLVMDelegate.make(
+				  targetTriple, targetDataLayout, program, debugLLVM, WerrorLLVM,
+				  getOptionValue("enableFaultInjection") != null);
 			} catch (BuildLLVMDelegate.BuildLLVMDisabledException e) {
 				System.err.println("-emitLLVM is disabled because OpenARC was built"
 				                   + " without LLVM");

@@ -60,6 +60,7 @@ CXXSRCS = $(CSRCS:.c=.cpp)
 # Set macros used for the input program #
 #########################################
 DEFSET_CPU += -DOMP=$(OMP)
+DEFSET_LLVM += -DOMP=$(OMP)
 DEFSET_ACC += -DOMP=$(OMP)
 
 #########################################################
@@ -70,8 +71,10 @@ DEFSET_ACC += -DOMP=$(OMP)
 #   output C++ program                                  # 
 #########################################################
 #CFLAGS1 =  
+#CFLAGS1_LLVM =  
 #CFLAGS2 =  
 #CLIBS1 = 
+#CLIBS1_LLVM = 
 #CLIBS2 = 
 
 ################################################
@@ -84,6 +87,8 @@ TARGET ?= ./bin
 ##############################
 BENCHMARK_OPENACC = $(TARGET)/$(BENCHMARK)_ACC
 BENCHMARK_CPU = $(TARGET)/$(BENCHMARK)_CPU
+BENCHMARK_TCPU = $(TARGET)/$(BENCHMARK)_TCPU
+BENCHMARK_LLVM = $(TARGET)/$(BENCHMARK)_LLVM
 
 ####################
 # Compiler options #
@@ -95,10 +100,12 @@ ifeq ($(OPENARC_ARCH),0)
 # CUDA target
 OPENARCLIB_SUFFIX = cuda
 KERNEL_FILE = openarc_kernel.cu
+RESILIENCE_FILE = resilience.cu
 else
 # OpenCL target
 OPENARCLIB_SUFFIX = opencl
 KERNEL_FILE = openarc_kernel.cl
+RESILIENCE_FILE = resilience.cl
 endif
 
 ifeq ($(OMP),1)
@@ -122,7 +129,8 @@ ACCRT_BASE = openaccrt_$(OPENARCLIB_SUFFIX)
 endif
 
 # Compiler flags 
-CFLAGS1 += $(OMP_FLAGS1)
+CFLAGS1 += $(OMP_FLAGS1) -I$(OPENARCLIB)
+CFLAGS1_LLVM += $(OMP_FLAGS1) -I$(OPENARCLIB)
 ifeq ($(MODE),profile)
 CFLAGS2 += $(GFRONTEND_DEBUG) $(OMP_FLAGS2) $(COMMONCINCLUDES)
 ACCRTLIB = $(ACCRT_BASE)pf
@@ -132,7 +140,8 @@ ACCRTLIB = $(ACCRT_BASE)
 endif
 
 # Libraries
-CLIBS1 += $(CLIBS1_BASE)
+CLIBS1 += $(CLIBS1_BASE) -L$(OPENARCLIB) 
+CLIBS1_LLVM += -L$(OPENARCLIB) 
 CLIBS2 += $(CLIBS2_BASE) -l$(ACCRTLIB)
 
 ################
@@ -140,13 +149,22 @@ CLIBS2 += $(CLIBS2_BASE) -l$(ACCRTLIB)
 ################
 ACC: $(BENCHMARK)_ACC
 CPU: $(BENCHMARK)_CPU
+TCPU: $(BENCHMARK)_TCPU
+LLVM: $(BENCHMARK)_LLVM
 all: ACC CPU
 
 $(BENCHMARK)_CPU: $(CSRCS) makedirectories
 	$(CC) $(DEFSET_CPU) $(CFLAGS1) -o $(BENCHMARK_CPU) $(CSRCS) $(CLIBS1)
 
+$(BENCHMARK)_TCPU: $($(CETUS_OUTPUT)/$(CSRCS)) makedirectories
+	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_CPU) $(CFLAGS1) -I ../ -o ../$(BENCHMARK_TCPU) $(CSRCS) $(CLIBS1); cd ../
+
+$(BENCHMARK)_LLVM: $(CSRCS) makedirectories
+	$(OPENARCLIB)/../bin/openarc-cc $(DEFSET_LLVM) $(CFLAGS1_LLVM) -o $(BENCHMARK_LLVM) $(CSRCS) $(CLIBS1_LLVM)
+
 $(BENCHMARK)_ACC: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
 	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
+	cd $(CETUS_OUTPUT); grep resilience $(KERNEL_FILE) > /dev/null && cp $(OPENARCLIB)/$(RESILIENCE_FILE) $(OPENARCLIB)/resilience.h ../$(TARGET); cd ../
 	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/openarc_kernel_EmulatorDeviceEmulatedDevice.aocx; fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
 	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
 
@@ -158,9 +176,9 @@ makedirectories:
 	mkdir -p $(TARGET)
 
 clean:
-	rm -f *.o *~ confFile.txt TuningOptions.txt;
+	rm -f *.o *.bc *~ confFile.txt Makefile*.local TuningOptions.txt;
 	if [ -d ./$(CETUS_OUTPUT) ]; then cd $(CETUS_OUTPUT); rm -rf *.o *~ *aoco *aocx openarc_kernel; cd ..; fi
-	if [ -d $(TARGET) ]; then rm -f $(BENCHMARK_CPU) $(BENCHMARK_OPENACC) Timer; cd $(TARGET); rm -f openarc_kernel*.ptx $(KERNEL_FILE) binBuilder_$(OPENARCLIB_SUFFIX) Timer *.aocx; fi
+	if [ -d $(TARGET) ]; then rm -f $(BENCHMARK_CPU) $(BENCHMARK_TCPU) $(BENCHMARK_LLVM) $(BENCHMARK_OPENACC) Timer; cd $(TARGET); rm -f openarc_kernel*.ptx $(KERNEL_FILE) binBuilder_$(OPENARCLIB_SUFFIX) Timer *.aocx; fi
 
 purge: clean
-	rm -rf $(TARGET) $(CETUS_OUTPUT) cetus_input openarcConf.txt *.log
+	rm -rf $(TARGET) $(CETUS_OUTPUT) cetus_input openarcConf.txt npbparams.h *.log

@@ -54,16 +54,18 @@ public abstract class BuildLLVMDelegate extends CodeGenPass {
    *          whether to produce debug output
    * @param warningsAsErrors
    *          whether to report warnings as errors
+   * @param enableFaultInjection
+   *          whether to enable FITL or ignore OpenARC fault-injection
+   *          directives
    * @return an instance of {@link BuildLLVM}, ready for a call to
    *         {@link #start}
    * @throws BuildLLVMDisabledException
    *           if {@link BuildLLVM} was not compiled
    */
-  public static BuildLLVMDelegate make(String llvmTargetTriple,
-                                       String llvmTargetDataLayout,
-                                       Program program, boolean debugOutput,
-                                       boolean warningsAsErrors)
-    throws BuildLLVMDisabledException
+  public static BuildLLVMDelegate make(
+    String llvmTargetTriple, String llvmTargetDataLayout, Program program,
+    boolean debugOutput, boolean warningsAsErrors,
+    boolean enableFaultInjection) throws BuildLLVMDisabledException
   {
     if (ctor == null) {
       Class <?> clazz;
@@ -82,7 +84,7 @@ public abstract class BuildLLVMDelegate extends CodeGenPass {
       try {
         ctor = clazz1.getDeclaredConstructor(String.class, String.class,
                                              Program.class, boolean.class,
-                                             boolean.class);
+                                             boolean.class, boolean.class);
       } catch (NoSuchMethodException | SecurityException e) {
         throw new IllegalStateException(
                     BUILD_LLVM_CLASS + " does not have the expected constructor",
@@ -92,7 +94,8 @@ public abstract class BuildLLVMDelegate extends CodeGenPass {
     }
     try {
       return ctor.newInstance(llvmTargetTriple, llvmTargetDataLayout, program,
-                              debugOutput, warningsAsErrors);
+                              debugOutput, warningsAsErrors,
+                              enableFaultInjection);
     } catch (InstantiationException | IllegalAccessException
              | IllegalArgumentException | InvocationTargetException e)
     {

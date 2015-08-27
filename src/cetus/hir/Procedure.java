@@ -192,6 +192,19 @@ public final class Procedure extends Declaration
     }
 
     /**
+    * [Added by Seyong Lee]
+    * Replace an existing parameter declaration with a new one.
+    *
+    * @param ref the existing parameter declaration to be replaced.
+    * @param decl the new parameter declaration to be added.
+    */
+    public void replaceDeclaration(Declaration ref, Declaration decl) {
+        getDeclaratorWithParameters().replaceParameter(ref, decl);
+        SymbolTools.removeSymbols(this, ref);
+        SymbolTools.addSymbols(this, decl);
+    }
+
+    /**
     * Returns the procedure declarator of the procedure.
     *
     * @return the procedure declarator.

@@ -4,7 +4,11 @@ import cetus.hir.*;
 import openacc.hir.OpenCLSpecifier;
 import cetus.transforms.TransformPass;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created with IntelliJ IDEA.
@@ -15,12 +19,14 @@ import java.util.List;
  */
 public class OpenCLArrayFlattener extends TransformPass
 {
+	private boolean addRestrictQualifier = false;
     /**
      * @param program
      */
-    public OpenCLArrayFlattener(Program program)
+    public OpenCLArrayFlattener(Program program, boolean addRestrictQual)
     {
         super(program);
+        addRestrictQualifier = addRestrictQual;
     }
 
     @Override
@@ -95,7 +101,9 @@ public class OpenCLArrayFlattener extends TransformPass
 						List<Specifier> nestedSpecifiers = declarator.getDeclarator().getSpecifiers();
 						if(nestedSpecifiers.size() == 1)
 						{
-							if(nestedSpecifiers.get(0) == PointerSpecifier.UNQUALIFIED)
+							//[DEBUG at Aug. 3, 2015]
+							//if(nestedSpecifiers.get(0) == PointerSpecifier.UNQUALIFIED)
+							if(nestedSpecifiers.get(0) instanceof PointerSpecifier)
 							{
 								isPointer = true;
 							}
@@ -130,28 +138,114 @@ public class OpenCLArrayFlattener extends TransformPass
             }
 
 			//Change function parameters from static array to pointer
+            //e.g., float a[N]; => float *a;
+            //      float b[M][N] => float *b;
+            //      float (*c)[N] => float *c;
             ProcedureDeclarator kernelProcDeclarator = (ProcedureDeclarator)kernelProc.getDeclarator();
+            Map<Declaration, Declaration> replaceDeclMap = new HashMap<Declaration, Declaration>();
             for(int i = 0; i < kernelProcDeclarator.getChildren().size(); i++)
             {
                 if(kernelProcDeclarator.getChildren().get(i) instanceof Declaration)
                 {
                     VariableDeclaration param = (VariableDeclaration)kernelProcDeclarator.getChildren().get(i);
+                    Declarator paramDeclr = param.getDeclarator(0);
+                    List specs = null;
+                    if( paramDeclr.getArraySpecifiers().size() > 0 ) {
+                    	paramDeclr.getArraySpecifiers().clear();
+                    	if( paramDeclr instanceof VariableDeclarator ) {
+                    		VariableDeclarator varSym = (VariableDeclarator)paramDeclr;
+                    		specs = varSym.getTypeSpecifiers();
+                    		// Separate declarator/declaration specifiers.
+                    		List declaration_specs = new ArrayList(specs.size());
+                    		List declarator_specs = new ArrayList(specs.size());
+                    		for (int k = 0; k < specs.size(); k++) {
+                    			Object spec = specs.get(k);
+                    			if (spec instanceof PointerSpecifier) {
+                    				if( addRestrictQualifier ) {
+                    					if( spec.equals(PointerSpecifier.UNQUALIFIED) ) {
+                    						declarator_specs.add(PointerSpecifier.RESTRICT);
+                    					} else if( spec.equals(PointerSpecifier.CONST) ) {
+                    						declarator_specs.add(PointerSpecifier.CONST_RESTRICT);
+                    					} else if( spec.equals(PointerSpecifier.CONST_VOLATILE) ) {
+                    						declarator_specs.add(PointerSpecifier.CONST_RESTRICT_VOLATILE);
+                    					} else {
+                    						declarator_specs.add(spec);
+                    					}
+                    				} else {
+                    					declarator_specs.add(spec);
+                    				}
+                    			} else {
+                    				declaration_specs.add(spec);
+                    			}
+                    		}
+                    		if( declarator_specs.isEmpty() ) {
+                    			if( addRestrictQualifier ) {
+                    				declarator_specs.add(PointerSpecifier.RESTRICT);
+                    			} else {
+                    				declarator_specs.add(PointerSpecifier.UNQUALIFIED);
+                    			}
+                    		}
+                    		VariableDeclarator Declr = new VariableDeclarator(declarator_specs, new NameID(varSym.getSymbolName()));
 
-					if(param.getDeclarator(0).getArraySpecifiers().size() > 0)
-                    {
-						//Remove * from (*var)[CONST] declaration
-						if(param.getDeclarator(0) instanceof NestedDeclarator)
-						{
-							((NestedDeclarator)param.getDeclarator(0)).getDeclarator().getSpecifiers().clear();
-						}
+                    		Declaration decls = new VariableDeclaration(declaration_specs, Declr);
+                    		replaceDeclMap.put(param, decls);
+                    	} else if( paramDeclr instanceof NestedDeclarator) {
+                    		NestedDeclarator nestedSym = (NestedDeclarator)paramDeclr;
+                    		Declarator childDeclarator = nestedSym.getDeclarator();
+                    		List childDeclr_specs = null;
+                    		if( childDeclarator instanceof VariableDeclarator ) {
+                    			VariableDeclarator varSym = (VariableDeclarator)childDeclarator;
+                    			childDeclr_specs = varSym.getSpecifiers();
+                    			varSym.getArraySpecifiers().clear();
+                    		} else {
+                    			Tools.exit("[ERROR in OpenCLArrayFlattener()] nested declarator whose child declarator is also " +
+                    					"nested declarator is not supported yet; exit!\n" +
+                    					"Symbol: " + paramDeclr + "\n");
+                    		}
+                    		specs = nestedSym.getTypeSpecifiers();
+                    		if( childDeclr_specs != null ) {
+                    			specs.addAll(childDeclr_specs);
+                    		}
+                    		// Separate declarator/declaration specifiers.
+                    		List declaration_specs = new ArrayList(specs.size());
+                    		List declarator_specs = new ArrayList(specs.size());
+                    		for (int k = 0; k < specs.size(); k++) {
+                    			Object spec = specs.get(k);
+                    			if (spec instanceof PointerSpecifier) {
+                    				if( addRestrictQualifier ) {
+                    					if( spec.equals(PointerSpecifier.UNQUALIFIED) ) {
+                    						declarator_specs.add(PointerSpecifier.RESTRICT);
+                    					} else if( spec.equals(PointerSpecifier.CONST) ) {
+                    						declarator_specs.add(PointerSpecifier.CONST_RESTRICT);
+                    					} else if( spec.equals(PointerSpecifier.CONST_VOLATILE) ) {
+                    						declarator_specs.add(PointerSpecifier.CONST_RESTRICT_VOLATILE);
+                    					} else {
+                    						declarator_specs.add(spec);
+                    					}
+                    				} else {
+                    					declarator_specs.add(spec);
+                    				}
+                    			} else {
+                    				declaration_specs.add(spec);
+                    			}
+                    		}
+                    		if( declarator_specs.isEmpty() ) {
+                    			if( addRestrictQualifier ) {
+                    				declarator_specs.add(PointerSpecifier.RESTRICT);
+                    			} else {
+                    				declarator_specs.add(PointerSpecifier.UNQUALIFIED);
+                    			}
+                    		}
+                    		VariableDeclarator Declr = new VariableDeclarator(declarator_specs, new NameID(nestedSym.getSymbolName()));
 
-						//Add * to make a pointer type
-    		            List<Specifier> specifiers = param.getSpecifiers();
-						specifiers.add(PointerSpecifier.UNQUALIFIED);
-
-						param.getDeclarator(0).getArraySpecifiers().clear();
+                    		Declaration decls = new VariableDeclaration(declaration_specs, Declr);
+                    		replaceDeclMap.put(param, decls);
+                    	}
                     }
                 }
+            }
+            for( Declaration refD : replaceDeclMap.keySet() ) {
+            	kernelProc.replaceDeclaration(refD, replaceDeclMap.get(refD));
             }
         }
     }

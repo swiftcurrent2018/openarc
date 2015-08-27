@@ -387,6 +387,63 @@ void HI_ftinjection_double(double * target, int ftinject,  long int epos, type64
     }   
 }
 
+void HI_ftinjection_pointer(void ** target, int ftinject,  long int epos, type64b bitvec) {
+    if( ftinject != 0 ) {
+		PointerBits val;
+        val.p = *(target+epos);
+        val.i ^= bitvec;
+        *(target+epos) = val.p;
+#ifdef _DEBUG_FTPRINT_ON_
+		fprintf(stderr, "====> Fault injected for pointer data\n");
+#endif
+    }
+}
+
+type8b HI_ftinject_val_int1b(type8b target, int ftinject) {
+    if( ftinject != 0 ) {
+        target ^= 1;
+#ifdef _DEBUG_FTPRINT_ON_
+		fprintf(stderr, "====> Fault injected for int1b data\n");
+#endif
+    }
+    return target;
+}
+
+type8b HI_ftinject_val_int8b(type8b target, int ftinject,  type8b bitvec) {
+    HI_ftinjection_int8b(&target, ftinject, 0, bitvec);
+    return target;
+}
+
+type16b HI_ftinject_val_int16b(type16b target, int ftinject,  type16b bitvec) {
+    HI_ftinjection_int16b(&target, ftinject, 0, bitvec);
+    return target;
+}
+
+type32b HI_ftinject_val_int32b(type32b target, int ftinject,  type32b bitvec) {
+    HI_ftinjection_int32b(&target, ftinject, 0, bitvec);
+    return target;
+}
+
+type64b HI_ftinject_val_int64b(type64b target, int ftinject,  type64b bitvec) {
+    HI_ftinjection_int64b(&target, ftinject, 0, bitvec);
+    return target;
+}
+
+float HI_ftinject_val_float(float target, int ftinject,  type32b bitvec) {
+    HI_ftinjection_float(&target, ftinject, 0, bitvec);
+    return target;
+}
+
+double HI_ftinject_val_double(double target, int ftinject,  type64b bitvec) {
+    HI_ftinjection_double(&target, ftinject, 0, bitvec);
+    return target;
+}
+
+void *HI_ftinject_val_pointer(void *target, int ftinject,  type64b bitvec) {
+    HI_ftinjection_pointer(&target, ftinject, 0, bitvec);
+    return target;
+}
+
 void HI_checksum_sum_register(void * target, long int nElems, size_t typeSize, int isIntType, double confVal) {
 	rsdata_confvalmap[target] = confVal;
 	rsdata_datatypemap[target] = isIntType;

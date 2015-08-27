@@ -515,7 +515,8 @@ public class MemTrVerifyTransformation extends TransformPass {
 								}
 								checkCall.addArgument(new NameID("acc_device_nvidia"));
 								checkCall.addArgument(new NameID("HI_maystale"));
-								checkCall.addArgument(new NameID("INT_MIN"));
+								//checkCall.addArgument(new NameID("INT_MIN"));
+								checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
 								if( (tSO != null) && (gsym == tSO) ) {
 									cStmt.addStatementAfter(refStmt, new ExpressionStatement(checkCall));
 								} else {
@@ -546,7 +547,8 @@ public class MemTrVerifyTransformation extends TransformPass {
 								}
 								checkCall.addArgument(new NameID("acc_device_nvidia"));
 								checkCall.addArgument(new NameID("HI_notstale"));
-								checkCall.addArgument(new NameID("INT_MIN"));
+								//checkCall.addArgument(new NameID("INT_MIN"));
+								checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
 								if( (tSO != null) && (gsym == tSO) ) {
 									cStmt.addStatementAfter(refStmt, new ExpressionStatement(checkCall));
 								} else {

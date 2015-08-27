@@ -1541,6 +1541,11 @@ void HostConf::addKernelNames(int kernels, std::string kernelNames[]) {
 
 //Compiler will insert this before the first read access of the variable.
 void HI_check_read(const void * hostPtr, acc_device_t dtype, const char * varName, const char *refName, int loopIndex) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_check_read(%s, %s)\n", varName, refName);
+	}
+#endif
     HostConf_t * tconf = getHostConf();
 
     //acc_device_t devType = acc_get_device_type();
@@ -1570,10 +1575,20 @@ void HI_check_read(const void * hostPtr, acc_device_t dtype, const char * varNam
             std::cout <<"[DEBUG-ERROR] variable " << varName << " should be copied from device to host for " << refName <<"." <<std::endl;
         }
     }
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_check_read(%s, %s)\n", varName, refName);
+	}
+#endif
 }
 
 //Compiler will insert this before the first write access of the variable.
 void HI_check_write(const void * hostPtr, acc_device_t dtype, const char * varName, const char *refName, int loopIndex) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_check_write(%s, %s)\n", varName, refName);
+	}
+#endif
     HostConf_t * tconf = getHostConf();
 
     //acc_device_t devType = acc_get_device_type();
@@ -1611,11 +1626,21 @@ void HI_check_write(const void * hostPtr, acc_device_t dtype, const char * varNa
         (*devicememstatusmap)[hostPtr] = HI_stale;
         (*hostmemstatusmap)[hostPtr] = HI_notstale;
     }
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_check_write(%s, %s)\n", varName, refName);
+	}
+#endif
 }
 
 //Compiler will insert this after each memory transfer call for the variable
 //or after GPU memory is freed.
 void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, const char * varName, const char *refName, int loopIndex) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_status(%s, %s)\n", varName, refName);
+	}
+#endif
     HostConf_t * tconf = getHostConf();
 
     //acc_device_t devType = acc_get_device_type();
@@ -1667,6 +1692,11 @@ void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t stat
         }
         (*hostmemstatusmap)[hostPtr] = status;
     }
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_status(%s, %s)\n", varName, refName);
+	}
+#endif
 }
 
 //Compiler will insert this right after a kernel call if the compiler analyzes
@@ -1678,6 +1708,11 @@ void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t stat
 //This method is similar to HI_set_status(), but this does not check any error
 //or redundancy.
 void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, int asyncID) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_reset_status()\n");
+	}
+#endif
     HostConf_t * tconf = getHostConf();
 
     //acc_device_t devType = acc_get_device_type();
@@ -1699,7 +1734,7 @@ void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t st
             	(*devicememstatusmap)[hostPtr] = status;
             }
             */
-            else if (asyncID > INT_MIN) {
+            else if (asyncID != DEFAULT_QUEUE) {
                 /*
                 asyncfreemap_t * asyncfreemap = tconf->asyncfreemaptable;
                 pointerset_t * freeset;
@@ -1734,6 +1769,11 @@ void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t st
         //HI_memstatus_t hoststatus = (*hostmemstatusmap)[hostPtr];
         (*hostmemstatusmap)[hostPtr] = status;
     }
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_reset_status()\n");
+	}
+#endif
 }
 
 HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size) {

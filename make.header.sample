@@ -44,6 +44,10 @@
 #       SPEC_CFG     : SPEC CPU 2006 config file (if value does    #
 #                      not contain "/", then it names a sample     #
 #                      file included with OpenARC)                 #
+#   - Modify target-specific location of libpmemobj (required only #
+#     for NVL support):                                            #
+#       PMEMOBJ_INCLUDES : include path for libpmemobj             #
+#       PMEMOBJ_LIBDIR   : library path for libpmemobj             #
 #                                                                  #
 # When specifying CPP, you must specify a C preprocessor and       #
 # command-line options that disable C language extensions that     #
@@ -131,6 +135,8 @@ endif
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =
+#PMEMOBJ_INCLUDES =
+#PMEMOBJ_LIBDIR =
 
 endif
 
@@ -189,11 +195,13 @@ LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
 LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128
 PERL = perl
 
-MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.4-rhel6-gnu/include
-MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.4-rhel6-gnu/lib
+MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
+MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
 FC = gfortran
 SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-newark.cfg.in
+#PMEMOBJ_INCLUDES =
+#PMEMOBJ_LIBDIR =
 
 endif
 
@@ -230,6 +238,8 @@ GFRONTEND_DEBUG = -g
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =
+#PMEMOBJ_INCLUDES =
+#PMEMOBJ_LIBDIR =
 
 endif
 
@@ -241,14 +251,12 @@ ifeq ($(TARGET_SYSTEM),MacBookPro)
 OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
-CC = gcc
-CXX = g++
+CC = gcc-apple-4.2
+CXX = g++-apple-4.2
 CPP = $(CC) -E -std=c99
-#On OSX V10.10, use external GNU compiler.
-#CPP = /usr/local/bin/gcc -E -std=c99
 GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
 GPROFILEMACROS = -D_OPENARC_PROFILE_=1
-BACKENDCXX = g++
+BACKENDCXX = g++-apple-4.2
 CC_FLAGS_PREFIX = 
 #GBACKEND_FLAGS = -arch i386 -arch x86_64
 GBACKEND_FLAGS = -arch x86_64
@@ -269,6 +277,8 @@ MPI_LIBDIR = /opt/local/lib/openmpi-mp
 FC = gfortran-mp-4.9
 SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-osx.cfg.in
+#PMEMOBJ_INCLUDES =
+#PMEMOBJ_LIBDIR =
 
 endif
 
@@ -306,6 +316,8 @@ GFRONTEND_DEBUG = -g
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =
+#PMEMOBJ_INCLUDES =
+#PMEMOBJ_LIBDIR =
 
 endif
 

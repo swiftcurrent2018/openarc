@@ -551,9 +551,12 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 	void * memHandle;
 
     if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
-        //result = HI_success;
-		fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
-		exit(1);
+		if( unifiedMemSupported ) {
+        	result = HI_success;
+		} else {
+			fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+			exit(1);
+		}
     } else {
 		memPool_t *memPool = memPoolMap[tconf->threadID];
 		std::multimap<size_t, void *>::iterator it = memPool->find(count);

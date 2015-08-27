@@ -36,6 +36,8 @@ public class IfStatement extends Statement {
     public IfStatement(Expression condition, Statement true_clause) {
         super(2);
         object_print_method = class_print_method;
+        //Added by Seyong Lee
+        condition.setParens(false);
         addChild(condition);
         if (!(true_clause instanceof CompoundStatement)) {
             CompoundStatement cs = new CompoundStatement();
@@ -62,6 +64,8 @@ public class IfStatement extends Statement {
                        Statement false_clause) {
         super(3);
         object_print_method = class_print_method;
+        //Added by Seyong Lee
+        condition.setParens(false);
         addChild(condition);
         if (!(true_clause instanceof CompoundStatement)) {
             CompoundStatement cs = new CompoundStatement();

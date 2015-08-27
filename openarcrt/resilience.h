@@ -35,6 +35,14 @@ typedef union {
 	type64b i;
 } DoubleBits;
 
+typedef union {
+	void *p;
+	type64b i;
+} PointerBits;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Set a new random seed value for the internal random-number generator.
 // This function is internally called by acc_init() function, and thus 
@@ -72,5 +80,19 @@ extern void HI_ftinjection_int32b(type32b * target, int ftinject,  long int epos
 extern void HI_ftinjection_int64b(type64b * target, int ftinject,  long int epos, type64b bitvec);
 extern void HI_ftinjection_float(float * target, int ftinject,  long int epos, type32b bitvec);
 extern void HI_ftinjection_double(double * target, int ftinject,  long int epos, type64b bitvec);
+extern void HI_ftinjection_pointer(void ** target, int ftinject,  long int epos, type64b bitvec);
+
+extern type8b HI_ftinject_val_int1b(type8b target, int ftinject);
+extern type8b HI_ftinject_val_int8b(type8b target, int ftinject,  type8b bitvec);
+extern type16b HI_ftinject_val_int16b(type16b target, int ftinject,  type16b bitvec);
+extern type32b HI_ftinject_val_int32b(type32b target, int ftinject,  type32b bitvec);
+extern type64b HI_ftinject_val_int64b(type64b target, int ftinject,  type64b bitvec);
+extern float HI_ftinject_val_float(float target, int ftinject,  type32b bitvec);
+extern double HI_ftinject_val_double(double target, int ftinject,  type64b bitvec);
+extern void *HI_ftinject_val_pointer(void *target, int ftinject,  type64b bitvec);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

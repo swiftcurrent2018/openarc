@@ -101,7 +101,9 @@ public class IntegerLiteral extends Literal {
             object_print_method = class_print_method;
             base = Base.DECIMAL;
         }
-        this.value = (Integer.decode(_int_str)).intValue();
+        //[Modified by Seyong Lee to use Long instead of Integer]
+        //this.value = (Integer.decode(_int_str)).intValue();
+        this.value = (Long.decode(_int_str)).longValue();
         this.suffix = "";
     }
 

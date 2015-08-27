@@ -221,12 +221,15 @@ noloopcollapse
 	structured block
 
 where clause is one of the following
-ftregion
 ftcond(condition)
-ftdata(list)
 num_faults(scalar-integer-expression)
 num_ftbits(scalar-integer-expression)
 repeat(scalar-integer-expression)
+ftprofile(scalar-integer-variable)
+ftpredict(scalar-integer-constant)
+ftregion // this and the following clauses imply a nested ftregion pragma
+ftdata(list) // cannot be combined with ftkind
+ftkind(identifier-list) // see ftkind documentation below
 ftthread(scalar-integer-expression)
 
 
@@ -241,8 +244,20 @@ ftthread(scalar-integer-expression)
 	structured block
 
 where clause is one of the following
-ftdata(list)
+ftdata(list) // cannot be combined with ftkind
+ftkind(identifier-list) // see ftkind documentation below
 ftthread(scalar-integer-expression)
+
+
+Each identifier in the identifier-list for an ftkind clause is one of the following
+integer_arg
+integer_res
+floating_arg
+floating_res
+arithmetic_arg
+arithmetic_res
+pointer_arg
+pointer_res
 
 
 #pragma openarc profile region label(name) [clause[[,] clause]...]

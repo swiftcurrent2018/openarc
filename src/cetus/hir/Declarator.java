@@ -106,6 +106,17 @@ public abstract class Declarator implements Cloneable, Traversable {
     public abstract void addParameterAfter(Declaration ref, Declaration decl);
 
     /**
+    * [Added by Seyong Lee]
+    * Replace an existing child declaration with a new one.
+    *
+    * @param ref the reference parameter declaration.
+    * @param decl the new parameter declaration to be inserted.
+    * @throws IllegalArgumentException if <b>ref</b> is not found.
+    * @throws NotAnOrphanException if <b>decl</b> has a parent object.
+    */
+    public abstract void replaceParameter(Declaration ref, Declaration decl);
+
+    /**
     * Appends a new specifier to the list of trailing specifiers.
     *
     * @param spec the new specifier to be appended.

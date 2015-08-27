@@ -642,9 +642,12 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
     HI_error_t result = HI_error;
 
     if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
-        //result = HI_success;
-		fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
-		exit(1);
+		if( unifiedMemSupported ) {
+        	result = HI_success;
+        } else {
+			fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+			exit(1);
+		}
     } else {
         CUresult cuResult = CUDA_SUCCESS;
 #if VICTIM_CACHE_MODE == 0
@@ -878,9 +881,12 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
     HI_error_t result;
 
     if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
-        result = HI_success;
-		fprintf(stderr, "[ERROR in CudaDriver::HI_malloc2D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
-		exit(1);
+		if( unifiedMemSupported ) {
+        	result = HI_success;
+        } else {
+			fprintf(stderr, "[ERROR in CudaDriver::HI_malloc2D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+			exit(1);
+		}
     } else {
         CUresult cuResult = cuMemAllocPitch((CUdeviceptr*)devPtr, pitch, widthInBytes, height, 16);
         if( cuResult == CUDA_SUCCESS ) {

@@ -179,6 +179,26 @@ public class ProcedureDeclarator extends Declarator implements Symbol {
         decl.setParent(this);
     }
 
+    /**
+    * [Added by Seyong Lee]
+    * Replace existing parameter with a new one.
+    *
+    * @param ref the reference parameter declaration to be replaced.
+    * @param decl the new parameter declaration to be added.
+    */
+    public void replaceParameter(Declaration ref, Declaration decl) {
+        int index = Tools.identityIndexOf(children, ref);
+        if (index == -1) {
+            throw new IllegalArgumentException();
+        }
+        if (decl.getParent() != null) {
+            throw new NotAnOrphanException();
+        }
+        children.set(index, decl);
+        decl.setParent(this);
+        ref.setParent(null);
+    }
+
     /** Returns a clone of the procedure declarator. */
     @Override
     public ProcedureDeclarator clone() {

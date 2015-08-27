@@ -316,6 +316,11 @@ public class VariableDeclarator extends Declarator implements Symbol {
         throw new UnsupportedOperationException();
     }
 
+    //[Added by Seyong Lee]
+    public void replaceParameter(Declaration ref, Declaration decl) {
+        throw new UnsupportedOperationException();
+    }
+
     /**
     * Warning: this is an experimental feature.
     * Checks if the given Object <b>obj</b> refers to the same Symbol as this
