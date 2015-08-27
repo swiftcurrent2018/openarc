@@ -295,6 +295,9 @@
 #Option: assumeNoAliasingAmongKernelArgs
 #assumeNoAliasingAmongKernelArgs
 #Assume that there is no aliasing among kernel arguments
+#Option: skipKernelLoopBoundChecking
+#skipKernelLoopBoundChecking
+#Skip kernel-loop-boundary-checking code when generating a device kernel; it is safe only if total number of workers equals to that of the kernel loop iterations
 #NOPTIONDESC#
 ############################################################################
 # Translation configuration #
@@ -392,4 +395,5 @@ addIncludePath=__openarcrt__
 #SkipGPUTranslation=N
 #ASPENModelGen=mode=N
 #assumeNoAliasingAmongKernelArgs
+#skipKernelLoopBoundChecking
 #NOPTION#

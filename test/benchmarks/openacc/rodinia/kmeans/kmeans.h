@@ -52,7 +52,7 @@
 #endif
 
 #ifndef _NPOINTS
-#define _NPOINTS	494020
+#define _NPOINTS	204800
 #endif
 
 #define DEBUG

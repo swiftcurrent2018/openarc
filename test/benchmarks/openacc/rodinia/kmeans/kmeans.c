@@ -167,8 +167,7 @@ int main(int argc, char **argv) {
 
         /* allocate space for attributes[] and read attributes of all objects */
         buf           = (float*) malloc(numObjects*numAttributes*sizeof(float));
-        //attributes = (float (*)[_NATTRIBUTES]) malloc(numObjects*numAttributes*sizeof(float));
-        attributes = (float (*)[_NATTRIBUTES]) acc_create_unified(NULL, numObjects*numAttributes*sizeof(float));
+        attributes = (float (*)[_NATTRIBUTES]) malloc(numObjects*numAttributes*sizeof(float));
 
         read(infile, buf, numObjects*numAttributes*sizeof(float));
 
@@ -195,8 +194,7 @@ int main(int argc, char **argv) {
 
         /* allocate space for attributes[] and read attributes of all objects */
         buf           = (float*) malloc(numObjects*numAttributes*sizeof(float));
-        //attributes = (float (*)[_NATTRIBUTES]) malloc(numObjects*numAttributes*sizeof(float));
-        attributes = (float (*)[_NATTRIBUTES]) acc_create_unified(NULL, numObjects*numAttributes*sizeof(float));
+        attributes = (float (*)[_NATTRIBUTES]) malloc(numObjects*numAttributes*sizeof(float));
         rewind(infile);
         i = 0;
         while (fgets(line, 1024, infile) != NULLZ) {
@@ -249,10 +247,8 @@ int main(int argc, char **argv) {
 #endif
 
 
-    //free(attributes);
-    acc_delete_unified(attributes, 0);
-    //free(cluster_centres);
-    acc_delete_unified(cluster_centres, 0);
+    free(attributes);
+    free(cluster_centres);
     free(buf);
     return(0);
 }

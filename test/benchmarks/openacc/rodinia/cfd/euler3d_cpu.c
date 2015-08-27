@@ -3,7 +3,6 @@
 
 
 #include <math.h>
-#include <omp.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -13,10 +12,10 @@
 #endif
 
 #ifndef NEL
-#define NEL 232536
+#define NEL 97046
 #endif
 #ifndef NELR
-#define NELR 232536
+#define NELR 97280
 #endif
 
 #ifdef _OPENARC_
@@ -478,9 +477,6 @@ int main(int argc, char* argv[])
 				// these need to be computed the first time in order to compute time step
 				printf("Starting...\n");
 				start_time1 = gettime();
-#ifdef _OPENMP
-				double start = omp_get_wtime();
-#endif
 				// Begin iterations
 				for(i = 0; i < iterations; i++)
 				{
@@ -697,10 +693,6 @@ int main(int argc, char* argv[])
 				}
 		}
 
-#ifdef _OPENMP
-		double end = omp_get_wtime();
-		printf("%lf seconds per iteration\n", (end-start) / iterations);
-#endif
 		end_time1 = gettime();
 		printf("Accelerator Elapsed Time = %lf sec.\n", end_time1 - start_time1);
         printf("Main Comp. TIme (with data copies) = %lf sec.\n", end_time1 - start_time2);

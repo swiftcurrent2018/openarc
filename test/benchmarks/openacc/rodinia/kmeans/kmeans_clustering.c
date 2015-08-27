@@ -81,46 +81,7 @@
 
 #define _NTHREADS	(_NPOINTS/_UNROLLFAC_)
 
-#ifndef _BSIZE_
-#define _BSIZE_ 256
-#endif
-
-#ifndef RES_REGION0
-#define RES_REGION0	1
-#endif
-#ifndef TOTAL_NUM_FAULTS
-#define TOTAL_NUM_FAULTS	1
-#endif
-#ifndef NUM_FAULTYBITS
-#define NUM_FAULTYBITS	1
-#endif
-#ifndef NUM_REPEATS
-#define NUM_REPEATS	1
-#endif
-#ifndef _FTVAR0
-#define _FTVAR0	0
-#endif
-#ifndef _FTTHREAD
-#define _FTTHREAD 0
-#endif
-
-
 #ifdef _OPENARC_
-
-#include "ftmacro.h"
-
-#if _BSIZE_ == 32
-#pragma openarc #define _BSIZE_ 32
-#elif _BSIZE_ == 64
-#pragma openarc #define _BSIZE_ 64
-#elif _BSIZE_ == 128
-#pragma openarc #define _BSIZE_ 128
-#elif _BSIZE_ == 256
-#pragma openarc #define _BSIZE_ 256
-#elif _BSIZE_ == 384
-#pragma openarc #define _BSIZE_ 384
-#endif
-
 
 #if _NPOINTS == 204800
 #pragma openarc #define _NPOINTS 204800
@@ -151,6 +112,7 @@
 #pragma openarc #define _NCLUSTERS 5
 
 #pragma openarc #define _NTHREADS (_NPOINTS/_UNROLLFAC_)
+
 #endif
 
 extern double wtime(void);

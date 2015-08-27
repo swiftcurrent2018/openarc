@@ -92,9 +92,9 @@ int main()
   int i;
   double elapsed_time;
 
-  a = (float *) malloc(M*N*4);
-  b = (float *) malloc(M*P*4);
-  c = (float *) malloc(P*N*4);
+  a = (float *) malloc(M*N*sizeof(float));
+  b = (float *) malloc(M*P*sizeof(float));
+  c = (float *) malloc(P*N*sizeof(float));
 
   for (i = 0; i <  M*N; i++) {
     a[i] = (float) 0.0;

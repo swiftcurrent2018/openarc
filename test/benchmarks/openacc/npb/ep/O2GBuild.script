@@ -1,0 +1,48 @@
+#! /bin/bash
+if [ $# -ge 1 ]; then
+	inputData1=$1
+else
+	inputData1="S"
+fi
+
+verLevel=0
+
+openarcrt="../../../../../openarcrt"
+openarclib="../../../../../lib"
+
+if [ ! -f "openarcConf.txt" ]; then
+    cp "openarcConf_NORMAL.txt" "openarcConf.txt"
+fi
+
+case "$inputData1" in
+	S) cp npbparams.h_S npbparams.h
+		;;
+	W) cp npbparams.h_W npbparams.h
+		;;
+	A) cp npbparams.h_A npbparams.h
+		;;
+	B) cp npbparams.h_B npbparams.h
+		;;
+	C) cp npbparams.h_C npbparams.h
+		;;
+	*) echo "Undefined input class: $inputData1; exit!"
+		exit 1
+esac
+
+if [ "$openarcrt" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__openarcrt__|${openarcrt}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPUDriver -verbosity=${verLevel} -gpuConfFile=openarcConf.txt *.c
+
+echo ""
+echo "====> Input Class: ${inputData1}"
+echo ""
+echo "====> To compiled the translated output file:"
+echo "\$ make"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; ep_ACC"
+echo ""

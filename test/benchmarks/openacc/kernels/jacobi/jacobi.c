@@ -48,7 +48,7 @@ int main (int argc, char *argv[])
     float sum = 0.0f;
 
     double strt_time, done_time;
-#if VERIFICATION == 1
+#if VERIFICATION >= 1
 	float** a_CPU = (float**)malloc(sizeof(float*) * SIZE_2);
 	float** b_CPU = (float**)malloc(sizeof(float*) * SIZE_2);
 
@@ -70,7 +70,7 @@ int main (int argc, char *argv[])
         for (j = 0; j < SIZE_2; j++)
         {
             b[i][j] = 0;
-#if VERIFICATION == 1
+#if VERIFICATION >= 1
 			b_CPU[i][j] = 0;
 #endif 
         }
@@ -81,7 +81,7 @@ int main (int argc, char *argv[])
         b[j][0] = 1.0;
         b[j][SIZE_1] = 1.0;
 
-#if VERIFICATION == 1
+#if VERIFICATION >= 1
 		b_CPU[j][0] = 1.0;
 		b_CPU[j][SIZE_1] = 1.0;
 #endif 
@@ -92,7 +92,7 @@ int main (int argc, char *argv[])
         b[0][i] = 1.0;
         b[SIZE_1][i] = 1.0;
 
-#if VERIFICATION == 1
+#if VERIFICATION >= 1
 		b_CPU[0][i] = 1.0;
 		b_CPU[SIZE_1][i] = 1.0;
 #endif 
@@ -133,7 +133,7 @@ int main (int argc, char *argv[])
 
     done_time = my_timer ();
 
-#if VERIFICATION == 1
+#if VERIFICATION >= 1
 
     for (k = 0; k < ITER; k++)
     {
@@ -153,11 +153,11 @@ int main (int argc, char *argv[])
             }
         }
     }
-
+#if VERIFICATION == 1
 	{
-		double cpu_sum = 0.0f;
-		double gpu_sum = 0.0f;
-    	double rel_err = 0.0f;
+		double cpu_sum = 0.0;
+		double gpu_sum = 0.0;
+    	double rel_err = 0.0;
 
 		for (i = 1; i <= SIZE; i++)
     	{
@@ -167,9 +167,13 @@ int main (int argc, char *argv[])
 
 		cpu_sum = sqrt(cpu_sum);
 		gpu_sum = sqrt(gpu_sum);
-		rel_err = (cpu_sum-gpu_sum)/cpu_sum;
+		if( cpu_sum > gpu_sum) {
+			rel_err = (cpu_sum-gpu_sum)/cpu_sum;
+		} else {
+			rel_err = (gpu_sum-cpu_sum)/cpu_sum;
+		}
 
-		if(rel_err < 1e-6)
+		if(rel_err < 1e-9)
 		{
 	    	printf("Verification Successful err = %e\n", rel_err);
 		}
@@ -178,6 +182,59 @@ int main (int argc, char *argv[])
 	    	printf("Verification Fail err = %e\n", rel_err);
 		}
 	}
+#else
+	{
+		double cpu_sum = 0.0;
+		double gpu_sum = 0.0;
+    	double rel_err = 0.0;
+		int error_found = 0;
+
+        for (i = 1; i <= SIZE; i++)
+        {
+            for (j = 1; j <= SIZE; j++)
+            {
+        		cpu_sum = b_CPU[i][j];
+				gpu_sum = b[i][j];
+				if( cpu_sum == gpu_sum ) {
+					continue;
+				}
+				if( cpu_sum > gpu_sum) {
+					if( cpu_sum == 0.0 ) {
+						rel_err = cpu_sum-gpu_sum;
+					} else {
+						rel_err = (cpu_sum-gpu_sum)/cpu_sum;
+					}
+				} else {
+					if( cpu_sum == 0.0 ) {
+						rel_err = gpu_sum-cpu_sum;
+					} else {
+						rel_err = (gpu_sum-cpu_sum)/cpu_sum;
+					}
+				}
+				if(rel_err < 0.0) {
+					rel_err = -1*rel_err;
+				}
+
+				if(rel_err >= 1e-9)
+				{
+					error_found = 1;
+					break;
+				}
+			}
+			if( error_found == 1 ) {
+				break;
+			}
+		}
+		if( error_found == 0 )
+		{
+	    	printf("Verification Successful\n");
+		}
+		else
+		{
+	    	printf("Verification Fail err = %e\n", rel_err);
+		}
+	}
+#endif
 #endif
 
 

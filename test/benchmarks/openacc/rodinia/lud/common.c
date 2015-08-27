@@ -6,7 +6,7 @@
 
 #include "common.h"
 
-#define	EPSILON	0.1
+#define	EPSILON	0.0001
 
 void stopwatch_start(stopwatch *sw){
     if (sw == NULLZ)
@@ -140,6 +140,7 @@ matrix_multiply(float *inputa, float *inputb, float *output, int size){
 func_ret_t
 lud_verify(float *m, float *lu, int matrix_dim){
   int i,j,k;
+  int found_error = 0;
   float *tmp = (float*)malloc(matrix_dim*matrix_dim*sizeof(float));
 
 	FILE *fp;
@@ -188,12 +189,19 @@ lud_verify(float *m, float *lu, int matrix_dim){
 
   for (i=0; i<matrix_dim; i++){
       for (j=0; j<matrix_dim; j++){
-          if ( fabs(m[i*matrix_dim+j]-tmp[i*matrix_dim+j]) > EPSILON)
+          if ( fabs(m[i*matrix_dim+j]-tmp[i*matrix_dim+j]) > EPSILON) {
             fprintf(fp, "dismatch at (%d, %d): (o)%f (n)%f\n", i, j, m[i*matrix_dim+j], tmp[i*matrix_dim+j]);
+			found_error = 1;
+		  }
       }
   }
   free(tmp);
 	fclose(fp);
+  if( found_error == 0 ) {
+	printf("Verification Successful\n");
+  } else {
+	printf("Verification Failed\n");
+  }
 	return RET_FAILURE;
 }
 

@@ -7,14 +7,6 @@
 #include <omp.h>
 #endif
 
-//#define __SINGLEPRECISION__
-#ifdef __SINGLEPRECISION__
-////////////////////////////////////
-// Below code works only in Win32 //
-////////////////////////////////////
-    #include <float.h>
-#endif
-
 extern double timer_();
 
 //////////////////////////
@@ -162,17 +154,6 @@ float x[SIZE];
 float y[SIZE];
 
 int main() {
-#ifdef __SINGLEPRECISION__
-////////////////////////////////////
-// Below code works only in Win32 //
-////////////////////////////////////
-    unsigned int originalCW;
-    int err;
-    err = _controlfp_s(&originalCW,0,0);	
-    //err = _controlfp_s(&originalCW, _PC_24, _MCW_PC);
-	err = _controlfp_s(NULL, _PC_24, _MCW_PC);
-#endif
-
 	FILE *fp10;
 	//FILE *fp12; //Result writing part is disabled
 	char filename1[96] = SPMUL_INPUTDIR; 
@@ -295,17 +276,6 @@ LB99:
 ////////////////////////////////////////////////////////////////////////
 #pragma acc data copy(x[0:SIZE]), copyin(values[0:NZR], colind[0:NZR], rowptr[0:SIZE+1]), create(y[0:SIZE])
 	for( k=0; k<ITER; k++ ) {
-#ifdef __SINGLEPRECISION__
-////////////////////////////////////
-// Below code works only in Win32 //
-////////////////////////////////////
-    unsigned int originalCW;
-    int err;
-    err = _controlfp_s(&originalCW,0,0);
-    //err = _controlfp_s(&originalCW, _PC_24, _MCW_PC);
-	err = _controlfp_s(NULL, _PC_24, _MCW_PC);
-#endif
-
 #pragma acc kernels loop gang, worker
         for( i=0; i<SIZE2; i++ ) { 
             y[i] = 0.0f;
@@ -367,13 +337,6 @@ LB99:
 
 	fclose(fp12);
 */
-
-#ifdef __SINGLEPRECISION__
-////////////////////////////////////
-// Below code works only in Win32 //
-////////////////////////////////////
-    err = _controlfp_s(&originalCW, _CW_DEFAULT, MCW_PC);
-#endif
 
 	return 0;
 }

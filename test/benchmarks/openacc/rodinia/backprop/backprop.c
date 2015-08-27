@@ -7,7 +7,6 @@
  ******************************************************************
  */
 
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "backprop.h"
@@ -185,22 +184,20 @@ int n_in, n_hidden, n_out;
   input_prev_weights = (float (*)[I_SIZE])alloc_2d_dbl(n_in + 1, n_hidden + 1);
   hidden_prev_weights = (float (*)[H_SIZE])alloc_2d_dbl(n_hidden + 1, n_out + 1);
 
-	if(VERIFICATION) {
-		//input_units_CPU = alloc_1d_dbl(n_in + 1);
-		hidden_units_CPU = alloc_1d_dbl(n_hidden + 1);
-		output_units_CPU = alloc_1d_dbl(n_out + 1);
+#if VERIFICATION == 1
+  hidden_units_CPU = alloc_1d_dbl(n_hidden + 1);
+  output_units_CPU = alloc_1d_dbl(n_out + 1);
 
-		hidden_delta_CPU = alloc_1d_dbl(n_hidden + 1);
-		output_delta_CPU = alloc_1d_dbl(n_out + 1);
+  hidden_delta_CPU = alloc_1d_dbl(n_hidden + 1);
+  output_delta_CPU = alloc_1d_dbl(n_out + 1);
 
 
-		input_weights_CPU = (float (*)[I_SIZE])alloc_2d_dbl(n_in + 1, n_hidden + 1);
-		hidden_weights_CPU = (float (*)[H_SIZE])alloc_2d_dbl(n_hidden + 1, n_out + 1);
+  input_weights_CPU = (float (*)[I_SIZE])alloc_2d_dbl(n_in + 1, n_hidden + 1);
+  hidden_weights_CPU = (float (*)[H_SIZE])alloc_2d_dbl(n_hidden + 1, n_out + 1);
 
-		input_prev_weights_CPU = (float (*)[I_SIZE])alloc_2d_dbl(n_in + 1, n_hidden + 1);
-		hidden_prev_weights_CPU = (float (*)[H_SIZE])alloc_2d_dbl(n_hidden + 1, n_out + 1);
-	  
-	}
+  input_prev_weights_CPU = (float (*)[I_SIZE])alloc_2d_dbl(n_in + 1, n_hidden + 1);
+  hidden_prev_weights_CPU = (float (*)[H_SIZE])alloc_2d_dbl(n_hidden + 1, n_out + 1);
+#endif
 }
 
 
@@ -262,10 +259,6 @@ void bpnn_layerforward1(float l1[I_SIZE], float l2[H_SIZE], float conn[H_SIZE][I
 
   /*** Set up thresholding unit ***/
   l1[0] = 1.0F;
-#if defined(_OPENMP)
-  omp_set_num_threads(NUM_THREAD);
-	//printf("OpenMP in bpnn_layerforward1()\n");
-#endif 
   /*** For each unit in second layer ***/
   for (j = 1; j <= n2; j++) {
 
@@ -286,10 +279,6 @@ void bpnn_layerforward2(float l1[H_SIZE], float l2[O_SIZE], float conn[O_SIZE][H
 
   /*** Set up thresholding unit ***/
   l1[0] = 1.0F;
-#if defined(_OPENMP)
-  omp_set_num_threads(NUM_THREAD);
-	//printf("OpenMP in bpnn_layerforward2()\n");
-#endif 
   /*** For each unit in second layer ***/
   for (j = 1; j <= n2; j++) {
 
@@ -357,10 +346,6 @@ int nly, float w[O_SIZE][H_SIZE], float oldw[O_SIZE][H_SIZE])
   //eta = 0.3;
   //momentum = 0.3;
 
-#if defined(_OPENMP)
-  omp_set_num_threads(NUM_THREAD);
-	//printf("OpenMP in bpnn_adjust_weights1()\n");
-#endif 
   for (j = 1; j <= ndelta; j++) {
     for (k = 0; k <= nly; k++) {
       new_dw = ((ETA * delta[j] * ly[k]) + (MOMENTUM * oldw[j][k]));
@@ -379,10 +364,6 @@ int nly, float w[H_SIZE][I_SIZE], float oldw[H_SIZE][I_SIZE])
   //eta = 0.3;
   //momentum = 0.3;
 
-#if defined(_OPENMP)
-  omp_set_num_threads(NUM_THREAD);
-	//printf("OpenMP in bpnn_adjust_weights2()\n");
-#endif 
   for (j = 1; j <= ndelta; j++) {
     for (k = 0; k <= nly; k++) {
       new_dw = ((ETA * delta[j] * ly[k]) + (MOMENTUM * oldw[j][k]));

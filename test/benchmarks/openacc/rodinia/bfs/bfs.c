@@ -2,7 +2,6 @@
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
-#include <omp.h>
 #include <sys/time.h>
 //#define NUM_THREAD 4
 #define false 0
@@ -27,10 +26,10 @@
 //#define NUM_OF_NODES 16777216
 //#define EDGELIST_SIZE 100666228
 #ifndef NUM_OF_NODES
-#define NUM_OF_NODES 16777216
+#define NUM_OF_NODES 4096
 #endif
 #ifndef EDGELIST_SIZE
-#define EDGELIST_SIZE 100666228
+#define EDGELIST_SIZE 24576
 #endif
 
 #ifdef _OPENARC_
@@ -373,9 +372,9 @@ copy(h_cost[0:NUM_OF_NODES])
 		}
 		
 		if(!good) 
-			printf("Verification: Failed\n");
+			printf("Verification Failed\n");
 		else
-			printf("Verification: Successful\n");
+			printf("Verification Successful\n");
 
 		free( h_graph_nodes_starting_CPU);
 		free( h_graph_nodes_no_of_edges_CPU);

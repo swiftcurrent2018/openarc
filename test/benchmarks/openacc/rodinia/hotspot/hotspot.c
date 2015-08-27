@@ -22,11 +22,11 @@
 #define DEBUG
 
 #ifndef ROW_SIZE
-#define ROW_SIZE 4096
+#define ROW_SIZE 64
 #endif
 
 #ifndef COL_SIZE
-#define COL_SIZE 4096
+#define COL_SIZE 64
 #endif
 
 #define TEMP_SIZE   (ROW_SIZE*COL_SIZE)
@@ -357,7 +357,7 @@ void writeoutput(double *vect, int grid_rows, int grid_cols, char *file){
 				for (j=0; j < grid_cols; j++)
 				{   
 
-						sprintf(str, "%d\t%g\n", index, vect[i*grid_cols+j]);
+						sprintf(str, "%d\t%lf\n", index, vect[i*grid_cols+j]);
 						fputs(str,fp);
 						index++;
 				}   
@@ -381,8 +381,8 @@ void read_input(double *vect, int grid_rows, int grid_cols, char *file)
 				fgets(str, STR_SIZE, fp);
 				if (feof(fp))
 						fatal("not enough lines in file");
-				//if ((sscanf(str, "%lf", &val) != 1) )
-				if ((sscanf(str, "%f", &val) != 1) )
+				if ((sscanf(str, "%lf", &val) != 1) )
+				//if ((sscanf(str, "%f", &val) != 1) )
 						fatal("invalid file format");
 				vect[i] = val;
 		}
@@ -472,6 +472,7 @@ int main(int argc, char **argv)
 			
 		  for (i = 0; i < grid_rows * grid_cols; ++i) {
 		      double d = tempCPU[i] - temp[i];
+			  //printf("CPU temp[%d] = %g, GPU temp[%d] = %g\n", i, tempCPU[i], i, temp[i]);
 		      deltaL2Norm += d * d;
 		      nonAccL2Norm += tempCPU[i] * tempCPU[i];
 		  }
@@ -481,7 +482,7 @@ int main(int argc, char **argv)
 			if (L2Norm < 1e-6)
         printf("Verification: Successful\n");
 		  else
-		      printf("Verification: Failed\n");
+		      printf("Verification: Failed (L2Norm = %g)\n", L2Norm);
 
 			free(tempCPU);
 			free(powerCPU);

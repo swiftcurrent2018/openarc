@@ -14,8 +14,9 @@ CSRCS = matmul.c
 # Set macros used for the input program #
 #########################################
 _N_ ?= 512
-DEFSET_CPU = -D_N_=$(_N_)
-DEFSET_ACC = -D_N_=$(_N_)
+DEFSET_CPU = -D_N_=$(_N_) -DENABLE_OPENACC=0
+DEFSET_LLVM = -D_N_=$(_N_) -DENABLE_OPENACC=0 -ffitl -Warc,-macro=_N_=$(_N_)
+DEFSET_ACC = -D_N_=$(_N_) -DENABLE_OPENACC=1
 
 #########################################################
 # Makefile options that the user can overwrite          #
@@ -39,7 +40,8 @@ MODE ?= normal
 #########################################################
 #CFLAGS1 =  
 #CFLAGS2 =  
-#CLIBS1 = 
+CLIBS1 =  -lresilience
+CLIBS1_LLVM = -lresilience -lstdc++
 #CLIBS2 = 
 
 ################################################

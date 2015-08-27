@@ -13,8 +13,6 @@ fi
 openarcrt="../../../../../openarcrt"
 openarclib="../../../../../lib"
 
-benchname="laplace2d"
-
 if [ ! -f "openarcConf.txt" ]; then
     cp "openarcConf_NORMAL.txt" "openarcConf.txt"
 fi
@@ -32,3 +30,10 @@ if [ "$openarcrt" != "" ]; then
 fi
 
 java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPUDriver -verbosity=${verLevel} -gpuConfFile=openarcConf.txt *.c
+echo ""
+echo "====> To compile the translated output file:"
+echo "\$ make"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; laplace2d_ACC"
+echo ""

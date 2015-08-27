@@ -167,7 +167,11 @@ int main(int argc, char** argv)
 
             cpu_sum = sqrt(cpu_sum);
             gpu_sum = sqrt(gpu_sum);
-            rel_err = (cpu_sum-gpu_sum)/cpu_sum;
+			if( cpu_sum > gpu_sum ) {
+            	rel_err = (cpu_sum-gpu_sum)/cpu_sum;
+			} else {
+            	rel_err = (gpu_sum-cpu_sum)/cpu_sum;
+			}
 
             if(rel_err < 1e-6)
             {

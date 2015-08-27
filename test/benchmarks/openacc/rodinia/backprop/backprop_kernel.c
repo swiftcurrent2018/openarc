@@ -56,8 +56,8 @@ float (*hidden_weights)[H_SIZE];      /* weights from hidden to output layer */
 float (*input_prev_weights)[I_SIZE];  /* previous change on input to hidden wgt */
 float (*hidden_prev_weights)[H_SIZE]; /* previous change on hidden to output wgt */
 
+#if VERIFICATION == 1
 //Verification related variables
-
 float *hidden_units_CPU;         /* the hidden units */
 float *output_units_CPU;         /* the output units */
 
@@ -71,6 +71,7 @@ float (*hidden_weights_CPU)[H_SIZE];      /* weights from hidden to output layer
 	                              /*** The next two are for momentum ***/
 float (*input_prev_weights_CPU)[I_SIZE];  /* previous change on input to hidden wgt */
 float (*hidden_prev_weights_CPU)[H_SIZE]; /* previous change on hidden to output wgt */
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -92,7 +93,7 @@ void bpnn_train_kernel(float *eo, float *eh)
 {
   int in, hid, out;
   float out_err, hid_err;
-  int i, j, k;
+  int j, k;
   float sum;
   float new_dw;
 #ifdef DEBUG0
@@ -101,12 +102,15 @@ void bpnn_train_kernel(float *eo, float *eh)
 #ifdef DEBUG
   double start_time, end_time;
 #endif
+#if VERIFICATION == 1
   //Verification related variables
+	int i;
 	float out_err_CPU, hid_err_CPU;
 	double deltaL2Norm = 0;
 	double nonAccL2Norm = 0;
 	double L2Norm;
 	double d;
+#endif
 
   in = input_n;
   hid = hidden_n;
@@ -125,7 +129,7 @@ void bpnn_train_kernel(float *eo, float *eh)
   hidden_units[0] = 1.0F;
  
  
-if(VERIFICATION) {
+#if VERIFICATION == 1
 	for(i=0; i<(hid+1); i++) {
 		for(j=0 ; j <(in+1); j++) {
 			input_weights_CPU[i][j]= input_weights[i][j];
@@ -139,7 +143,7 @@ if(VERIFICATION) {
 			hidden_prev_weights_CPU[i][j]= hidden_prev_weights[i][j];
 		}
 	}
-}
+#endif
   
 #pragma acc data \
 copy(input_weights[0:H_SIZE][0:I_SIZE]) \
@@ -241,8 +245,7 @@ create(hidden_units[0:H_SIZE])
   printf("Elapsed time %lf sec\n", end_time0 - start_time0);
 #endif
 
-if(VERIFICATION) {
-{
+#if VERIFICATION == 1
 
 #ifdef DEBUG
   start_time = gettime();
@@ -317,7 +320,6 @@ if(VERIFICATION) {
       input_prev_weights_CPU[j][k] = new_dw;
     }
   }
-}
 #ifdef DEBUG
   end_time = gettime();
   printf("bpnn_adjust_weights2() execution time CPU %lf sec\n", end_time - start_time);
@@ -336,12 +338,11 @@ if(VERIFICATION) {
 
   L2Norm = sqrt(deltaL2Norm / nonAccL2Norm);
 	
-	if (L2Norm < 1e-6)
+	if (L2Norm < 1e-9)
     printf("Verification: Successful\n");
   else
     printf("Verification: Failed\n");	
+
+#endif
 	
-}
-
-
 }

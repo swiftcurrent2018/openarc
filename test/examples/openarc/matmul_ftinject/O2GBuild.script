@@ -13,8 +13,6 @@ fi
 openarcrt="../../../../openarcrt"
 openarclib="../../../../lib"
 
-benchname="matmul"
-
 if [ ! -f "openarcConf.txt" ]; then
     cp "openarcConf_FTINJ.txt" "openarcConf.txt"
 fi

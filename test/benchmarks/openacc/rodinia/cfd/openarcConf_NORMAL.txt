@@ -301,6 +301,9 @@
 #Option: assumeNoAliasingAmongKernelArgs
 #assumeNoAliasingAmongKernelArgs
 #Assume that there is no aliasing among kernel arguments
+#Option: skipKernelLoopBoundChecking
+#skipKernelLoopBoundChecking
+#Skip kernel-loop-boundary-checking code when generating a device kernel; it is safe only if total number of workers equals to that of the kernel loop iterations
 #NOPTIONDESC#
 ############################################################################
 # Translation configuration #
@@ -377,7 +380,7 @@ defaultNumWorkers=64
 # Misc. Cetus configururation #
 ###############################
 #outdir=cetus_output
-macro=VERIFICATION=0,NEL=__inputData1__,block_length=__inputData2__,NELR=__inputData3__
+macro=VERIFICATION=1,NEL=__inputData1__,block_length=__inputData2__,NELR=__inputData3__
 #dump-options
 #dump-system-options
 #induction
@@ -398,5 +401,6 @@ addIncludePath=__openarcrt__
 #AccParallelization=N
 #SkipGPUTranslation=N
 #ASPENModelGen=mode=N
-#assumeNoAliasingAmongKernelArgs
+assumeNoAliasingAmongKernelArgs
+#skipKernelLoopBoundChecking
 #NOPTION#

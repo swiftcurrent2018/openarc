@@ -69,7 +69,6 @@
 #include <limits.h>
 #include <math.h>
 #include <float.h>
-#include <omp.h>
 
 #include "kmeans.h"
 #include "openacc.h"
@@ -88,8 +87,7 @@ int cluster(int      numObjects,      /* number of input objects */
     int    *membership;
     float (*tmp_cluster_centres)[_NATTRIBUTES];
 
-    //membership = (int*) malloc(numObjects * sizeof(int));
-    membership = (int*) acc_create_unified(NULL, numObjects * sizeof(int));
+    membership = (int*) malloc(numObjects * sizeof(int));
    
     srand(7);
 	/* perform regular Kmeans */
@@ -106,8 +104,7 @@ int cluster(int      numObjects,      /* number of input objects */
     *cluster_centres = tmp_cluster_centres;
 
    
-	//free(membership);
-	acc_delete_unified(membership, 0);
+	free(membership);
 
     return 0;
 }

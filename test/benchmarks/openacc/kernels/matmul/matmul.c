@@ -1,16 +1,21 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <stdio.h>
+#include <math.h>
 //#define _OPENACCM
 #ifdef _OPENACCM
 #include <openacc.h>
 #endif
-#if OMP == 1
+#ifdef _OPENMP
 #include <omp.h>
 #endif
 
 #ifndef _N_
 #define _N_ 512
+#endif
+
+#ifndef VERIFICATION
+#define VERIFICATION 1
 #endif
 
 
@@ -89,25 +94,32 @@ MatrixMultiplication_openmp(float * a,float * b, float * c)
 int main()
 {
   float *a, *b, *c;
-  int i;
+  float *a_CPU, *b_CPU, *c_CPU;
+  int i,j;
   double elapsed_time;
 
-  a = (float *) malloc(M*N*4);
-  b = (float *) malloc(M*P*4);
-  c = (float *) malloc(P*N*4);
+  a = (float *) malloc(M*N*sizeof(float));
+  b = (float *) malloc(M*P*sizeof(float));
+  c = (float *) malloc(P*N*sizeof(float));
+  a_CPU = (float *) malloc(M*N*sizeof(float));
+  b_CPU = (float *) malloc(M*P*sizeof(float));
+  c_CPU = (float *) malloc(P*N*sizeof(float));
 
   for (i = 0; i <  M*N; i++) {
-    a[i] = (float) 0.0;
+    a[i] = (float) 0.0F;
+    a_CPU[i] = (float) 0.0F;
   }
   for (i = 0; i <  M*P; i++) {
     b[i] = (float) i;
+    b_CPU[i] = (float) i;
   }
   for (i = 0; i <  P*N; i++) {
-    c[i] = (float) 1.0;
+    c[i] = (float) 1.0F;
+    c_CPU[i] = (float) 1.0F;
   }
 
   elapsed_time = my_timer();
-  MatrixMultiplication_openmp(a,b,c);
+  MatrixMultiplication_openmp(a_CPU,b_CPU,c_CPU);
   elapsed_time = my_timer() - elapsed_time;
   printf("CPU Elapsed time = %lf sec\n", elapsed_time);
   elapsed_time = my_timer();
@@ -115,6 +127,39 @@ int main()
   elapsed_time = my_timer() - elapsed_time;
   printf("Accelerator Elapsed time = %lf sec\n", elapsed_time);
 
+#if VERIFICATION == 1
+	{
+		double cpu_sum = 0.0;
+		double gpu_sum = 0.0;
+    	double rel_err = 0.0;
+
+    	for (i=0; i<M*N; i++){
+			cpu_sum += a_CPU[i]*a_CPU[i];
+			gpu_sum += a[i]*a[i];
+		}
+
+		cpu_sum = sqrt(cpu_sum);
+		gpu_sum = sqrt(gpu_sum);
+		if( cpu_sum > gpu_sum ) {
+			rel_err = (cpu_sum-gpu_sum)/cpu_sum;
+		} else {
+			rel_err = (gpu_sum-cpu_sum)/cpu_sum;
+		}
+
+		if(rel_err < 1e-6)
+		{
+	    	printf("Verification Successful err = %e\n", rel_err);
+		}
+		else
+		{
+	    	printf("Verification Fail err = %e\n", rel_err);
+		}
+	}
+#endif
+
+  free(a_CPU);
+  free(b_CPU);
+  free(c_CPU);
   free(a);
   free(b);
   free(c);

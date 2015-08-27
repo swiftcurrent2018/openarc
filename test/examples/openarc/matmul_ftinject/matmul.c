@@ -7,6 +7,10 @@
 
 #include <resilience.h>
 
+#ifndef ENABLE_OPENACC
+#define ENABLE_OPENACC 1
+#endif
+
 #ifndef _N_
 #define _N_ 512
 #endif
@@ -26,10 +30,10 @@ double my_timer ()
     return time.tv_sec + time.tv_usec / 1000000.0;
 }
 
+#define TOTAL_NUM_FAULTS 1
 #pragma openarc #define TTHREAD 0
 #pragma openarc #define FTVAR b[0:(M*P)]
 #pragma openarc #define TOTAL_NUM_FAULTS 1
-#define TOTAL_NUM_FAULTS 1
 #pragma openarc #define NUM_FAULTYBITS 1
 
 
@@ -48,7 +52,9 @@ MatrixMultiplication_openacc(float * a,float * b, float * c)
   }
   HI_sort_int(itrpos, TOTAL_NUM_FAULTS);
 
+#if ENABLE_OPENACC == 1
 #pragma acc data copyout(a[0:(M*N)]), copyin(b[0:(M*P)],c[0:(P*N)])
+#endif
   for( m=0; m<ITER; m++) {
     //Enable fault injection only at randomly selected iterations.
     injectFT = 0;
@@ -58,13 +64,19 @@ MatrixMultiplication_openacc(float * a,float * b, float * c)
       }
     }
 #pragma openarc resilience ftregion ftthread(TTHREAD) ftcond(injectFT) ftdata(FTVAR) num_faults(TOTAL_NUM_FAULTS) num_ftbits(NUM_FAULTYBITS)
+#if ENABLE_OPENACC == 1
 #pragma acc kernels loop independent gang
+#endif
     for (i=0; i<M; i++){
+#if ENABLE_OPENACC == 1
 #pragma acc loop worker
+#endif
       for (j=0; j<N; j++)
         {
 	  float sum = 0.0 ;
+#if ENABLE_OPENACC == 1
 #pragma acc loop seq
+#endif
 	  for (k=0; k<P; k++) {
 	    sum += b[i*P+k]*c[k*N+j] ;
       }
@@ -110,9 +122,9 @@ int main()
   int i;
   double elapsed_time;
 
-  a = (float *) malloc(M*N*4);
-  b = (float *) malloc(M*P*4);
-  c = (float *) malloc(P*N*4);
+  a = (float *) malloc(M*N*sizeof(float));
+  b = (float *) malloc(M*P*sizeof(float));
+  c = (float *) malloc(P*N*sizeof(float));
 
   for (i = 0; i <  M*N; i++) {
     a[i] = (float) 0.0;

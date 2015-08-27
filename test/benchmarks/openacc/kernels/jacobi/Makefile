@@ -13,9 +13,10 @@ CSRCS = jacobi.c
 #########################################
 # Set macros used for the input program #
 #########################################
-VERIFICATION ?= 0
-SIZE ?= 2048
-DEFSET_CPU = -DVERIFICATION=$(VERIFICATION) -DSIZE=$(SIZE)
+VERIFICATION ?= 1
+SIZE ?= 4096
+DEFSET_CPU = -DVERIFICATION=$(VERIFICATION) -DSIZE=$(SIZE) -DENABLE_OPENACC=0
+DEFSET_LLVM = -DVERIFICATION=$(VERIFICATION) -DSIZE=$(SIZE) -DENABLE_OPENACC=0 -Warc,-macro=SIZE=$(SIZE) $(ARCMACRO)
 DEFSET_ACC = -DVERIFICATION=$(VERIFICATION) -DSIZE=$(SIZE)
 
 ##########################################################
@@ -50,7 +51,7 @@ MODE ?= normal
 AOCL_BOARD ?= p385_hpc_a7
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
-AOCL_FLAGS ?= -c --report
+AOCL_FLAGS ?= -v -c --report
 #AOCL_FLAGS ?= --report
 
 
@@ -62,8 +63,12 @@ AOCL_FLAGS ?= -c --report
 #   output C++ program                                  # 
 #########################################################
 #CFLAGS1 =  
+#CFLAGS1_LLVM =  
 #CFLAGS2 =  
-#CLIBS1 = 
+# For Translated CPU
+CLIBS1 = -lm
+# For LLVM
+CLIBS1_LLVM = -lm
 #CLIBS2 = 
 
 ################################################
