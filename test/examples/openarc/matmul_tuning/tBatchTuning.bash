@@ -1,5 +1,101 @@
 #! /bin/bash
 
+function usage()
+{
+    echo "./tBatchTuning.bash"
+    echo "List of options:"
+    echo -e "\t-h --help"
+    echo -e "\t-t=tLevel --tuninglevel=tLevel"
+    echo -e "\t-m=tMode --mode=tMode"
+    echo -e "\t-n=N --numitr=N"
+    echo ""
+	echo -e "Supported Modes:"
+	echo -e "tMode = 0 #perform batch translation and exit"
+	echo -e "tMode = 1 #perform batch compilation and exit"
+	echo -e "tMode = 2 #perform batch run and exit"
+	echo -e "tMode = 3 #perform batch translation, compilation, and run (default)"
+    echo ""
+	echo -e "Supported Tuning Level:"
+	echo -e "tLevel = 1 #program-level tuning (default)"
+	echo -e "tLevel = 2 #kernel-level tuning"
+}
+
+if [ $# -eq 0 ]; then
+	echo "==> Commandline inputs are missing!"
+	echo "==> Usage:"
+	usage
+	exit 1
+fi
+
+###############################
+# Tuning Level                #
+###############################
+# 1 = program-level tuning    #
+# 2 = GPU-kernel-level tuning #
+###############################
+tLevel=1
+
+###########################################
+# Tuning Mode                             #
+###########################################
+# 0 = Batch translation only              #
+# 1 = Batch compile only                  #
+# 2 = Batch run only                      #
+# 3 = Batch translation, compile, and run #
+###########################################
+tMode=3
+
+# Number of execution iterations
+numItr=1
+
+while [ "$1" != "" ]; do
+    PARAM=`echo $1 | awk -F= '{print $1}'`
+    VALUE=`echo $1 | awk -F= '{print $2}'`
+    case $PARAM in
+        -h | --help)
+            usage
+            exit
+            ;;  
+        -t | --tuninglevel)
+            tLevel=${VALUE}
+            ;;  
+        -m | --mode)
+            tMode=${VALUE}
+            ;;  
+        -n | --numitr)
+            numItr=${VALUE}
+            ;;  
+        *)  
+            echo "ERROR: unknown parameter \"$PARAM\""
+            usage
+            exit 1
+            ;;  
+    esac
+    shift
+done
+
+if [ $tLevel -ne 1 ] && [ $tLevel -ne 2 ]; then
+	echo "==> [ERROR] incorrect value for tuninglevel option: $tLevel; exit"
+	echo "==> Usage:"
+	usage
+	exit 1
+fi
+
+if [ $tLevel -lt 0 ] || [ $tLevel -gt 3 ]; then
+	echo "==> [ERROR] incorrect value for mode option: $tMode; exit"
+	echo "==> Usage:"
+	usage
+	exit 1
+fi
+
+if [ $numItr -le 0 ]; then
+	echo "==> [ERROR] incorrect value for numitr option: $numItr; exit"
+	echo "==> Usage:"
+	usage
+	exit 1
+fi
+
+
 #######################################
 # Modify the following conf variables #
 #######################################
@@ -12,21 +108,9 @@ inputHeaderFiles=( )
 inputFiles=( "${inputCFiles[@]}" "${inputHeaderFiles[@]}" )
 
 # OpenARC options (common to all inputs) to translate the benchmark.
-openarcOptionBase=( "macro=VERIFICATION=1" )
+openarcOptionBase=( "macro=VERIFICATION=1,HOST_MEM_ALIGNMENT=1" )
 # commandline options (common to all inputs) to run the benchmark.
 cmdOptionBase=""
-
-###############################
-# Tuning Level                #
-###############################
-# 1 = program-level tuning    #
-# 2 = GPU-kernel-level tuning #
-###############################
-if [ $# -ge 1 ]; then
-	tLevel=$1
-else
-	tLevel=1
-fi
 
 if [ "$openarc" = "" ] || [ ! -d "$openarc" ]; then
 	echo "Environment variable, openarc, should be set up correctly to run this script; exit."
@@ -53,6 +137,8 @@ fi
 cleanCmd="make clean"
 makeCmd="make ACC"
 baseExeName="matmul_ACC"
+
+if [ $tMode -eq 0 ] || [ $tMode -eq 3 ]; then
 
 #####################################################
 # Step1:  Delete output files generated for tuning. #
@@ -165,6 +251,7 @@ do
 	cd ${workDir}
 	numExperiments=`${exeCmd} | grep "Number of created tuning-configuration files:" | cut -d' ' -f10`
 	echo "Number of created tuning-configuration files for input class ${inputClass}: ${numExperiments}"
+	echo "${numExperiments}" > numExperiments.log
 	if [ $? -eq 0 ]; then
 		echo "${i} th Compile success : input class => ${inputClass}" >> ${logFile}
 	else
@@ -325,6 +412,10 @@ do
 rm -f "${workDir}/${filename}"
 done
 
+fi
+
+if [ $tMode -eq 1 ] || [ $tMode -eq 3 ]; then
+
 ##############################################
 # Step5: Compile the translated output files #
 ##############################################
@@ -354,6 +445,9 @@ do
 	cd ${inputClass}
 	rm -rf *
 
+	if [ "${numExperiments}" = "" ]; then
+		numExperiments=`cat ${workDir}/numExperiments.log`
+	fi
 	k=0
 	while [ $k -lt ${numExperiments} ]
 	do
@@ -399,6 +493,22 @@ do
 		mv ${baseExeName} ${newExeName}
 		mv ${newExeName} "${outputDir}"
 		mv ${inputKernelFile} "${outputDir}"
+        if [ -f *.aocx ]; then
+            mv *.aocx ${outputDir}
+        fi  
+        if [ -f *.ptx ]; then
+            mv *.ptx ${outputDir}
+        fi  
+
+        ##############################################
+        # Move output log if targeting Altera OpenCL #
+        ##############################################
+        if [ -d "${workDir}/cetus_output/openarc_kernel" ];then
+            cp -f "${workDir}/cetus_output/openarc_kernel/area.rpt" "${outputDir}/"
+            cp -f "${workDir}/cetus_output/openarc_kernel/sys_description.txt" "${outputDir}/"
+            cp -f "${workDir}/cetus_output/openarc_kernel/sys_description.legend.txt" "${outputDir}/"
+        fi  
+
 		k=$((k+1))
 	done
 
@@ -407,6 +517,10 @@ done
 
 cd ${workDir}
 rm -f test.out
+
+fi
+
+if [ $tMode -eq 2 ] || [ $tMode -eq 3 ]; then
 
 ##########################################
 # Step6: Batch-run the compiled binaries #
@@ -431,6 +545,9 @@ do
 	# commandline options to run the benchmark.
 	cmdOption="${cmdOptionBase} ${inputOption}"
 
+	if [ "${numExperiments}" = "" ]; then
+		numExperiments=`cat ${workDir}/numExperiments.log`
+	fi
 	k=0
 	while [ $k -lt ${numExperiments} ]
 	do
@@ -446,12 +563,19 @@ do
 		echo " " | tee -a ${logFile}
 		echo "## Execution Command: ${exeCmd}" | tee -a ${logFile}
 		echo " " | tee -a ${logFile}
-		./${exeCmd} 2>&1 | tee -a ${logFile}
+		n=0
+		while [ $n -lt ${numItr} ]
+		do	
+			./${exeCmd} 2>&1 | tee -a ${logFile}
+			n=$((n+1))
+		done
 		k=$((k+1))
 	done
 
 i=$((i+1))
 done
+
+fi
 
 cd ${workDir}
 rm -f test.out

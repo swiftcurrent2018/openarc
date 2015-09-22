@@ -37,7 +37,7 @@
 OMP ?= 0
 MODE ?= normal
 DIST ?= 0
-AOCL_BOARD ?= p385_hpc_a7
+AOCL_BOARD ?= p385_hpc_d5
 AOCL_FLAGS ?= -march=emulator
 
 ifeq ($(DIST),1)
@@ -108,6 +108,16 @@ KERNEL_FILE = openarc_kernel.cl
 RESILIENCE_FILE = resilience.cl
 endif
 
+ifeq ($(OPENARC_ARCH),3)
+#EMUL_MODE = $(shell export $(AOCL_FLAGS); echo $$AOCL_FLAGS | grep "emulator" > /dev/null 2>&1;)
+EMUL_MODE = $(shell export AOCL_FLAGS="$(AOCL_FLAGS)"; echo $$AOCL_FLAGS | grep "emulator";)
+ifneq ($(EMUL_MODE),)
+    KERNEL_BINARY ?= "openarc_kernel_EmulatorDeviceEmulatedDevice.aocx"
+else
+    KERNEL_BINARY ?= "openarc_kernel_p385_hpc_d5PCIe385n.aocx"
+endif
+endif
+
 ifeq ($(OMP),1)
 CLIBS1_BASE = $(GOMP_LIBS)
 CLIBS2_BASE = $(COMMONCLIBS) $(GOMP_LIBS)
@@ -165,11 +175,11 @@ $(BENCHMARK)_LLVM: $(CSRCS) makedirectories
 $(BENCHMARK)_ACC: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
 	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
 	cd $(CETUS_OUTPUT); grep resilience $(KERNEL_FILE) > /dev/null && cp $(OPENARCLIB)/$(RESILIENCE_FILE) $(OPENARCLIB)/resilience.h ../$(TARGET); cd ../
-	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/openarc_kernel_EmulatorDeviceEmulatedDevice.aocx; fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
+	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/$(KERNEL_BINARY); fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
 	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
 
 COMPILE_KERNEL: $($(CETUS_OUTPUT)/$(KERNLE_FILE)) makedirectories
-	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/openarc_kernel_EmulatorDeviceEmulatedDevice.aocx; fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
+	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/$(KERNEL_BINARY); fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
 	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
 
 makedirectories:

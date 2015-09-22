@@ -33,14 +33,14 @@
 #      =0 disable automatic privatization
 #      =1 enable only scalar privatization (default)
 #      =2 enable both scalar and array variable privatization
-#(this option is always applied unless explicitly disabled by setting the value to 0
+#(this option is always applied unless explicitly disabled by setting the value to 0)
 #Option: AccReduction
 #AccReduction=N
 #Perform reduction variable analysis
 #      =0 disable reduction analysis 
 #      =1 enable only scalar reduction analysis (default)
 #      =2 enable array reduction analysis and transformation
-#(this option is always applied unless explicitly disabled by setting the value to 0
+#(this option is always applied unless explicitly disabled by setting the value to 0)
 #Option: CUDACompCapability
 #CUDACompCapability=1.1
 #CUDA compute capability of a target GPU
@@ -327,6 +327,15 @@
 #Option: skipKernelLoopBoundChecking
 #skipKernelLoopBoundChecking
 #Skip kernel-loop-boundary-checking code when generating a device kernel; it is safe only if total number of workers equals to that of the kernel loop iterations
+#Option: defaultNumComputeUnits
+#defaultNumComputeUnits=N
+#Default number of physical compute units (default value = 1); applicable only to Altera-OpenCL devices
+#Option: defaultNumSIMDWorkItems
+#defaultNumSIMDWorkItems=N
+#Default number of work-items within a work-group executing in an SIMD manner (default value = 1); applicable only to Altera-OpenCL devices
+#Option: disableDefaultCachingOpts
+#disableDefaultCachingOpts
+#Disable default caching optimizations so that they are applied only if explicitly requested
 #NOPTIONDESC#
 ############################################################################
 # Translation configuration #
@@ -425,4 +434,7 @@ defaultNumWorkers=64
 #ASPENModelGen=mode=N
 #assumeNoAliasingAmongKernelArgs
 #skipKernelLoopBoundChecking
+#defaultNumComputeUnits=N
+#defaultNumSIMDWorkItems=N
+#disableDefaultCachingOpts
 #NOPTION#

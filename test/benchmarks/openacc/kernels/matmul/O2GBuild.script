@@ -1,15 +1,16 @@
 #! /bin/bash
 if [ $# -ge 2 ]; then
 	inputSize=$1
-	verLevel=$2
+	unrollfac=$2
 elif [ $# -eq 1 ]; then
 	inputSize=$1
-	verLevel=0
+	unrollfac=0
 else
-	inputSize=512
-	verLevel=0
+	inputSize=2048
+	unrollfac=0
 fi
 
+verLevel=0
 openarcrt="../../../../../openarcrt"
 openarclib="../../../../../lib"
 
@@ -20,6 +21,12 @@ fi
 if [ "$inputSize" != "" ]; then
     mv "openarcConf.txt" "openarcConf.txt_tmp"
     cat "openarcConf.txt_tmp" | sed "s|__inputSize__|${inputSize}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$unrollfac" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__unrollfac__|${unrollfac}|g" > "openarcConf.txt"
     rm "openarcConf.txt_tmp"
 fi
 

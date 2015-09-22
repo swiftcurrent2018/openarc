@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.4 (June 01, 2015)
+OpenARC V0.4.1 (Sept. 22, 2015)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -150,7 +150,15 @@ Available OpenARC commandline options can be found either in [openarc-path]/test
 TESTING
 -------------------------------------------------------------------------------
 "./test" directory contains examples showing how to use OpenARC.
+For example, to compile and run matmul.c in ./test/examples/openarc/matmul directory:
 
+	$ cd [openarc-path]/test/examples/openarc/matmul
+
+	$ O2Gbuild.script
+
+	$ make
+
+	$ cd bin; matmul_ACC
 
 -------------------------------------------------------------------------------
 FEATURES/UPDATES

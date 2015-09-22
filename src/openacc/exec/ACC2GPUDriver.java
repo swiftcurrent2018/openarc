@@ -143,7 +143,7 @@ public class ACC2GPUDriver extends Driver
         + "      =0 disable automatic privatization\n"
         + "      =1 enable only scalar privatization (default)\n"
         + "      =2 enable both scalar and array variable privatization\n"
-        + "(this option is always applied unless explicitly disabled by setting the value to 0");
+        + "(this option is always applied unless explicitly disabled by setting the value to 0)");
 		optionsWithIntArgument.add("AccPrivatization");
 		
 		options.add(options.ANALYSIS, "AccReduction","N",
@@ -151,7 +151,7 @@ public class ACC2GPUDriver extends Driver
         + "      =0 disable reduction analysis \n"
         + "      =1 enable only scalar reduction analysis (default)\n"
         + "      =2 enable array reduction analysis and transformation\n"
-        + "(this option is always applied unless explicitly disabled by setting the value to 0");
+        + "(this option is always applied unless explicitly disabled by setting the value to 0)");
 		optionsWithIntArgument.add("AccReduction");
 		
 		options.add(options.ANALYSIS, "AccParallelization","N",
@@ -164,6 +164,16 @@ public class ACC2GPUDriver extends Driver
 		options.add(options.UTILITY, "defaultNumWorkers", "N",
 		"Default number of workers per gang for compute regions (default value = 64)");
 		optionsWithIntArgument.add("defaultNumWorkers");
+
+		options.add(options.UTILITY, "defaultNumComputeUnits", "N",
+		"Default number of physical compute units (default value = 1); "
+		+ "applicable only to Altera-OpenCL devices");
+		optionsWithIntArgument.add("defaultNumComputeUnits");
+
+		options.add(options.UTILITY, "defaultNumSIMDWorkItems", "N",
+		"Default number of work-items within a work-group executing in an SIMD manner (default value = 1); "
+		+ "applicable only to Altera-OpenCL devices");
+		optionsWithIntArgument.add("defaultNumSIMDWorkItems");
 		
 		options.add(options.TRANSFORM, "maxNumGangs", "N",
 		"Maximum number of gangs per a compute region; this option will be applied to all gang loops in the program.");
@@ -383,6 +393,9 @@ public class ACC2GPUDriver extends Driver
 		options.add(options.TRANSFORM, "shrdArryCachingOnConst",
 		"Cache R/O shared array variables onto GPU constant memory");
 
+		options.add(options.TRANSFORM, "disableDefaultCachingOpts",
+		"Disable default caching optimizations so that they are applied only if explicitly requested");
+
     options.add(options.TRANSFORM, "loopUnrollFactor", "N",
             "Unroll loops inside OpenACC compute regions\n" +
                     "        N Specifies the unroll factor");
@@ -415,6 +428,7 @@ public class ACC2GPUDriver extends Driver
 		boolean	globalGMallocOpt = false;
 		boolean implicitMemTrOptSet = false;
 		boolean implicitMallocOptSet = false;
+		boolean disableDefaultCachingOpts = false;
 		
 		String value = getOptionValue("omp2acc");
 		if( value != null ) {
@@ -491,10 +505,15 @@ public class ACC2GPUDriver extends Driver
 		if( value == null ) {
 			setOptionValue("showInternalAnnotations", "1");
 		}
-		/////////////////////////////////////////////////////////////
-		//If no caching optimization is specified, default options //
-		//are enabled.                                             //
-		/////////////////////////////////////////////////////////////
+
+		if(getOptionValue("disableDefaultCachingOpts") != null)
+		{
+			disableDefaultCachingOpts = true;
+		}
+		///////////////////////////////////////////////////////////////
+		//If no caching optimization is specified, default options   //
+		//are enabled unless disableDefaultCachingOpts is specified. //
+		///////////////////////////////////////////////////////////////
 		boolean cachingOptFound = false;
 		for( String tOpt : cachingOpts ) {
 			value = getOptionValue(tOpt);
@@ -503,7 +522,7 @@ public class ACC2GPUDriver extends Driver
 				break;
 			}
 		}
-		if( !cachingOptFound ) {
+		if( !cachingOptFound && !disableDefaultCachingOpts ) {
 			setOptionValue("shrdArryElmtCachingOnReg", "1");
 			setOptionValue("shrdSclrCachingOnReg", "1");
 			setOptionValue("shrdSclrCachingOnSM", "1");

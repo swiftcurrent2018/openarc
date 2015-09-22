@@ -11,17 +11,27 @@
 #endif
 
 #ifndef _N_
-#define _N_ 512
+#define _N_ 2048
+#endif
+
+#ifndef _UNROLL_FAC_
+#define _UNROLL_FAC_ 16
+#pragma openarc #define _UNROLL_FAC_ 16
 #endif
 
 #ifndef VERIFICATION
 #define VERIFICATION 1
 #endif
 
+#define N _N_
+#define M _N_
+#define P _N_
 
-int N = _N_;
-int M = _N_;
-int P = _N_;
+#ifdef _OPENARC_
+#pragma openarc #define N _N_
+#pragma openarc #define M _N_
+#pragma openarc #define P _N_
+#endif
 
 double my_timer ()
 {
@@ -41,14 +51,12 @@ MatrixMultiplication_openacc(float * a, float * b, float * c)
 #ifdef _OPENACCM
   acc_init(acc_device_default);
 #endif
-#pragma acc data copyout(a[0:(M*N)]), copyin(b[0:(M*P)],c[0:(P*N)])
-  {
-#pragma acc kernels loop independent gang
+#pragma acc kernels loop independent gang worker collapse(2) copyout(a[0:(M*N)]), copyin(b[0:(M*P)],c[0:(P*N)])
     for (i=0; i<M; i++){
-#pragma acc loop worker
       for (j=0; j<N; j++)
         {
 	  float sum = 0.0 ;
+#pragma openarc transform unroll(_UNROLL_FAC_)
 #pragma acc loop seq
 	  for (k=0; k<P; k++) {
 	    sum += b[i*P+k]*c[k*N+j] ;
@@ -56,7 +64,6 @@ MatrixMultiplication_openacc(float * a, float * b, float * c)
 	  a[i*N+j] = sum ;
         }
     }
-  }
 #ifdef _OPENACCM
   acc_shutdown(acc_device_default);
 #endif
@@ -118,10 +125,12 @@ int main()
     c_CPU[i] = (float) 1.0F;
   }
 
+#if VERIFICATION == 1
   elapsed_time = my_timer();
   MatrixMultiplication_openmp(a_CPU,b_CPU,c_CPU);
   elapsed_time = my_timer() - elapsed_time;
   printf("CPU Elapsed time = %lf sec\n", elapsed_time);
+#endif
   elapsed_time = my_timer();
   MatrixMultiplication_openacc(a,b,c);
   elapsed_time = my_timer() - elapsed_time;

@@ -14,8 +14,9 @@ CSRCS = matmul.c
 # Set macros used for the input program #
 #########################################
 _N_ ?= 512
-DEFSET_CPU = -D_N_=$(_N_)
-DEFSET_ACC = -D_N_=$(_N_)
+BLOCK_SIZE ?= 8
+DEFSET_CPU = -D_N_=$(_N_) -DBLOCK_SIZE=$(BLOCK_SIZE)
+DEFSET_ACC = -D_N_=$(_N_) -DBLOCK_SIZE=$(BLOCK_SIZE)
 
 ##########################################################
 # Makefile options that the user can overwrite           #
@@ -45,11 +46,12 @@ DEFSET_ACC = -D_N_=$(_N_)
 ##########################################################
 OMP ?= 0
 MODE ?= normal
-#AOCL_BOARD ?= p385_hpc_d5
-AOCL_BOARD ?= p385_hpc_a7
+AOCL_BOARD ?= p385_hpc_d5
+#AOCL_BOARD ?= p385_hpc_a7
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
-AOCL_FLAGS ?= -v -c --report
+#AOCL_FLAGS ?= -v -c --report
+AOCL_FLAGS ?= -v --report
 #AOCL_FLAGS ?= --report
 
 #########################################################

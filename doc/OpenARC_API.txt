@@ -148,8 +148,14 @@ use_device( condition )
 ***************************************************************
 ** List of OpenACC constructs added as experimental features **
 ***************************************************************
-#pragma acc barrier //replaced with device-specific local synchronization call 
-					//(e.g., in CUDA, "__syncthreads()").
+#pragma acc barrier [( mem-fence-flag )] //replaced with device-specific local synchronization call. 
+					                     //(e.g., in CUDA, "__syncthreads()")
+					                     //(e.g., in OpenCL, "barrier(CLK_LOCAL_MEM_FENCE|CLK_GLOBAL_MEM_FENCE)")
+										 //If no argument is passed, both global and local 
+										 //memory fences are enforced.
+where mem-fence-flag is one of the following:
+acc_mem_fence_local
+acc_mem_fence_global
 
 
 *********************************

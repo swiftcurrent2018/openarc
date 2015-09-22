@@ -71,6 +71,7 @@ public class ARCAnnotation extends PragmaAnnotation
  *     ftregion
  *     ftcond(condition)
  *     ftdata(list)
+ *     ftkind(list)
  *     num_faults(scalar-integer-expression)
  *     num_ftbits(scalar-integer-expression)
  *     repeat(scalar-integer-expression)
@@ -86,6 +87,7 @@ public class ARCAnnotation extends PragmaAnnotation
  * <p>     
  * where clause is one of the following
  *     ftdata(list)
+ *     ftkind(list)
  *     ftthread(scalar-integer-expression)
  * 
  * #pragma openarc profile region label(name) [clause[[,] clause]...]
@@ -145,7 +147,7 @@ public class ARCAnnotation extends PragmaAnnotation
 		"procname", "kernelid", "unroll",
 		"noregister", "noshared", "notexture", "enclosingloops",
 		"multisrccg", "multisrcgc", "conditionalsrc", "permute", 
-		"ftdata", "mode", "event", 
+		"ftdata", "ftkind", "mode", "event", 
 		"transpose", "redim", "expand", "redim_transpose", "expand_transpose",
 		"transpose_expand", "num_simd_work_items", "num_compute_units"));
 
@@ -160,7 +162,7 @@ public class ARCAnnotation extends PragmaAnnotation
 					"transform", "transpose", "redim", "expand", "redim_transpose", "expand_transpose",
 					"transpose_expand",
 					"profile", "region", "measure", "track", "if", "resilience", 
-					"ftregion", "ftinject", "ftcond", "ftthread", "ftdata", "num_faults", 
+					"ftregion", "ftinject", "ftcond", "ftthread", "ftdata", "ftkind", "num_faults", 
 					"num_ftbits", "repeat", "label", "mode", "event", "induction", "verbosity"));
 	
 	// List of OpenARC directives.
@@ -214,11 +216,11 @@ public class ARCAnnotation extends PragmaAnnotation
 	
 	// Resilience clauses 
 	private static final Set<String> resilienceClauses = new HashSet(Arrays.asList("ftregion", "ftcond",
-			"ftdata", "num_faults", "num_fbits", "repeat", "ftthread" ));
+			"ftdata", "ftkind", "num_faults", "num_fbits", "repeat", "ftthread" ));
 	
 	// ftregion clauses 
 	private static final Set<String> ftregionClauses = new HashSet(Arrays.asList(
-			"ftdata", "ftthread" ));
+			"ftdata", "ftkind", "ftthread" ));
 	
 	// profile clauses 
 	private static final Set<String> profileClauses = new HashSet(Arrays.asList(

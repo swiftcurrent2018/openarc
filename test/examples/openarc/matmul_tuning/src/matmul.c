@@ -17,6 +17,14 @@
 #define _N_ 512
 #endif
 
+#ifndef HOST_MEM_ALIGNMENT
+#define HOST_MEM_ALIGNMENT 0
+#endif
+
+#if HOST_MEM_ALIGNMENT == 1
+#define AOCL_ALIGNMENT 64
+#endif
+
 
 int N = _N_;
 int M = N;
@@ -93,12 +101,25 @@ MatrixMultiplication_openmp(float * restrict a,float * restrict b, float * restr
 int main()
 {
   float *a, *b, *c;
+#if HOST_MEM_ALIGNMENT == 1
+  void *p;
+#endif
   int i;
   double elapsed_time;
 
-  a = (float *) malloc(M*N*4);
-  b = (float *) malloc(M*P*4);
-  c = (float *) malloc(P*N*4);
+#if HOST_MEM_ALIGNMENT == 1
+  posix_memalign(&p, AOCL_ALIGNMENT, N*N*sizeof(float));
+  a = (float *)p;
+  posix_memalign(&p, AOCL_ALIGNMENT, N*N*sizeof(float));
+  b = (float *)p;
+  posix_memalign(&p, AOCL_ALIGNMENT, N*N*sizeof(float));
+  c = (float *)p;
+#else
+  a = (float *) malloc(M*N*sizeof(float));
+  b = (float *) malloc(M*P*sizeof(float));
+  c = (float *) malloc(P*N*sizeof(float));
+#endif
+
 
   for (i = 0; i <  M*N; i++) {
     a[i] = (float) 0.0;

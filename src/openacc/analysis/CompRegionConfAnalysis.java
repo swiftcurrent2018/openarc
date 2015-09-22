@@ -42,6 +42,12 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 
 	@Override
 	public void start() {
+		if( OPENARC_ARCH == 1 ) {
+			//AMD GPUs
+			maxNumWorkers = 256;
+		} else if( OPENARC_ARCH == 2 ) {
+			maxNumWorkers = 1024;
+		}
 		String value = Driver.getOptionValue("defaultNumWorkers");
 		if( value != null ) {
 			defaultNumWorkers = Integer.valueOf(value).intValue();
@@ -374,7 +380,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 												+ ")\nEnclosing Procedure: " + pProc.getSymbolName() + "\nEnclosing ACCAnnotation: " + cAnnot + "\n", 0);
 										PrintTools.println("If the compute capability of the target CUDA device is 2.x, this should be OK; " +
 												"otherwise, user should reduce the total number of workers manually.", 0);
-									} else {
+									} else if( OPENARC_ARCH != 3) {
 										Tools.exit("[ERROR in CompRegionConfAnalsys()] total number of workers (" + tNumWorkers
 												+ ") in the following worker loop is bigger than the allowed limit (" + maxNumWorkers
 												+ ")\nEnclosing Procedure: " + pProc.getSymbolName() + "\nEnclosing ACCAnnotation: " 

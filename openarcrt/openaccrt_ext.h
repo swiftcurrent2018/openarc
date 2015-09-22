@@ -91,10 +91,10 @@ public:
     HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
     HI_error_t HI_synchronize();
     HI_error_t destroy();
-    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID);
+    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
-    HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID);
-    HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID);
+    HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
+    HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     HI_error_t HI_free( const void *hostPtr, int asyncID);
     HI_error_t HI_pin_host_memory(const void* hostPtr, size_t size);
     void HI_unpin_host_memory(const void* hostPtr);
@@ -106,15 +106,15 @@ public:
     HI_error_t HI_memcpy2D_asyncS(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async);
 
     void HI_tempFree( void** tempPtr, acc_device_t devType);
-    void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType);
+    void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
 	
 	// Experimental API to support unified memory //
-    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID);
+    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
     HI_error_t HI_free_unified( const void *hostPtr, int asyncID);
 
     static int HI_get_num_devices(acc_device_t devType);
-    void HI_malloc(void **devPtr, size_t size);
+    void HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     void HI_free(void *devPtr);
     HI_error_t createKernelArgMap();
     HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size);
@@ -184,10 +184,10 @@ public:
     HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
     HI_error_t HI_synchronize();
     HI_error_t destroy();
-    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID);
+    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
-    HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID);
-    HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID);
+    HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
+    HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     HI_error_t HI_free( const void *hostPtr, int asyncID);
     HI_error_t HI_pin_host_memory(const void* hostPtr, size_t size);
     void HI_unpin_host_memory(const void* hostPtr);
@@ -198,15 +198,15 @@ public:
     HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async);
 
     void HI_tempFree( void** tempPtr, acc_device_t devType);
-    void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType);
+    void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
 	
 	// Experimental API to support unified memory //
-    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID);
+    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
     HI_error_t HI_free_unified( const void *hostPtr, int asyncID);
 
     static int HI_get_num_devices(acc_device_t devType);
-    void HI_malloc(void **devPtr, size_t size);
+    void HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     void HI_free(void *devPtr);
     HI_error_t createKernelArgMap();
 

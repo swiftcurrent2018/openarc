@@ -78,6 +78,8 @@ public class LoopUnrollTransformation extends TransformPass {
         if(loopAnnots == null || seqAnnots != null) {
         	LoopInfo forLoopInfo = new LoopInfo(f);
         	Expression index = forLoopInfo.getLoopIndex();
+        	Expression lb = forLoopInfo.getLoopLB();
+        	Expression ub = forLoopInfo.getLoopUB();
         	Statement loopBody = f.getBody().clone();
         	//Perform unrolling only if the increment is 1
         	if(forLoopInfo.getLoopIncrement().toString().equals("1")) {
@@ -98,8 +100,19 @@ public class LoopUnrollTransformation extends TransformPass {
         		}
 
         		if(factor > 1) {
-        			//[FIXME] below transformation works only if unrolling factor evenly divides into 
-        			//the number of iterations.
+        			Expression itrSize = Symbolic.simplify(Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1)));
+					if( itrSize instanceof IntegerLiteral ) {
+						long nItr = ((IntegerLiteral)itrSize).getValue();
+						if( factor > nItr ) {
+							//Skip the unrolling.
+							PrintTools.println("[WARNING in LoopUnrollingTransformation] unrolling factor (" + factor + 
+									") is bigger than the number of iterations (" + nItr + "); "
+        						+ "the following unroll clause will be ignored.\n"
+        						+ "OpenARC annotation: " + arcAnnots + AnalysisTools.getEnclosingAnnotationContext(arcAnnots), 0);
+							continue;
+							
+						}
+					}
         			for(int i=1; i< factor; i++) {
         				Statement newBody = loopBody.clone();
         				BinaryExpression newIndex = new BinaryExpression(index.clone(), BinaryOperator.ADD,
@@ -111,10 +124,28 @@ public class LoopUnrollTransformation extends TransformPass {
         					AssignmentOperator.NORMAL, new BinaryExpression(index.clone(), BinaryOperator.ADD,
         							new IntegerLiteral(factor)) );
         			f.setStep(newStep);
-        			//Fixed by T.Hoshino Sep.12 2014  =================
-        			newFor.setInitialStatement(null);
-        			Statement parent = (Statement) f.getParent();
-        			((CompoundStatement)parent).addStatementAfter(f, newFor);
+        			boolean addTrailCode = true;
+        			boolean completeUnrolling = false;
+					if( itrSize instanceof IntegerLiteral ) {
+						long nItr = ((IntegerLiteral)itrSize).getValue();
+						if( nItr == factor ) {
+							completeUnrolling = true;
+							addTrailCode = false;
+						} else if( nItr%factor == 0 ) {
+							addTrailCode = false;
+						}
+					}
+					if( completeUnrolling ) {
+						PrintTools.println("complete unrolling!", 0);
+						loopBody = f.getBody();
+						f.setBody(null);
+						f.swapWith(loopBody);
+
+					} else if( addTrailCode ) {
+						newFor.setInitialStatement(null);
+						Statement parent = (Statement) f.getParent();
+						((CompoundStatement)parent).addStatementAfter(f, newFor);
+					}
         			//=================================================
         		}
         	}

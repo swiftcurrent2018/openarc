@@ -667,7 +667,7 @@ d_void* acc_malloc(size_t size) {
     HostConf_t * tconf = getHostConf();
     void *devPtr;
     if( tconf->isOnAccDevice ) {
-        tconf->device->HI_malloc(&devPtr, size);
+        tconf->device->HI_malloc(&devPtr, size, HI_MEM_READ_WRITE);
     } else {
         fprintf(stderr, "[ERROR in acc_malloc()] target accelerator device has not been set; exit!\n");
         exit(1);
@@ -761,7 +761,7 @@ void* acc_copyin(h_void* hostPtr, size_t size) {
 		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyin()\n");
 	}
 #endif
-	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE);
+	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 	HI_memcpy(devPtr, hostPtr, size, HI_MemcpyHostToDevice, 0);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
@@ -779,7 +779,7 @@ void* acc_pcopyin(h_void* hostPtr, size_t size) {
 	}
 #endif
 	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
-		HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE);
+		HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 		HI_memcpy(devPtr, hostPtr, size, HI_MemcpyHostToDevice, 0);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -801,7 +801,7 @@ void* acc_create(h_void* hostPtr, size_t size) {
 		fprintf(stderr, "[OPENARCRT-INFO] enter acc_create()\n");
 	}
 #endif
-	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE);
+	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_create()\n");
@@ -818,7 +818,7 @@ void* acc_pcreate(h_void* hostPtr, size_t size) {
 	}
 #endif
 	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
-		HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE);
+		HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
@@ -1072,7 +1072,7 @@ void* acc_copyin_unified(h_void* hostPtr, size_t size) {
 		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyin_unified()\n");
 	}
 #endif
-	HI_malloc1D_unified(hostPtr, &devPtr, size, DEFAULT_QUEUE);
+	HI_malloc1D_unified(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 	HI_memcpy_unified(devPtr, hostPtr, size, HI_MemcpyHostToDevice, 0);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
@@ -1096,7 +1096,7 @@ void* acc_pcopyin_unified(h_void* hostPtr, size_t size) {
 	}
 #endif
 	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
-		HI_malloc1D_unified(hostPtr, &devPtr, size, DEFAULT_QUEUE);
+		HI_malloc1D_unified(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 		HI_memcpy_unified(devPtr, hostPtr, size, HI_MemcpyHostToDevice, 0);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -1122,7 +1122,7 @@ void* acc_create_unified(h_void* hostPtr, size_t size) {
 		fprintf(stderr, "[OPENARCRT-INFO] enter acc_create_unified()\n");
 	}
 #endif
-	HI_malloc1D_unified(hostPtr, &devPtr, size, DEFAULT_QUEUE);
+	HI_malloc1D_unified(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_create_unified()\n");
@@ -1144,7 +1144,7 @@ void* acc_pcreate_unified(h_void* hostPtr, size_t size) {
 	}
 #endif
 	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
-		HI_malloc1D_unified(hostPtr, &devPtr, size, DEFAULT_QUEUE);
+		HI_malloc1D_unified(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {

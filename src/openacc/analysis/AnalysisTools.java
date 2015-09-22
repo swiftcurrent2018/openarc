@@ -3201,7 +3201,7 @@ public abstract class AnalysisTools {
 	 * @param program input program
 	 */
 	public static void annotateUserDirectives(Program program, 
-			HashMap<String, HashMap<String, Object>> userDirectives) {
+			HashMap<String, HashMap<String, Object>> userDirectives, int tNumComputeUnits, int tNumSIMDWorkItems) {
 		boolean userDirectiveExists = false;
 		/* iterate to search for all Procedures */
 		List<Procedure> procedureList = IRTools.getProcedureList(program);
@@ -3233,6 +3233,19 @@ public abstract class AnalysisTools {
 					aInfo.put("procname", procName);
 					aInfo.put("kernelid", new IntegerLiteral(cnt));
 					String kernelName = procName + "_kernel" + cnt++;	
+					if( (tNumComputeUnits > 0) || (tNumSIMDWorkItems > 0) ) {
+						ARCAnnotation openclAnnot = at.getAnnotation(ARCAnnotation.class, "opencl");
+						if( openclAnnot == null ) {
+							openclAnnot = new ARCAnnotation("opencl", "_directive");
+							at.annotate(openclAnnot);
+						}
+						if( !openclAnnot.containsKey("num_compute_units") && (tNumComputeUnits > 0) ) {
+							openclAnnot.put("num_compute_units", new IntegerLiteral(tNumComputeUnits));
+						}
+						if( !openclAnnot.containsKey("num_simd_work_items") && (tNumSIMDWorkItems > 0) ) {
+							openclAnnot.put("num_simd_work_items", new IntegerLiteral(tNumSIMDWorkItems));
+						}
+					}
 					if( !userDirectives.isEmpty() ) {
 						userDirectiveExists = true;
 						Set<String> kernelSet = userDirectives.keySet();

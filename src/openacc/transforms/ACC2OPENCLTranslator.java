@@ -905,6 +905,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		Set<Symbol> constantSet = new HashSet<Symbol>();
 		Set<Symbol> textureSet = new HashSet<Symbol>();
 		Set<Symbol> sharedROSet = new HashSet<Symbol>();
+		Set<Symbol> ROSymSet = new HashSet<Symbol>();
 		ARCAnnotation tCAnnot = at.getAnnotation(ARCAnnotation.class, "constant");
 		Set<SubArray> dataSet;
 		if( tCAnnot != null ) {
@@ -935,6 +936,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		if( tCAnnot != null ) {
 			dataSet = (Set<SubArray>)tCAnnot.get("noshared");
 			sharedROSet.removeAll(AnalysisTools.subarraysToSymbols(dataSet, IRSymbolOnly));
+		}
+		ACCAnnotation ROAnnot = at.getAnnotation(ACCAnnotation.class, "accreadonly");
+		if( ROAnnot != null ) {
+			ROSymSet.addAll((Set<Symbol>)ROAnnot.get("accreadonly"));
 		}
 		//Check if condition
 		Expression ifCond = null;
@@ -1128,8 +1133,12 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								}*/
 								continue;
 							} else {
+								boolean ROSymbol = false;
+								if( ROSymSet.contains(IRSym) ) {
+									ROSymbol = true;
+								}
 								genOpenCLCodesForDataClause(dAnnot, IRSym, varName, startList, lengthList, typeSpecs, ifCond, asyncID, dataClauseT, 
-										mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, isFirstData);
+										mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, isFirstData, ROSymbol);
 								isFirstData = false;
 							}
 						} else {
@@ -1537,7 +1546,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 	protected void genOpenCLCodesForDataClause(ACCAnnotation dAnnot, Symbol IRSym, Expression hostVar, List<Expression> startList, 
 			List<Expression> lengthList, List<Specifier> typeSpecs, Expression ifCondExp, Expression asyncExp, DataClauseType dataClauseT, 
 			MallocType mallocT, MemTrType memtrT, DataRegionType dRegionType, List<Statement> inStmts, List<Statement>outStmts,
-			Statement asyncW1Stmt, boolean isFirstData) {
+			Statement asyncW1Stmt, boolean isFirstData, boolean ROSymbol) {
 		Annotatable at = dAnnot.getAnnotatable();
 		SymbolTable targetSymbolTable = null;
 		Set<SymbolTable> targetSymbolTables = new HashSet<SymbolTable>();
@@ -2003,6 +2012,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						(Identifier)gpuVar.clone())));
 				arg_list.add(cloned_bytes.clone());
 				arg_list.add(asyncID.clone());
+				if( ROSymbol ) {
+					arg_list.add(new NameID("HI_MEM_READ_ONLY"));
+				} else {
+					arg_list.add(new NameID("HI_MEM_READ_WRITE"));
+				}
 				malloc_call.setArguments(arg_list);
 				malloc_stmt = new ExpressionStatement(malloc_call);
 				preambleList.add(malloc_stmt);
@@ -2687,6 +2701,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		Set<Symbol> constantSet = new HashSet<Symbol>();
 		Set<Symbol> textureSet = new HashSet<Symbol>();
 		Set<Symbol> sharedROSet = new HashSet<Symbol>();
+		Set<Symbol> ROSymSet = new HashSet<Symbol>();
 		ARCAnnotation tCAnnot = at.getAnnotation(ARCAnnotation.class, "constant");
 		Set<SubArray> dataSet;
 		if( tCAnnot != null ) {
@@ -2717,6 +2732,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		if( tCAnnot != null ) {
 			dataSet = (Set<SubArray>)tCAnnot.get("noshared");
 			sharedROSet.removeAll(AnalysisTools.subarraysToSymbols(dataSet, IRSymbolOnly));
+		}
+		ACCAnnotation ROAnnot = at.getAnnotation(ACCAnnotation.class, "accreadonly");
+		if( ROAnnot != null ) {
+			ROSymSet.addAll((Set<Symbol>)ROAnnot.get("accreadonly"));
 		}
 		//Check if condition
 		Expression ifCond = null;
@@ -2805,8 +2824,12 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							//               - If mainTrUnt does not have, error. Otherwise, create extern copy.
 							//           - If host variable is local, error.
 							//Step3: create and insert memory transfer code.
+							boolean ROSymbol = false;
+							if( ROSymSet.contains(IRSym) ) {
+								ROSymbol = true;
+							}
 							genOpenCLCodesForDataClause(uAnnot, IRSym, varName, startList, lengthList, typeSpecs, 
-									ifCond, asyncID, dataClauseT, mallocT, memtrT, regionT, inStmts, outStmts, null, isFirstData);
+									ifCond, asyncID, dataClauseT, mallocT, memtrT, regionT, inStmts, outStmts, null, isFirstData, ROSymbol);
 							isFirstData = false;
 						} else {
 							break;
@@ -3685,11 +3708,18 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		//////////////////////////////////////////////////////////////////////////
 		// Insert barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE) calls for //
 		// each #pragam acc barrier directive.                                  //
+		// CLK_LOCAL_MEM_FENCE - The barrier function will either flush any     //
+		//   variables stored in local memory or queue a memory fence to ensure //
+		//   correct ordering of memory operations to local memory.             //
+		// CLK_GLOBAL_MEM_FENCE - The barrier function will queue a memory fence//
+		//   to ensure correct ordering of memory operations to global memory.  //
+		//   This can be useful when work-items, for example, write to buffer or//
+		//   image objects and then want to read the updated data.              //
 		//////////////////////////////////////////////////////////////////////////
 		List<ACCAnnotation> barrierAnnots = AnalysisTools.ipCollectPragmas(
 				region, ACCAnnotation.class, "barrier", null);
 		if( barrierAnnots != null ) {
-			FunctionCall syncCall = new FunctionCall(new NameID("barrier"));
+/*			FunctionCall syncCall = new FunctionCall(new NameID("barrier"));
 			syncCall.addArgument(new BinaryExpression(new NameID("CLK_LOCAL_MEM_FENCE"),
 					BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("CLK_GLOBAL_MEM_FENCE")));
 			ExpressionStatement syncCallStmt = new ExpressionStatement(syncCall);
@@ -3698,6 +3728,23 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				Statement syncCStmt = syncCallStmt.clone();
 				syncCStmt.annotate(bAnnot);
 				bStmt.swapWith(syncCStmt);
+			}*/
+			for( ACCAnnotation bAnnot : barrierAnnots ) {
+				Statement bStmt = (Statement)bAnnot.getAnnotatable();
+				FunctionCall syncCall = new FunctionCall(new NameID("barrier"));
+				String bArg = bAnnot.get("barrier");
+				if( bArg.equals("acc_mem_fence_local") ) {
+					syncCall.addArgument(new NameID("CLK_LOCAL_MEM_FENCE"));
+
+				} else if( bArg.equals("acc_mem_fence_global") ) {
+					syncCall.addArgument(new NameID("CLK_GLOBAL_MEM_FENCE"));
+				} else {
+					syncCall.addArgument(new BinaryExpression(new NameID("CLK_LOCAL_MEM_FENCE"),
+							BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("CLK_GLOBAL_MEM_FENCE")));
+				}
+				ExpressionStatement syncCallStmt = new ExpressionStatement(syncCall);
+				syncCallStmt.annotate(bAnnot);
+				bStmt.swapWith(syncCallStmt);
 			}
 		}
 		
@@ -5182,6 +5229,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                 } else {
                     tItrSize = num_gangs;
                 }
+                iterspace = Symbolic.simplify(iterspace);
+                tItrSize = Symbolic.simplify(tItrSize);
                 if( tItrSize.equals(iterspace) ) {
                     continue; //we don't need to unroll this loop.
                 } else if( (tItrSize instanceof IntegerLiteral) && (iterspace instanceof IntegerLiteral) ) {

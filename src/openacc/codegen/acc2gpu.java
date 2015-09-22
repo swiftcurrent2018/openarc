@@ -57,6 +57,8 @@ public class acc2gpu extends CodeGenPass
 	private boolean IRSymbolOnly = true;
 	private Map<String, String> env = null;
 	private int unrollFactor = 1;
+	private int tNumComputeUnits = 0;
+	private int tNumSIMDWorkItems = 0;
 	private int OPENARC_ARCH = 0;
 	
 	public acc2gpu(Program program, HashMap<String, HashMap<String, Object>> uDirectives,
@@ -251,6 +253,18 @@ public class acc2gpu extends CodeGenPass
 		value = Driver.getOptionValue("assumeNoAliasingAmongKernelArgs");
 		if( value != null ) {
 			assumeNoAliasingAmongKernelArgs = true;
+		}
+
+		if( OPENARC_ARCH == 3 ) {
+			value = Driver.getOptionValue("defaultNumComputeUnits");
+			if( value != null ) {
+				tNumComputeUnits = Integer.valueOf(value).intValue();
+			}
+
+			value = Driver.getOptionValue("defaultNumSIMDWorkItems");
+			if( value != null ) {
+				tNumSIMDWorkItems = Integer.valueOf(value).intValue();
+			}
 		}
 		
 /*		value = Driver.getOptionValue("tinline");
@@ -474,7 +488,7 @@ public class acc2gpu extends CodeGenPass
 		// Annotate each kernel region with parent procedure name   //
 		// and kernel id, and apply user directives if existing.    //
 		//////////////////////////////////////////////////////////////
-		AnalysisTools.annotateUserDirectives(program, userDirectives);
+		AnalysisTools.annotateUserDirectives(program, userDirectives, tNumComputeUnits, tNumSIMDWorkItems);
 		
 		/////////////////////////////////////////////////////
 		// Analyze locality of shared variables to exploit //
@@ -949,6 +963,10 @@ public class acc2gpu extends CodeGenPass
 			gOptionSet2.add("defaultNumWorkers");
 			str.append("maxNumGangs=N\n");
 			gOptionSet2.add("maxNumGangs");
+			str.append("defaultNumComputeUnits=N\n");
+			gOptionSet2.add("defaultNumComputeUnits");
+			str.append("defaultNumSIMDWorkItems=N\n");
+			gOptionSet2.add("defaultNumSIMDWorkItems");
 			if( ReductionPatternExists ) {
 				str.append("localRedVarConf=1 (use 0 if shared memory overflows)\n");
 				gOptionSet2.add("localRedVarConf");
@@ -985,7 +1003,11 @@ public class acc2gpu extends CodeGenPass
 			str.append("#########################################\n");
 			str.append("#pragma optionType4\n");
 			str.append("assumeNonZeroTripLoops\n");
+			str.append("assumeNoAliasingAmongKernelArgs\n");
+			str.append("skipKernelLoopBoundChecking\n");
 			gOptionSet4.add("assumeNonZeroTripLoops");
+			gOptionSet4.add("assumeNoAliasingAmongKernelArgs");
+			gOptionSet4.add("skipKernelLoopBoundChecking");
 			gOptionMap.put("optionType4", gOptionSet4);
 			str.append("\n");
 			str.append("##############################################################\n");
@@ -1077,7 +1099,8 @@ public class acc2gpu extends CodeGenPass
 	// Always-beneficial global options, but user's approval is // 
 	// required.                                                //
 	//////////////////////////////////////////////////////////////
-	static private String[] gOptions4 = {"assumeNonZeroTripLoops"};
+	static private String[] gOptions4 = {"assumeNonZeroTripLoops", "assumeNoAliasingAmongKernelArgs",
+		"skipKernelLoopBoundChecking"};
 	
 	///////////////////////////////////////////////////////////////
 	// May-beneficial global options, which interact with other  //
@@ -1141,7 +1164,9 @@ public class acc2gpu extends CodeGenPass
 	static private String[] defaultGOptions3 = { "useUnrollingOnReduction"};
 	
 	static private String[] defaultNumWorkers = {"32", "64", "128", "256", "384"};
-	static private String[] defaultNumGangs = {};
+	static private String[] defaultNumGangs = {"NONE"};
+	static private String[] defaultNumComputeUnits = {"NONE"};
+	static private String[] defaultNumSIMDWorkItems = {"NONE"};
 	
 	/**
 	 * Program-level tuning configuration output generator.
@@ -1199,11 +1224,15 @@ public class acc2gpu extends CodeGenPass
 		String AccReductionValue = "1";
 		Set<String> numWorkersSet = null;
 		Set<String> maxNumGangsSet = null;
+		Set<String> numComputeUnitsSet = null;
+		Set<String> numSIMDWorkItemsSet = null;
 		if( tuningConfigs == null || tuningConfigs.isEmpty() ) {
 			defaultGOption = new HashSet<String>(Arrays.asList(defaultGOptions1));
 			excludedGOption = new HashSet<String>();
 			numWorkersSet = new HashSet<String>(Arrays.asList(defaultNumWorkers));
 			maxNumGangsSet = new HashSet<String>(Arrays.asList(defaultNumGangs));
+			numComputeUnitsSet = new HashSet<String>(Arrays.asList(defaultNumComputeUnits));
+			numSIMDWorkItemsSet = new HashSet<String>(Arrays.asList(defaultNumSIMDWorkItems));
 		} else {
 			defaultGOption = (HashSet<String>)tuningConfigs.get("defaultGOptionSet");
 			if( defaultGOption == null ) {
@@ -1251,6 +1280,26 @@ public class acc2gpu extends CodeGenPass
 			maxNumGangsSet = AnalysisTools.expressionsToStringSet((Set<Expression>)tuningConfigs.get("maxNumGangsSet"));
 			if( (maxNumGangsSet == null) || maxNumGangsSet.isEmpty() ) {
 				maxNumGangsSet = new HashSet<String>(Arrays.asList(defaultNumGangs));
+			}
+			numComputeUnitsSet = AnalysisTools.expressionsToStringSet((Set<Expression>)tuningConfigs.get("defaultNumComputeUnits"));
+			if( (numComputeUnitsSet == null) || numComputeUnitsSet.isEmpty() ) {
+				numComputeUnitsSet = new HashSet<String>(Arrays.asList(defaultNumComputeUnits));
+			} else if( !excludedGOption.contains("defaultNumComputeUnits") ) {
+				//////////////////////////////////////////////////////////////////////
+				// If defaultNumComputeUnits option is used, defaultNumComputeUnits //
+				// option is always included.                                       //
+				//////////////////////////////////////////////////////////////////////
+				defaultGOption.add("defaultNumComputeUnits");
+			}
+			numSIMDWorkItemsSet = AnalysisTools.expressionsToStringSet((Set<Expression>)tuningConfigs.get("defaultNumSIMDWorkItems"));
+			if( (numSIMDWorkItemsSet == null) || numSIMDWorkItemsSet.isEmpty() ) {
+				numSIMDWorkItemsSet = new HashSet<String>(Arrays.asList(defaultNumSIMDWorkItems));
+			} else if( !excludedGOption.contains("defaultNumSIMDWorkItems") ) {
+				////////////////////////////////////////////////////////////////////////
+				// If defaultNumSIMDWorkItems option is used, defaultNumSIMDWorkItems //
+				// option is always included.                                         //
+				////////////////////////////////////////////////////////////////////////
+				defaultGOption.add("defaultNumSIMDWorkItems");
 			}
 			Expression  tExp = ((Expression)tuningConfigs.get("gpuMemTrOptLevel"));
 			if( tExp != null ) {
@@ -1335,162 +1384,150 @@ public class acc2gpu extends CodeGenPass
 																								for( boolean gOpt23 : gOptMap.get("shrdArryCachingOnConst") ) {
 																									for( boolean gOpt24 : gOptMap.get("localRedVarConf") ) {
 																										for( boolean gOpt25 : gOptMap.get("MemTrOptOnLoops") ) {
-																											StringBuilder str1 = new StringBuilder(256);
-																											if( addSafetyCheckingCode ) {
-																												str1.append("addSafetyCheckingCode\n");
-																											}
-																											if( gOpt1 ) {
-																												str1.append("assumeNonZeroTripLoops\n");
-																											}
-																											if( gOpt2 ) {
-																												str1.append("AccPrivatization="+AccPrivatizationValue+"\n");
-																											}
-																											if( gOpt3 ) {
-																												str1.append("AccReduction="+AccReductionValue+"\n");
-																											}
-																											if( gOpt4 ) {
-																												str1.append("gpuMallocOptLevel="+mallocOptValue+"\n");
-																											}
-																											if( gOpt5 ) {
-																												str1.append("gpuMemTrOptLevel="+memTrOptValue+"\n");
-																											}
-																											if( gOpt6 ) {
-																												str1.append("useMatrixTranspose\n");
-																											}
-																											if( gOpt7 ) {
-																												str1.append("useMallocPitch\n");
-																											}
-																											if( gOpt8 ) {
-																												str1.append("useLoopCollapse\n");
-																											}
-																											if( gOpt9 ) {
-																												str1.append("useParallelLoopSwap\n");
-																											}
-																											if( gOpt10 ) {
-																												str1.append("useUnrollingOnReduction\n");
-																											}
-																											if( gOpt11 ) {
-																												str1.append("shrdSclrCachingOnReg\n");
-																											}
-																											if( gOpt12 ) {
-																												str1.append("shrdArryElmtCachingOnReg\n");
-																											}
-																											if( gOpt13 ) {
-																												str1.append("shrdSclrCachingOnSM\n");
-																											}
-																											if( gOpt14 ) {
-																												str1.append("prvtArryCachingOnSM\n");
-																											}
-																											if( gOpt15 ) {
-																												str1.append("shrdArryCachingOnTM\n");
-																											}
-																											//if( gOpt18 ) {
-																											//	str1.append("disableCritical2ReductionConv\n");
-																											//}
-																											if( gOpt19 ) {
-																												str1.append("UEPRemovalOptLevel="+UEPRemovalOptValue+"\n");
-																											}
-																											if( gOpt20 ) {
-																												str1.append("forceSyncKernelCall\n");
-																											}
-																											if( gOpt21 ) {
-																												str1.append("doNotRemoveUnusedSymbols\n");
-																											}
-																											if( gOpt22 ) {
-																												str1.append("shrdSclrCachingOnConst\n");
-																											}
-																											if( gOpt23 ) {
-																												str1.append("shrdArryCachingOnConst\n");
-																											}
-																											if( gOpt24 ) {
-																												str1.append("localRedVarConf=1\n");
-																											} else {
-																												str1.append("localRedVarConf=0\n");
-																											}
-																											if( gOpt25 ) {
-																												str1.append("MemTrOptOnLoops\n");
-																											}
-																											String confString = str1.toString();
-																											if( gOpt16 ) {
-																												for( String tbSz : numWorkersSet ) {
-																													str1 = new StringBuilder(256);
-																													str1.append(confString);
-																													str1.append("defaultNumWorkers="+tbSz+"\n");
-																													String confString2 = str1.toString();
-																													if( gOpt17 ) {
-																														for( String nBlocks : maxNumGangsSet ) {
-																															str1 = new StringBuilder(256);
-																															str1.append(confString2);
-																															str1.append("maxNumGangs="+nBlocks+"\n");
-																															String confString3 = str1.toString();
-																															if( !confSet.contains(confString3) ) {
-																																confSet.add(confString3);
-																																String confFile = "confFile"+confID+".txt";
-																																try {
-																																	BufferedWriter out1 = 
-																																		new BufferedWriter(new FileWriter(dirPrefix+confFile));
-																																	out1.write(confString3);
-																																	out1.close();
-																																} catch( Exception e ) {
-																																	PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
-																																			"tuning parameters can not be saved.", 0);
+																											for( boolean gOpt26 : gOptMap.get("assumeNoAliasingAmongKernelArgs") ) {
+																												for( boolean gOpt27 : gOptMap.get("skipKernelLoopBoundChecking") ) {
+																													for( boolean gOpt28 : gOptMap.get("defaultNumComputeUnits") ) {
+																														for( boolean gOpt29 : gOptMap.get("defaultNumSIMDWorkItems") ) {
+																															StringBuilder str1 = new StringBuilder(256);
+																															if( addSafetyCheckingCode ) {
+																																str1.append("addSafetyCheckingCode\n");
+																															}
+																															if( gOpt1 ) {
+																																str1.append("assumeNonZeroTripLoops\n");
+																															}
+																															if( gOpt26 ) {
+																																str1.append("assumeNoAliasingAmongKernelArgs\n");
+																															}
+																															if( gOpt27 ) {
+																																str1.append("skipKernelLoopBoundChecking\n");
+																															}
+																															if( gOpt2 ) {
+																																str1.append("AccPrivatization="+AccPrivatizationValue+"\n");
+																															}
+																															if( gOpt3 ) {
+																																str1.append("AccReduction="+AccReductionValue+"\n");
+																															}
+																															if( gOpt4 ) {
+																																str1.append("gpuMallocOptLevel="+mallocOptValue+"\n");
+																															}
+																															if( gOpt5 ) {
+																																str1.append("gpuMemTrOptLevel="+memTrOptValue+"\n");
+																															}
+																															if( gOpt6 ) {
+																																str1.append("useMatrixTranspose\n");
+																															}
+																															if( gOpt7 ) {
+																																str1.append("useMallocPitch\n");
+																															}
+																															if( gOpt8 ) {
+																																str1.append("useLoopCollapse\n");
+																															}
+																															if( gOpt9 ) {
+																																str1.append("useParallelLoopSwap\n");
+																															}
+																															if( gOpt10 ) {
+																																str1.append("useUnrollingOnReduction\n");
+																															}
+																															if( gOpt11 ) {
+																																str1.append("shrdSclrCachingOnReg\n");
+																															}
+																															if( gOpt12 ) {
+																																str1.append("shrdArryElmtCachingOnReg\n");
+																															}
+																															if( gOpt13 ) {
+																																str1.append("shrdSclrCachingOnSM\n");
+																															}
+																															if( gOpt14 ) {
+																																str1.append("prvtArryCachingOnSM\n");
+																															}
+																															if( gOpt15 ) {
+																																str1.append("shrdArryCachingOnTM\n");
+																															}
+																															//if( gOpt18 ) {
+																															//	str1.append("disableCritical2ReductionConv\n");
+																															//}
+																															if( gOpt19 ) {
+																																str1.append("UEPRemovalOptLevel="+UEPRemovalOptValue+"\n");
+																															}
+																															if( gOpt20 ) {
+																																str1.append("forceSyncKernelCall\n");
+																															}
+																															if( gOpt21 ) {
+																																str1.append("doNotRemoveUnusedSymbols\n");
+																															}
+																															if( gOpt22 ) {
+																																str1.append("shrdSclrCachingOnConst\n");
+																															}
+																															if( gOpt23 ) {
+																																str1.append("shrdArryCachingOnConst\n");
+																															}
+																															if( gOpt24 ) {
+																																str1.append("localRedVarConf=1\n");
+																															} else {
+																																str1.append("localRedVarConf=0\n");
+																															}
+																															if( gOpt25 ) {
+																																str1.append("MemTrOptOnLoops\n");
+																															}
+																															String confString = str1.toString();
+																															String confString2 = "";
+																															String confString3 = "";
+																															String confString4 = "";
+																															String confString5 = "";
+																															for( String tsS1 : numWorkersSet ) {
+																																confString2 = "";
+																																if( gOpt16 && !tsS1.equals("NONE") ) {
+																																	str1 = new StringBuilder(256);
+																																	str1.append("defaultNumWorkers="+tsS1+"\n");
+																																	confString2 = str1.toString();
 																																}
-																																confID++;
+																																for( String tsS2 : maxNumGangsSet ) {
+																																	confString3 = "";
+																																	if( gOpt17 && !tsS2.equals("NONE") ) {
+																																		str1 = new StringBuilder(256);
+																																		str1.append("maxNumGangs="+tsS2+"\n");
+																																		confString3 = str1.toString();
+																																	}
+																																	for( String tsS3 : numComputeUnitsSet ) {
+																																		confString4 = "";
+																																		if( gOpt28 && !tsS3.equals("NONE") ) {
+																																			str1 = new StringBuilder(256);
+																																			str1.append("defaultNumComputeUnits="+tsS3+"\n");
+																																			confString4 = str1.toString();
+																																		}
+																																		for( String tsS4 : numSIMDWorkItemsSet ) {
+																																			confString5 = "";
+																																			if( gOpt29 && !tsS4.equals("NONE") ) {
+																																				str1 = new StringBuilder(256);
+																																				str1.append("defaultNumSIMDWorkItems="+tsS4+"\n");
+																																				confString5 = str1.toString();
+																																			}
+																																			str1 = new StringBuilder(256);
+																																			str1.append(confString);
+																																			str1.append(confString2);
+																																			str1.append(confString3);
+																																			str1.append(confString4);
+																																			str1.append(confString5);
+																																			confString5 = str1.toString();
+																																			if( !confSet.contains(confString5) ) {
+																																				confSet.add(confString5);
+																																				String confFile = "confFile"+confID+".txt";
+																																				try {
+																																					BufferedWriter out1 = 
+																																							new BufferedWriter(new FileWriter(dirPrefix+confFile));
+																																					out1.write(confString5);
+																																					out1.close();
+																																				} catch( Exception e ) {
+																																					PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
+																																							"tuning parameters can not be saved.", 0);
+																																				}
+																																				confID++;
+																																			}
+																																		}
+																																	}
+																																}
 																															}
 																														}
-																													} else {
-																														if( !confSet.contains(confString2) ) {
-																															confSet.add(confString2);
-																															String confFile = "confFile"+confID+".txt";
-																															try {
-																																BufferedWriter out1 = 
-																																	new BufferedWriter(new FileWriter(dirPrefix+confFile));
-																																out1.write(confString2);
-																																out1.close();
-																															} catch( Exception e ) {
-																																PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
-																																		"tuning parameters can not be saved.", 0);
-																															}
-																															confID++;
-																														}
-																													}
-																												}
-																											} else {
-																												if( gOpt17 ) {
-																													for( String nBlocks : maxNumGangsSet ) {
-																														str1 = new StringBuilder(256);
-																														str1.append(confString);
-																														str1.append("maxNumGangs="+nBlocks+"\n");
-																														String confString3 = str1.toString();
-																														if( !confSet.contains(confString3) ) {
-																															confSet.add(confString3);
-																															String confFile = "confFile"+confID+".txt";
-																															try {
-																																BufferedWriter out1 = 
-																																	new BufferedWriter(new FileWriter(dirPrefix+confFile));
-																																out1.write(confString3);
-																																out1.close();
-																															} catch( Exception e ) {
-																																PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
-																																		"tuning parameters can not be saved.", 0);
-																															}
-																															confID++;
-																														}
-																													}
-																												} else {
-																													if( !confSet.contains(confString) ) {
-																														confSet.add(confString);
-																														String confFile = "confFile"+confID+".txt";
-																														try {
-																															BufferedWriter out1 = 
-																																new BufferedWriter(new FileWriter(dirPrefix+confFile));
-																															out1.write(confString);
-																															out1.close();
-																														} catch( Exception e ) {
-																															PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
-																																	"tuning parameters can not be saved.", 0);
-																														}
-																														confID++;
 																													}
 																												}
 																											}
@@ -1576,11 +1613,15 @@ public class acc2gpu extends CodeGenPass
 		String AccReductionValue = "1";
 		Set<String> numWorkersSet = null;
 		Set<String> maxNumGangsSet = null;
+		Set<String> numComputeUnitsSet = null;
+		Set<String> numSIMDWorkItemsSet = null;
 		if( tuningConfigs == null || tuningConfigs.isEmpty() ) {
 			defaultGOption = new HashSet<String>(Arrays.asList(defaultGOptions1));
 			excludedGOption = new HashSet<String>();
 			numWorkersSet = new HashSet<String>(Arrays.asList(defaultNumWorkers));
 			maxNumGangsSet = new HashSet<String>(Arrays.asList(defaultNumGangs));
+			numComputeUnitsSet = new HashSet<String>(Arrays.asList(defaultNumComputeUnits));
+			numSIMDWorkItemsSet = new HashSet<String>(Arrays.asList(defaultNumSIMDWorkItems));
 		} else {
 			defaultGOption = (HashSet<String>)tuningConfigs.get("defaultGOptionSet");
 			if( defaultGOption == null ) {
@@ -1632,6 +1673,26 @@ public class acc2gpu extends CodeGenPass
 			maxNumGangsSet = AnalysisTools.expressionsToStringSet((Set<Expression>)tuningConfigs.get("maxNumGangsSet"));
 			if( (maxNumGangsSet == null) || maxNumGangsSet.isEmpty() ) {
 				maxNumGangsSet = new HashSet<String>(Arrays.asList(defaultNumGangs));
+			}
+			numComputeUnitsSet = AnalysisTools.expressionsToStringSet((Set<Expression>)tuningConfigs.get("defaultNumComputeUnits"));
+			if( (numComputeUnitsSet == null) || numComputeUnitsSet.isEmpty() ) {
+				numComputeUnitsSet = new HashSet<String>(Arrays.asList(defaultNumComputeUnits));
+			} else if( !excludedGOption.contains("defaultNumComputeUnits") ) {
+				//////////////////////////////////////////////////////////////////////
+				// If defaultNumComputeUnits option is used, defaultNumComputeUnits //
+				// option is always included.                                       //
+				//////////////////////////////////////////////////////////////////////
+				defaultGOption.add("defaultNumComputeUnits");
+			}
+			numSIMDWorkItemsSet = AnalysisTools.expressionsToStringSet((Set<Expression>)tuningConfigs.get("defaultNumSIMDWorkItems"));
+			if( (numSIMDWorkItemsSet == null) || numSIMDWorkItemsSet.isEmpty() ) {
+				numSIMDWorkItemsSet = new HashSet<String>(Arrays.asList(defaultNumSIMDWorkItems));
+			} else if( !excludedGOption.contains("defaultNumSIMDWorkItems") ) {
+				////////////////////////////////////////////////////////////////////////
+				// If defaultNumSIMDWorkItems option is used, defaultNumSIMDWorkItems //
+				// option is always included.                                         //
+				////////////////////////////////////////////////////////////////////////
+				defaultGOption.add("defaultNumSIMDWorkItems");
 			}
 			Expression  tExp = ((Expression)tuningConfigs.get("gpuMemTrOptLevel"));
 			if( tExp != null ) {
@@ -1711,214 +1772,157 @@ public class acc2gpu extends CodeGenPass
 												for( boolean gOpt11 : gOptMap.get("defaultNumWorkers") ) {
 													for( boolean gOpt12 : gOptMap.get("maxNumGangs") ) {
 														//for( boolean gOpt18 : gOptMap.get("disableCritical2ReductionConv") ) {
-															for( boolean gOpt19 : gOptMap.get("UEPRemovalOptLevel") ) {
-																for( boolean gOpt20 : gOptMap.get("forceSyncKernelCall") ) {
-																	for( boolean gOpt21 : gOptMap.get("doNotRemoveUnusedSymbols") ) {
-																		for( boolean gOpt22 : gOptMap.get("localRedVarConf") ) {
-																			for( boolean gOpt23 : gOptMap.get("MemTrOptOnLoops") ) {
-																				StringBuilder str1 = new StringBuilder(256);
-																				if( addSafetyCheckingCode ) {
-																					str1.append("addSafetyCheckingCode\n");
-																				}
-																				if( gOpt1 ) {
-																					str1.append("assumeNonZeroTripLoops\n");
-																				}
-																				if( gOpt2 ) {
-																					str1.append("AccPrivatization="+AccPrivatizationValue+"\n");
-																				}
-																				if( gOpt3 ) {
-																					str1.append("AccReduction="+AccReductionValue+"\n");
-																				}
-																				if( gOpt4 ) {
-																					str1.append("gpuMallocOptLevel="+mallocOptValue+"\n");
-																				}
-																				if( gOpt5 ) {
-																					str1.append("gpuMemTrOptLevel="+memTrOptValue+"\n");
-																				}
-																				if( gOpt6 ) {
-																					str1.append("useMatrixTranspose\n");
-																				}
-																				if( gOpt7 ) {
-																					str1.append("useMallocPitch\n");
-																				}
-																				if( gOpt8 ) {
-																					str1.append("useLoopCollapse\n");
-																				}
-																				if( gOpt9 ) {
-																					str1.append("useParallelLoopSwap\n");
-																				}
-																				if( gOpt10 ) {
-																					str1.append("useUnrollingOnReduction\n");
-																				}
-																				//if( gOpt18 ) {
-																				//	str1.append("disableCritical2ReductionConv\n");
-																				//}
-																				if( gOpt19 ) {
-																					str1.append("UEPRemovalOptLevel="+UEPRemovalOptValue+"\n");
-																				}
-																				if( gOpt20 ) {
-																					str1.append("forceSyncKernelCall\n");
-																				}
-																				if( gOpt21 ) {
-																					str1.append("doNotRemoveUnusedSymbols\n");
-																				}
-																				if( gOpt22 ) {
-																					str1.append("localRedVarConf=1\n");
-																				} else {
-																					str1.append("localRedVarConf=0\n");
-																				}
-																				if( gOpt23 ) {
-																					str1.append("MemTrOptOnLoops\n");
-																				}
-																				String confString = str1.toString();
-																				if( gOpt11 ) {
-																					for( String tbSz : numWorkersSet ) {
-																						str1 = new StringBuilder(256);
-																						str1.append(confString);
-																						str1.append("defaultNumWorkers="+tbSz+"\n");
-																						String confString2 = str1.toString();
-																						if( gOpt12 ) {
-																							for( String nBlocks : maxNumGangsSet ) {
-																								str1 = new StringBuilder(256);
-																								str1.append(confString2);
-																								str1.append("maxNumGangs="+nBlocks+"\n");
-																								String confString3 = str1.toString();
-																								if( !confSet.contains(confString3) ) {
-																									confSet.add(confString3);
-																									Set<String> userDirectives = 
-																										genKTuningConf(gOpt8, gOpt9, gOpt10, kOptionMap, maxNumGangsSet);
-																									if( userDirectives == null ) {
-																										return;
-																									}
-																									for( String uDir : userDirectives ) {
-																										String confFile = "confFile"+confID+".txt";
-																										String uDirFile = "userDirective"+confID+".txt";
+														for( boolean gOpt19 : gOptMap.get("UEPRemovalOptLevel") ) {
+															for( boolean gOpt20 : gOptMap.get("forceSyncKernelCall") ) {
+																for( boolean gOpt21 : gOptMap.get("doNotRemoveUnusedSymbols") ) {
+																	for( boolean gOpt22 : gOptMap.get("localRedVarConf") ) {
+																		for( boolean gOpt23 : gOptMap.get("MemTrOptOnLoops") ) {
+																			for( boolean gOpt24 : gOptMap.get("assumeNoAliasingAmongKernelArgs") ) {
+																				for( boolean gOpt25 : gOptMap.get("skipKernelLoopBoundChecking") ) {
+																					for( boolean gOpt26 : gOptMap.get("defaultNumComputeUnits") ) {
+																						for( boolean gOpt27 : gOptMap.get("defaultNumSIMDWorkItems") ) {
+																							StringBuilder str1 = new StringBuilder(256);
+																							if( addSafetyCheckingCode ) {
+																								str1.append("addSafetyCheckingCode\n");
+																							}
+																							if( gOpt1 ) {
+																								str1.append("assumeNonZeroTripLoops\n");
+																							}
+																							if( gOpt24 ) {
+																								str1.append("assumeNoAliasingAmongKernelArgs\n");
+																							}
+																							if( gOpt25 ) {
+																								str1.append("skipKernelLoopBoundChecking\n");
+																							}
+																							if( gOpt2 ) {
+																								str1.append("AccPrivatization="+AccPrivatizationValue+"\n");
+																							}
+																							if( gOpt3 ) {
+																								str1.append("AccReduction="+AccReductionValue+"\n");
+																							}
+																							if( gOpt4 ) {
+																								str1.append("gpuMallocOptLevel="+mallocOptValue+"\n");
+																							}
+																							if( gOpt5 ) {
+																								str1.append("gpuMemTrOptLevel="+memTrOptValue+"\n");
+																							}
+																							if( gOpt6 ) {
+																								str1.append("useMatrixTranspose\n");
+																							}
+																							if( gOpt7 ) {
+																								str1.append("useMallocPitch\n");
+																							}
+																							if( gOpt8 ) {
+																								str1.append("useLoopCollapse\n");
+																							}
+																							if( gOpt9 ) {
+																								str1.append("useParallelLoopSwap\n");
+																							}
+																							if( gOpt10 ) {
+																								str1.append("useUnrollingOnReduction\n");
+																							}
+																							//if( gOpt18 ) {
+																							//	str1.append("disableCritical2ReductionConv\n");
+																							//}
+																							if( gOpt19 ) {
+																								str1.append("UEPRemovalOptLevel="+UEPRemovalOptValue+"\n");
+																							}
+																							if( gOpt20 ) {
+																								str1.append("forceSyncKernelCall\n");
+																							}
+																							if( gOpt21 ) {
+																								str1.append("doNotRemoveUnusedSymbols\n");
+																							}
+																							if( gOpt22 ) {
+																								str1.append("localRedVarConf=1\n");
+																							} else {
+																								str1.append("localRedVarConf=0\n");
+																							}
+																							if( gOpt23 ) {
+																								str1.append("MemTrOptOnLoops\n");
+																							}
+																							String confString = str1.toString();
+																							String confString2 = "";
+																							String confString3 = "";
+																							String confString4 = "";
+																							String confString5 = "";
+																							for( String tsS1 : numWorkersSet ) {
+																								confString2 = "";
+																								if( gOpt11 && !tsS1.equals("NONE") ) {
+																									str1 = new StringBuilder(256);
+																									str1.append("defaultNumWorkers="+tsS1+"\n");
+																									confString2 = str1.toString();
+																								}
+																								for( String tsS2 : maxNumGangsSet ) {
+																									confString3 = "";
+																									if( gOpt12 && !tsS2.equals("NONE") ) {
 																										str1 = new StringBuilder(256);
-																										str1.append(confString3);
-																										str1.append("UserDirectiveFile="+uDirFile+"\n");
-																										try {
-																											BufferedWriter out1 = 
-																												new BufferedWriter(new FileWriter(dirPrefix+confFile));
-																											out1.write(str1.toString());
-																											out1.close();
-																											BufferedWriter out2 = 
-																												new BufferedWriter(new FileWriter(dirPrefix+uDirFile));
-																											out2.write(uDir);
-																											out2.close();
-																										} catch( Exception e ) {
-																											PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
-																													"tuning parameters can not be saved.", 0);
+																										str1.append("maxNumGangs="+tsS2+"\n");
+																										confString3 = str1.toString();
+																									}
+																									for( String tsS3 : numComputeUnitsSet ) {
+																										confString4 = "";
+																										if( gOpt26 && !tsS3.equals("NONE") ) {
+																											str1 = new StringBuilder(256);
+																											str1.append("defaultNumComputeUnits="+tsS3+"\n");
+																											confString4 = str1.toString();
 																										}
-																										confID++;
+																										for( String tsS4 : numSIMDWorkItemsSet ) {
+																											confString5 = "";
+																											if( gOpt27 && !tsS4.equals("NONE") ) {
+																												str1 = new StringBuilder(256);
+																												str1.append("defaultNumSIMDWorkItems="+tsS4+"\n");
+																												confString5 = str1.toString();
+																											}
+																											str1 = new StringBuilder(256);
+																											str1.append(confString);
+																											str1.append(confString2);
+																											str1.append(confString3);
+																											str1.append(confString4);
+																											str1.append(confString5);
+																											confString5 = str1.toString();
+																											if( !confSet.contains(confString5) ) {
+																												confSet.add(confString5);
+																												Set<String> userDirectives = 
+																														genKTuningConf(gOpt8, gOpt9, gOpt10, kOptionMap, maxNumGangsSet);
+																												if( userDirectives == null ) {
+																													return;
+																												}
+																												for( String uDir : userDirectives ) {
+																													String confFile = "confFile"+confID+".txt";
+																													String uDirFile = "userDirective"+confID+".txt";
+																													str1 = new StringBuilder(256);
+																													str1.append(confString5);
+																													str1.append("UserDirectiveFile="+uDirFile+"\n");
+																													try {
+																														BufferedWriter out1 = 
+																																new BufferedWriter(new FileWriter(dirPrefix+confFile));
+																														out1.write(str1.toString());
+																														out1.close();
+																														BufferedWriter out2 = 
+																																new BufferedWriter(new FileWriter(dirPrefix+uDirFile));
+																														out2.write(uDir);
+																														out2.close();
+																													} catch( Exception e ) {
+																														PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
+																																"tuning parameters can not be saved.", 0);
+																													}
+																													confID++;
+																												}
+																											}
+																										}
 																									}
 																								}
 																							}
-																						} else {
-																							if( !confSet.contains(confString2) ) {
-																								confSet.add(confString2);
-																								Set<String> userDirectives = 
-																									genKTuningConf(gOpt8, gOpt9, gOpt10, kOptionMap, maxNumGangsSet);
-																								if( userDirectives == null ) {
-																									return;
-																								}
-																								for( String uDir : userDirectives ) {
-																									String confFile = "confFile"+confID+".txt";
-																									String uDirFile = "userDirective"+confID+".txt";
-																									str1 = new StringBuilder(256);
-																									str1.append(confString2);
-																									str1.append("UserDirectiveFile="+uDirFile+"\n");
-																									try {
-																										BufferedWriter out1 = 
-																											new BufferedWriter(new FileWriter(dirPrefix+confFile));
-																										out1.write(str1.toString());
-																										out1.close();
-																										BufferedWriter out2 = 
-																											new BufferedWriter(new FileWriter(dirPrefix+uDirFile));
-																										out2.write(uDir);
-																										out2.close();
-																									} catch( Exception e ) {
-																										PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
-																												"tuning parameters can not be saved.", 0);
-																									}
-																									confID++;
-																								}
-																							}
 																						}
-																					}
-																				} else {
-																					if( gOpt12 ) {
-																						for( String nBlocks : maxNumGangsSet ) {
-																							str1 = new StringBuilder(256);
-																							str1.append(confString);
-																							str1.append("maxNumGangs="+nBlocks+"\n");
-																							String confString2 = str1.toString();	
-																							if( !confSet.contains(confString2) ) {
-																								confSet.add(confString2);
-																								Set<String> userDirectives = 
-																									genKTuningConf(gOpt8, gOpt9, gOpt10, kOptionMap, maxNumGangsSet);
-																								if( userDirectives == null ) {
-																									return;
-																								}
-																								for( String uDir : userDirectives ) {
-																									String confFile = "confFile"+confID+".txt";
-																									String uDirFile = "userDirective"+confID+".txt";
-																									str1 = new StringBuilder(256);
-																									str1.append(confString2);
-																									str1.append("UserDirectiveFile="+uDirFile+"\n");
-																									try {
-																										BufferedWriter out1 = 
-																											new BufferedWriter(new FileWriter(dirPrefix+confFile));
-																										out1.write(str1.toString());
-																										out1.close();
-																										BufferedWriter out2 = 
-																											new BufferedWriter(new FileWriter(dirPrefix+uDirFile));
-																										out2.write(uDir);
-																										out2.close();
-																									} catch( Exception e ) {
-																										PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
-																												"tuning parameters can not be saved.", 0);
-																									}
-																									confID++;
-																								}
-																							}
-																						}
-																					} else {
-																						if( !confSet.contains(confString) ) {
-																							confSet.add(confString);
-																							Set<String> userDirectives = 
-																								genKTuningConf(gOpt8, gOpt9, gOpt10, kOptionMap, maxNumGangsSet);
-																							if( userDirectives == null ) {
-																								return;
-																							}
-																							for( String uDir : userDirectives ) {
-																								String confFile = "confFile"+confID+".txt";
-																								String uDirFile = "userDirective"+confID+".txt";
-																								str1 = new StringBuilder(256);
-																								str1.append(confString);
-																								str1.append("UserDirectiveFile="+uDirFile+"\n");
-																								try {
-																									BufferedWriter out1 = 
-																										new BufferedWriter(new FileWriter(dirPrefix+confFile));
-																									out1.write(str1.toString());
-																									out1.close();
-																									BufferedWriter out2 = 
-																										new BufferedWriter(new FileWriter(dirPrefix+uDirFile));
-																									out2.write(uDir);
-																									out2.close();
-																								} catch( Exception e ) {
-																									PrintTools.println("Creaing a file, "+ confFile + ", failed; " +
-																											"tuning parameters can not be saved.", 0);
-																								}
-																								confID++;
-																							}
-																						}
-																					}
+																					}																														
 																				}
 																			}
 																		}
 																	}
 																}
 															}
+														}
 														//}
 													}
 												}

@@ -4,7 +4,7 @@
 #include <sys/time.h>
 
 #ifndef _N_
-#define _N_ 1024
+#define _N_ 8192
 #endif
 
 #define MUL(x,y) ((x)*(y)) 
@@ -13,12 +13,24 @@
 #define VERIFICATION 0
 #endif
 
+#ifndef TRANSPOSE_Bs
+#define TRANSPOSE_Bs 0
+#endif
+
+#ifndef HOST_MEM_ALIGNMENT
+#define HOST_MEM_ALIGNMENT 1
+#endif
+
+#if HOST_MEM_ALIGNMENT == 1
+#define AOCL_ALIGNMENT 64
+#endif
+
 #ifndef DEBUG_PRINT
 #define DEBUG_PRINT 0
 #endif
 
 #ifndef BLOCK_SIZE
-#define BLOCK_SIZE 8
+#define BLOCK_SIZE 16
 #endif
 
 #ifdef _OPENARC_
@@ -64,6 +76,9 @@ int main(int argc, char **argv)
 #if DEBUG_PRINT == 1
 		float dSum = 0;
 #endif
+#if HOST_MEM_ALIGNMENT == 1
+		void *p;
+#endif
 
 		double strt_time, done_time;
 		printf("Matrix Multiplication\n");
@@ -72,10 +87,21 @@ int main(int argc, char **argv)
 		wA = _N_;
 		wB = _N_;
 
+#if HOST_MEM_ALIGNMENT == 1
+		posix_memalign(&p, AOCL_ALIGNMENT, _N_*_N_*sizeof(float));
+		A = (float *)p;
+		posix_memalign(&p, AOCL_ALIGNMENT, _N_*_N_*sizeof(float));
+		B = (float *)p;
+		posix_memalign(&p, AOCL_ALIGNMENT, _N_*_N_*sizeof(float));
+		GPU_C = (float *)p;
+		posix_memalign(&p, AOCL_ALIGNMENT, _N_*_N_*sizeof(float));
+		CPU_C = (float *)p;
+#else
 		A = (float *)malloc(sizeof(float)*_N_*_N_);
 		B = (float *)malloc(sizeof(float)*_N_*_N_);
 		GPU_C = (float *)malloc(sizeof(float)*_N_*_N_);
 		CPU_C = (float *)malloc(sizeof(float)*_N_*_N_);
+#endif
 
 
 		/* initialize matrix A and B */
@@ -141,10 +167,15 @@ int main(int argc, char **argv)
 														// to shared memory; each thread loads
 														// one element of each matrix
 														As[ty][tx] = A[a + wA * ty + tx];
+#if TRANSPOSE_Bs == 0
 														Bs[ty][tx] = B[b + wB * ty + tx];
+#else
+														Bs[tx][ty] = B[b + wB * ty + tx];
+#endif
 
 														// Synchronize to make sure the matrices are loaded
-#pragma acc barrier
+//#pragma acc barrier
+#pragma acc barrier(acc_mem_fence_local)
 
 														// Multiply the two matrices together;
 														// each thread computes one element
@@ -152,13 +183,18 @@ int main(int argc, char **argv)
 #pragma unroll
 
 														for (int k = 0; k < BLOCK_SIZE; ++k) {
+#if TRANSPOSE_Bs == 0
 																Csub += As[ty][k] * Bs[k][tx];
+#else
+																Csub += As[ty][k] * Bs[tx][k];
+#endif
 														}
 
 														// Synchronize to make sure that the preceding
 														// computation is done before loading two new
 														// sub-matrices of A and B in the next iteration
-#pragma acc barrier
+//#pragma acc barrier
+#pragma acc barrier(acc_mem_fence_local)
 												}
 
 												// Write the block sub-matrix to device memory;

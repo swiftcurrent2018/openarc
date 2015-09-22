@@ -55,8 +55,8 @@ DEFSET_ACC = -DVERIFICATION=$(VERIFICATION) -D_ROWS_=$(_ROWS_) -D_COLS_=$(_COLS_
 ##########################################################
 OMP ?= 0
 MODE ?= normal
-#AOCL_BOARD ?= p385_hpc_d5
-AOCL_BOARD ?= p385_hpc_a7
+AOCL_BOARD ?= p385_hpc_d5
+#AOCL_BOARD ?= p385_hpc_a7
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
 AOCL_FLAGS ?= -v -c --report

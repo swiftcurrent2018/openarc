@@ -18,6 +18,11 @@ typedef enum {
     acc_device_altera = 9
 } acc_device_t;
 
+typedef enum {
+    acc_mem_fence_local = 1,
+    acc_mem_fence_global = 2
+} acc_mem_fence_flags_t;
+
 #define h_void void
 #define d_void void
 

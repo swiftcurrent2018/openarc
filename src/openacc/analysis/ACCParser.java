@@ -940,6 +940,7 @@ public class ACCParser {
 	 *		ftregion
 	 *     	ftcond(condition)
 	 *     	ftdata(list)
+	 *     	ftkind(list)
 	 *     	num_faults(scalar-integer-expression)
 	 *     	num_ftbits(scalar-integer-expression)
 	 *     	repeat(scalar-integer-expression)
@@ -989,6 +990,7 @@ public class ACCParser {
 	 *
 	 *		where clause is one of the following
 	 *     	ftdata(list)
+	 *     	ftkind(list)
 	 *      ftthread(scalar-integer-expression)
 	 *
 	 *
@@ -1059,8 +1061,9 @@ public class ACCParser {
 	 * --------------------------------------------------------------- */
 	private static void parse_acc_barrier()
 	{
-		PrintTools.println("ACCParser is parsing [barrier] directive", 3);
-		addToMap("barrier", "_directive");
+		//PrintTools.println("ACCParser is parsing [barrier] directive", 3);
+		//addToMap("barrier", "_directive");
+		parse_acc_directivewithoptionalstringarg("barrier");
 	}
 	
 	/** ---------------------------------------------------------------
@@ -2144,6 +2147,8 @@ public class ACCParser {
 	 *         AccPrivatization
 	 *         AccReduction
 	 *         localRedVarConf
+	 *         assumeNoAliasingAmongKernelArgs
+	 *         skipKernelLoopBoundChecking
 	 * excludedGOptionSet(list) 
 	 *     - where list is a comma-seperated list of program-level tuning  
 	 *       parameters, which will not be applied.
@@ -2163,6 +2168,8 @@ public class ACCParser {
 	 *         shrdArryCachingOnTM
 	 *         defaultNumWorkers
 	 *         maxNumGangs
+	 *         assumeNoAliasingAmongKernelArgs
+	 *         skipKernelLoopBoundChecking
 	 * gpuMemTrOptLevel=N
 	 * gpuMallocOptLevel=N
 	 * UEPRemovalOptLevel=N
@@ -2172,6 +2179,10 @@ public class ACCParser {
 	 * defaultNumWorkersSet(list)
 	 *    - where list is the a comma-separated list of numbers.
 	 * maxNumGangsSet(list)
+	 *    - where list is the a comma-separated list of numbers.
+	 * defaultNumComputeUnits(list)
+	 *    - where list is the a comma-separated list of numbers.
+	 * defaultNumSIMDWorkItems(list)
 	 *    - where list is the a comma-separated list of numbers.
 	 *----------------------------------------------------------------------*/
 	
@@ -2203,6 +2214,8 @@ public class ACCParser {
 				case conf_localRedVarConf		:	parse_conf_expression(tok); break;
 				case conf_defaultNumWorkersSet		:	parse_conf_expressionset(tok); break;
 				case conf_maxNumGangsSet		:	parse_conf_expressionset(tok); break;
+				case conf_defaultNumComputeUnits		:	parse_conf_expressionset(tok); break;
+				case conf_defaultNumSIMDWorkItems		:	parse_conf_expressionset(tok); break;
 				case conf_UEPRemovalOptLevel		:	parse_conf_expression(tok); break;
 				default : ACCParserError("NoSuchCudaConstruct : " + clause);
 				}
@@ -2668,6 +2681,24 @@ public class ACCParser {
 		}
 	}
 
+	private static void parse_acc_directivewithoptionalstringarg(String directive)
+	{
+		PrintTools.println("ACCParser is parsing ["+directive+"] directive", 3);
+		if( check("(") ) {
+			match("(");
+			String str = get_token();
+			match(")");
+			if( str == null ) {
+				//addToMap(clause, "_clause");
+				ACCParserError("No valid argument is found for the clause, " + directive);
+			} else {
+				addToMap(directive, str);
+			}
+		} else {
+			addToMap(directive, "_directive");
+		}
+	}
+
 	private static void parse_acc_optionalconfclause(String clause)
 	{
 		PrintTools.println("ACCParser is parsing ["+clause+"] clause", 3);
@@ -2836,6 +2867,24 @@ public class ACCParser {
 		String str = get_token();
 		match(")");
 		addToMap(clause, str);
+	}
+
+	private static void parse_acc_optionalstringargclause(String clause)
+	{
+		PrintTools.println("ACCParser is parsing ["+clause+"] clause", 3);
+		if( check("(") ) {
+			match("(");
+			String str = get_token();
+			match(")");
+			if( str == null ) {
+				//addToMap(clause, "_clause");
+				ACCParserError("No valid argument is found for the clause, " + clause);
+			} else {
+				addToMap(clause, str);
+			}
+		} else {
+			addToMap(clause, "_clause");
+		}
 	}
 
 	private static void parse_conf_stringset(String clause)
@@ -3886,7 +3935,9 @@ public class ACCParser {
 		conf_AccReduction,
 		conf_localRedVarConf,
 		conf_defaultNumWorkersSet,
+		conf_defaultNumComputeUnits,
 		conf_maxNumGangsSet,
+		conf_defaultNumSIMDWorkItems,
 		conf_UEPRemovalOptLevel
 	}
 	

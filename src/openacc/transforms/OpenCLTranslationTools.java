@@ -436,6 +436,9 @@ public abstract class OpenCLTranslationTools {
 				if( num_workers != null ) {
 					num_workers = Symbolic.simplify(num_workers);
 				}
+				if( num_gangs != null ) {
+					num_gangs = Symbolic.simplify(num_gangs);
+				}
 				
 				// identify the loop index variable 
 				Expression ivar = LoopTools.getIndexVariable(ploop);
@@ -521,7 +524,7 @@ public abstract class OpenCLTranslationTools {
 					if( (lb != null) && (ub != null) ) {
 						//If the iteration size matches number of gangs of the pure gang loop or number of workers of the
 						//pure worker loop, we don't need to add boundary-checking code.
-						Expression itrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+						Expression itrSize = Symbolic.simplify(Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1)));
 						if( isGangLoop && (!isWorkerLoop) && (num_gangs != null) && (itrSize.equals(num_gangs)) ) {
 							addBoundaryCheck = false;
 						} else if( (!isGangLoop) && isWorkerLoop && (num_workers != null) && (itrSize.equals(num_workers)) ) {
@@ -1637,6 +1640,14 @@ public abstract class OpenCLTranslationTools {
                         List<Specifier> specs = vaDecl.getSpecifiers();
                         specs.add(0, OpenCLSpecifier.OPENCL_LOCAL);
                         Declarator declr = vaDecl.getDeclarator(0);
+                        Traversable parent = decl.getParent(); //parent should be DeclarationStatement.
+                        CompoundStatement cStmt = null;
+                        if( parent instanceof DeclarationStatement ) {
+                        	cStmt = (CompoundStatement)parent.getParent();
+                        } else {
+                        	Tools.exit("[ERROR in OpenCLTranslation.privateTransformation()] error in handling local," +
+                        			" implicit gang-private variable: " + lgSym);
+                        }
                         Initializer lsm_init = declr.getInitializer();
                         if( lsm_init != null ) {
                         	//OpenCL local variable cannot have initialization at its declaration statement.
@@ -1648,18 +1659,11 @@ public abstract class OpenCLTranslationTools {
                         		AssignmentExpression lAssignExp = new AssignmentExpression(new Identifier(lgSym),AssignmentOperator.NORMAL,
                         				initValue);
                         		Statement lAssignStmt = new ExpressionStatement(lAssignExp);
-                        		Traversable parent = decl.getParent(); //parent should be DeclarationStatement.
-                        		if( parent instanceof DeclarationStatement ) {
-                        			CompoundStatement cStmt = (CompoundStatement)parent.getParent();
-                        			Statement fStmt = IRTools.getFirstNonDeclarationStatement(cStmt);
-                        			if( fStmt == null ) {
-                        				cStmt.addStatement(lAssignStmt);
-                        			} else {
-                        				cStmt.addStatementBefore(fStmt, lAssignStmt);
-                        			}
+                        		Statement fStmt = IRTools.getFirstNonDeclarationStatement(cStmt);
+                        		if( fStmt == null ) {
+                        			cStmt.addStatement(lAssignStmt);
                         		} else {
-                        			Tools.exit("[ERROR in OpenCLTranslation.privateTransformation()] error in handling local," +
-                        					" implicit gang-private variable: " + lgSym);
+                        			cStmt.addStatementBefore(fStmt, lAssignStmt);
                         		}
 							} else {
 								Tools.exit("The following gang-private variable can not be alloced on the OpenCL local memory, since OpenCL" +
@@ -1667,6 +1671,14 @@ public abstract class OpenCLTranslationTools {
 										"variable has inseparable initialization: "+ lgSym);
 							}
                         }
+                        //Move the declaration statement into the enclosing compute region if symbols with the sam name
+						//does not exist.
+						if( !AnalysisTools.containsSymbol(scope.getSymbols(), lgSym.getSymbolName())) {
+							cStmt.removeChild(parent);
+							decl.setParent(null);
+							//parent.removeChild(decl); //disallowed.
+							scope.addDeclaration(decl);
+						}
                     }
                 }
             }

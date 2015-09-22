@@ -786,7 +786,7 @@ HI_error_t HI_synchronize()
 /////////////////////////////
 //Device Memory Allocation //
 /////////////////////////////
-HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int asyncID) {
+HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -806,7 +806,7 @@ HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int as
         fprintf(stderr, "[ERROR in HI_malloc1D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
-    return_status = tconf->device->HI_malloc1D(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_malloc1D(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc1D(%d)\n", asyncID);
@@ -815,7 +815,7 @@ HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int as
 	return return_status;
 }
 
-HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count, int asyncID) {
+HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -831,7 +831,7 @@ HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count
         fprintf(stderr, "[ERROR in HI_malloc1D_unified()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
-    return_status = tconf->device->HI_malloc1D_unified(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_malloc1D_unified(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc1D_unified(%d)\n", asyncID);
@@ -840,7 +840,7 @@ HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count
 	return return_status;
 }
 
-HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID) {
+HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -860,7 +860,7 @@ HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_
         fprintf(stderr, "[ERROR in HI_malloc2D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
-    return_status = tconf->device->HI_malloc2D( hostPtr, devPtr,pitch, widthInBytes, height, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_malloc2D( hostPtr, devPtr,pitch, widthInBytes, height, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc2D(%d)\n", asyncID);
@@ -869,7 +869,7 @@ HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_
 	return return_status;
 }
 
-HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID) {
+HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -889,7 +889,7 @@ HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_
         fprintf(stderr, "[ERROR in HI_malloc3D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
-    return_status = tconf->device->HI_malloc3D( hostPtr, devPtr, pitch, widthInBytes, height, depth, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_malloc3D( hostPtr, devPtr, pitch, widthInBytes, height, depth, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc3D(%d)\n", asyncID);
@@ -967,7 +967,7 @@ HI_error_t HI_free_async( const void *hostPtr, int asyncID ) {
 //malloc used for allocating temporary data.
 //If the method is called for a pointer to existing memory, the existing memory
 //will be freed before allocating new memory.
-void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType) {
+void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_tempMalloc1D()\n");
@@ -978,7 +978,7 @@ void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType) {
         exit(1);
 	}
     HostConf_t * tconf = getHostConf();
-    tconf->device->HI_tempMalloc1D( tempPtr, count, devType);
+    tconf->device->HI_tempMalloc1D( tempPtr, count, devType, flags);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempMalloc1D()\n");

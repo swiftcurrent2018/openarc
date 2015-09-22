@@ -27,6 +27,7 @@ public class AccPrivatization extends AnalysisPass {
 	private ArrayPrivatization privatizePass;
 	private int optionLevel;
 	private boolean IRSymbolOnly = true;
+	private List<FunctionCall> fCallList = null;
 	/**
 	 * @param program
 	 */
@@ -36,6 +37,7 @@ public class AccPrivatization extends AnalysisPass {
 		privatizePass = new ArrayPrivatization(program);
 		optionLevel = option;
 		IRSymbolOnly = IRSymOnly;
+		fCallList = IRTools.getFunctionCalls(program);
 	}
 
 	/* (non-Javadoc)
@@ -64,6 +66,9 @@ public class AccPrivatization extends AnalysisPass {
 				for( ACCAnnotation cAnnot : accAnnots ) {
 					Annotatable at = cAnnot.getAnnotatable();
 					boolean kernelLoop = false;
+					boolean gangloop = false;
+					boolean workerloop = false;
+					boolean vectorloop = false;
 					if( at.containsAnnotation(ACCAnnotation.class, "parallel") || 
 							at.containsAnnotation(ACCAnnotation.class, "kernels")) {
 						kernelLoop = true;
@@ -74,10 +79,19 @@ public class AccPrivatization extends AnalysisPass {
 							continue;
 						}
 					}
+					if( at.containsAnnotation(ACCAnnotation.class, "gang") ) {
+						gangloop = true;
+					}
+					if( at.containsAnnotation(ACCAnnotation.class, "worker") ) {
+						workerloop = true;
+					}
+					if( at.containsAnnotation(ACCAnnotation.class, "vector") ) {
+						vectorloop = true;
+					}
 					ACCAnnotation enCompAnnot = null;
 					Annotatable enCompRegion = null;
 					if( !kernelLoop ) {
-						enCompAnnot = AnalysisTools.ipFindFirstPragmaInParent(at, ACCAnnotation.class, ACCAnnotation.computeRegions, false, null, null);
+						enCompAnnot = AnalysisTools.ipFindFirstPragmaInParent(at, ACCAnnotation.class, ACCAnnotation.computeRegions, false, fCallList, null);
 /*						if( enCompAnnot.containsKey("parallel") ) {
 							enCompRegion = enCompAnnot.getAnnotatable();
 						}*/
@@ -88,6 +102,7 @@ public class AccPrivatization extends AnalysisPass {
 					Annotation cetusAnnot = at.getAnnotation(CetusAnnotation.class, "private");
 					if( cetusAnnot != null ) {
 						Set<Symbol> privatisables = (Set<Symbol>)cetusAnnot.get("private");
+						Set<Symbol> removeSet = new HashSet<Symbol>();
 						Set<SubArray> privateSet =  null;
 						Annotation tAnnot = at.getAnnotation(ACCAnnotation.class, "private");
 						if( tAnnot == null ) {
@@ -95,12 +110,30 @@ public class AccPrivatization extends AnalysisPass {
 						} else {
 							privateSet =  (Set<SubArray>)tAnnot.get("private");
 						}
+						//If a current loop is a gang loop without worker clauses, and the privatisable variable
+						//is declared within a worker loop, we don't need to gang-privatize the variable.
+						if( gangloop && !workerloop ) {
+							for( Symbol pSym : privatisables ) {
+								Declaration tDecl = null;
+								if( pSym instanceof VariableDeclarator ) {
+									tDecl = ((VariableDeclarator)pSym).getDeclaration();
+								} else if( pSym instanceof NestedDeclarator ) {
+									tDecl = ((NestedDeclarator)pSym).getDeclaration();
+								}
+								if( tDecl != null ) {
+									if(AnalysisTools.ipFindFirstPragmaInParent(tDecl, ACCAnnotation.class, "worker", fCallList, null) != null) {
+										removeSet.add(pSym);
+									}
+								}
+							}
+						}
+						privatisables.removeAll(removeSet);
 						if( !kernelLoop ) {
 							Set<Symbol> privateSymSet = AnalysisTools.subarraysToSymbols(privateSet, IRSymbolOnly);
 							for( Symbol pSym : privatisables ) {
 								if( !privateSymSet.contains(pSym) ) {
 									boolean addPrivSym = true;
-									if( (enCompRegion != null) && (at.containsAnnotation(ACCAnnotation.class, "gang")) ) {
+									if( (enCompRegion != null) && gangloop ) {
 										//Traversable tt = at.getParent();
 										//[DEBUG] local variable defined in a gang loop is also gang private.
 										Traversable tt = ((ForLoop)at).getBody();
@@ -359,7 +392,6 @@ public class AccPrivatization extends AnalysisPass {
 		//LIMIT: there will be new privatisable variables in the called functions, but they are not 
 		//checked in the current version.
 		Set<Symbol> accSet = new HashSet<Symbol>();
-		List<FunctionCall> gFuncCallList = IRTools.getFunctionCalls(program);
 		List<FunctionCall> funcCallList = IRTools.getFunctionCalls(t);
 		if( funcCallList != null ) {
 			Map<String, Symbol> gSymMap = null;

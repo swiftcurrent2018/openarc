@@ -13,6 +13,10 @@
 #define VERIFICATION 0
 #endif
 
+#ifndef TRANSPOSE_Bs
+#define TRANSPOSE_Bs 0
+#endif
+
 #ifndef DEBUG_PRINT
 #define DEBUG_PRINT 0
 #endif
@@ -141,7 +145,11 @@ int main(int argc, char **argv)
 														// to shared memory; each thread loads
 														// one element of each matrix
 														As[ty][tx] = A[a + wA * ty + tx];
+#if TRANSPOSE_Bs == 0
 														Bs[ty][tx] = B[b + wB * ty + tx];
+#else
+														Bs[tx][ty] = B[b + wB * ty + tx];
+#endif
 
 														// Synchronize to make sure the matrices are loaded
 #pragma acc barrier
@@ -152,7 +160,11 @@ int main(int argc, char **argv)
 #pragma unroll
 
 														for (int k = 0; k < BLOCK_SIZE; ++k) {
+#if TRANSPOSE_Bs == 0
 																Csub += As[ty][k] * Bs[k][tx];
+#else
+																Csub += As[ty][k] * Bs[tx][k];
+#endif
 														}
 
 														// Synchronize to make sure that the preceding

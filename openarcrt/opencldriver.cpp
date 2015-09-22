@@ -23,6 +23,23 @@ char * deblank(char *str)
   return out;
 }
 
+cl_mem_flags convert2CLMemFlags(HI_MallocKind_t flags) {
+	cl_mem_flags mem_flags = 0;
+	if( flags & HI_MEM_READ_WRITE ) {
+		mem_flags |= CL_MEM_READ_WRITE;
+	}
+	if( flags & HI_MEM_READ_ONLY ) {
+		mem_flags |= CL_MEM_READ_ONLY;
+	}
+	if( flags & HI_MEM_WRITE_ONLY ) {
+		mem_flags |= CL_MEM_WRITE_ONLY;
+	}
+	if( mem_flags == 0 ) {
+		mem_flags = CL_MEM_READ_WRITE;
+	}
+	return mem_flags;
+}
+
 ///////////////////////////
 // Device Initialization //
 ///////////////////////////
@@ -531,10 +548,10 @@ HI_error_t OpenCLDriver::destroy() {
 }
 
 
-HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID) {
+HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D(%d, %lu, %d)\n", asyncID, count, flags);
 	}
 #endif
     HostConf_t * tconf = getHostConf();
@@ -549,6 +566,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
     HI_error_t result = HI_error;
     cl_int  err = CL_SUCCESS;
 	void * memHandle;
+	cl_mem_flags mem_flags = convert2CLMemFlags(flags);
 
     if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
 		if( unifiedMemSupported ) {
@@ -563,19 +581,19 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 		if( it != memPool->end()) {
 #ifdef _OPENARC_PROFILE_
 			if( HI_openarcrt_verbosity > 2 ) {
-				fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_malloc1D(%d, %lu) reuses memories in the memPool\n", asyncID, count);
+				fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_malloc1D(%d, %lu, %d) reuses memories in the memPool\n", asyncID, count, flags);
 			}
 #endif
 			*devPtr = it->second;
 			memPool->erase(it);
             HI_set_device_address(hostPtr, *devPtr, count, asyncID, tconf->threadID);
 		} else {
-        	memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, count, NULL, &err);
+        	memHandle = (void*) clCreateBuffer(clContext, mem_flags, count, NULL, &err);
         	if(err != CL_SUCCESS) {
             	//fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : Malloc failed\n");
 #ifdef _OPENARC_PROFILE_
 				if( HI_openarcrt_verbosity > 2 ) {
-					fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_malloc1D(%d, %lu) releases memories in the memPool\n", asyncID, count);
+					fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_malloc1D(%d, %lu, %d) releases memories in the memPool\n", asyncID, count, flags);
 				}
 #endif
 				HI_device_mem_handle_t tHandle;
@@ -592,7 +610,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 					}
 				}
 				memPool->clear();
-        		memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, count, NULL, &err);
+        		memHandle = (void*) clCreateBuffer(clContext, mem_flags, count, NULL, &err);
 			}
         	if(err == CL_SUCCESS) {
 				*devPtr = malloc(count); //redundant malloc to create a fake device pointer.
@@ -620,7 +638,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		HI_print_device_address_mapping_summary(tconf->threadID);
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc1D(%d, %lu, %d)\n", asyncID, count, flags);
 	}
 #endif
     return result;
@@ -628,12 +646,12 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 }
 
 //[FIXME] Implement this!
-HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID) {
+HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
 	fprintf(stderr, "[OPENARCRT-ERROR]OpenCLDriver::HI_malloc1D_unified() is not yet implemented!\n");
 	//exit(1);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D_unified(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D_unified(%d, %lu, %d)\n", asyncID, count, flags);
 	}
 #endif
     HostConf_t * tconf = getHostConf();
@@ -648,6 +666,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
     HI_error_t result = HI_error;
     cl_int  err;
 	void *memHandle;
+	cl_mem_flags mem_flags = convert2CLMemFlags(flags);
 
     if(HI_get_device_address(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
         //result = HI_success;
@@ -664,7 +683,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
 			}
 		} else {
 			//[FIXME] This doesn not allocate unified memory.
-        	memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, count, NULL, &err);
+        	memHandle = (void*) clCreateBuffer(clContext, mem_flags, count, NULL, &err);
         	if(err == CL_SUCCESS) {
 				*devPtr = malloc(count); //redundant malloc to create a fake device pointer.
 				if( *devPtr == NULL ) {
@@ -688,7 +707,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc1D_unified(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc1D_unified(%d, %lu, %d)\n", asyncID, count, flags);
 	}
 #endif
     return result;
@@ -697,15 +716,15 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
 
 //[FIXME] Implement this!
 //the ElementSizeBytes in cuMemAllocPitch is currently set to 16.
-HI_error_t OpenCLDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID) {
+HI_error_t OpenCLDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc2D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc2D(%d, %d)\n", asyncID, flags);
 	}
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc2D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc2D(%d, %d)\n", asyncID, flags);
 	}
 #endif
 
@@ -713,10 +732,10 @@ HI_error_t OpenCLDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t
 }
 
 //[FIXME] Implement this!
-HI_error_t OpenCLDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID) {
+HI_error_t OpenCLDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc3D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc3D(%d, %d)\n", asyncID, flags);
 	}
 #endif
     /*if( tconf == NULL ) {
@@ -744,7 +763,7 @@ HI_error_t OpenCLDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t
     return result; */
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc3D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc3D(%d, %d)\n", asyncID, flags);
 	}
 #endif
     return HI_success;
@@ -871,7 +890,7 @@ HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
 //malloc used for allocating temporary data.
 //If the method is called for a pointer to existing memory, the existing memory
 //will be freed before allocating new memory.
-void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType) {
+void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_tempMalloc1D()\n");
@@ -899,7 +918,8 @@ void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t d
 #endif
         }
         cl_int err;
-        void * memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, count, NULL, &err);
+		cl_mem_flags mem_flags = convert2CLMemFlags(flags);
+        void * memHandle = (void*) clCreateBuffer(clContext, mem_flags, count, NULL, &err);
 		*tempPtr = malloc(count);
         HI_set_device_mem_handle(*tempPtr, memHandle, count, tconf->threadID);
 		tempMallocSet.insert(*tempPtr);
@@ -1307,7 +1327,7 @@ HI_error_t OpenCLDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t cou
     }
     case HI_MemcpyDeviceToHost: {
 		void *tDst;
-		HI_tempMalloc1D(&tDst, count, acc_device_host);
+		HI_tempMalloc1D(&tDst, count, acc_device_host, HI_MEM_READ_WRITE);
 		HI_set_temphost_address(dst, tDst, async);
 		HI_device_mem_handle_t tHandle;
 		if( HI_get_device_mem_handle(src, &tHandle, tconf->threadID) == HI_success ) {
@@ -1990,11 +2010,11 @@ int OpenCLDriver::HI_async_test_all() {
     return 1;
 }
 
-void OpenCLDriver::HI_malloc(void **devPtr, size_t size) {
+void OpenCLDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {
     cl_int  err;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc(%lu, %d)\n", size, flags);
 	}
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -2002,7 +2022,8 @@ void OpenCLDriver::HI_malloc(void **devPtr, size_t size) {
 #endif
     HostConf_t * tconf = getHostConf();
 	void * memHandle;
-    memHandle = (void*) clCreateBuffer(clContext, CL_MEM_READ_WRITE, size, NULL, &err);
+	cl_mem_flags mem_flags = convert2CLMemFlags(flags);
+    memHandle = (void*) clCreateBuffer(clContext, mem_flags, size, NULL, &err);
     if( err != CL_SUCCESS ) {
         fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc()] :failed to malloc on OpenCL with clCreateBuffer error %d\n", err);
 		exit(1);
@@ -2019,7 +2040,7 @@ void OpenCLDriver::HI_malloc(void **devPtr, size_t size) {
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc(%lu, %d)\n", size, flags);
 	}
 #endif
 

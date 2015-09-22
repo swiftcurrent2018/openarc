@@ -617,7 +617,7 @@ void CudaDriver::release_freed_device_memory()
 #endif
 }
 
-HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID) {
+HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
@@ -786,7 +786,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
     return result;
 }
 
-HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID) {
+HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D_unified(%d, %lu)\n", asyncID, count);
@@ -864,7 +864,7 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
 }
 
 //the ElementSizeBytes in cuMemAllocPitch is currently set to 16.
-HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID) {
+HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc2D(%d)\n", asyncID);
@@ -928,7 +928,7 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
 }
 
 
-HI_error_t CudaDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID) {
+HI_error_t CudaDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc3D(%d)\n", asyncID);
@@ -1082,7 +1082,7 @@ HI_error_t CudaDriver::HI_free_unified( const void *hostPtr, int asyncID) {
 //malloc used for allocating temporary data.
 //If the method is called for a pointer to existing memory, the existing memory
 //will be freed before allocating new memory.
-void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType) {
+void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempMalloc1D()\n");
@@ -1528,7 +1528,7 @@ HI_error_t CudaDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count
     }
     case HI_MemcpyDeviceToHost: {
 		void *tDst = 0;
-		HI_tempMalloc1D(&tDst, count, acc_device_host);
+		HI_tempMalloc1D(&tDst, count, acc_device_host, HI_MEM_READ_WRITE);
 		if( tconf->prepin_host_memory == 1 ) {
         	//Pin host memory
         	if( HI_pin_host_memory(tDst, (size_t) count) == HI_error ) {
@@ -2431,7 +2431,7 @@ int CudaDriver::HI_async_test_all() {
 }
 
 
-void CudaDriver::HI_malloc(void **devPtr, size_t size) {
+void CudaDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc()\n");

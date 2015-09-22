@@ -61,8 +61,8 @@ DEFSET_ACC = -DVERIFICATION=$(VERIFICATION) -DROW_SIZE=$(ROW_SIZE) -DCOL_SIZE=$(
 ##########################################################
 OMP ?= 0
 MODE ?= normal
-#AOCL_BOARD ?= p385_hpc_d5
-AOCL_BOARD ?= p385_hpc_a7
+AOCL_BOARD ?= p385_hpc_d5
+#AOCL_BOARD ?= p385_hpc_a7
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
 AOCL_FLAGS ?= -v -c --report

@@ -304,6 +304,15 @@
 #Option: skipKernelLoopBoundChecking
 #skipKernelLoopBoundChecking
 #Skip kernel-loop-boundary-checking code when generating a device kernel; it is safe only if total number of workers equals to that of the kernel loop iterations
+#Option: defaultNumComputeUnits
+#defaultNumComputeUnits=N
+#Default number of physical compute units (default value = 1); applicable only to Altera-OpenCL devices
+#Option: defaultNumSIMDWorkItems
+#defaultNumSIMDWorkItems=N
+#Default number of work-items within a work-group executing in an SIMD manner (default value = 1); applicable only to Altera-OpenCL devices
+#Option: disableDefaultCachingOpts
+#disableDefaultCachingOpts
+#Disable default caching optimizations so that they are applied only if explicitly requested
 #NOPTIONDESC#
 ############################################################################
 # Translation configuration #
@@ -312,7 +321,7 @@
 #targetArch=0
 #AccAnalysisOnly=1
 #SkipGPUTranslation
-showInternalAnnotations=1
+showInternalAnnotations=0
 ##########################
 # Analysis configuration #
 ##########################
@@ -380,7 +389,7 @@ defaultNumWorkers=128
 # Misc. Cetus configururation #
 ###############################
 #outdir=cetus_output
-macro=_N_=__inputSize__
+macro=_N_=__inputSize__,BLOCK_SIZE=__blockSize__,VERIFICATION=0,HOST_MEM_ALIGNMENT=1
 #dump-options
 #dump-system-options
 #induction
@@ -397,10 +406,13 @@ macro=_N_=__inputSize__
 #verbosity=0
 #SetAccEntryFunction=filename
 addIncludePath=__openarcrt__
-#disableWorkShareLoopCollapsing
+disableWorkShareLoopCollapsing
 #AccParallelization=N
 #SkipGPUTranslation=N
 #ASPENModelGen=mode=N
-#assumeNoAliasingAmongKernelArgs
+assumeNoAliasingAmongKernelArgs
 #skipKernelLoopBoundChecking
+#defaultNumComputeUnits=N
+#defaultNumSIMDWorkItems=N
+#disableDefaultCachingOpts
 #NOPTION#

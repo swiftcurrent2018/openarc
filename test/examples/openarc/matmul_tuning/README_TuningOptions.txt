@@ -20,6 +20,12 @@
 #    - Set default number of workers
 # maxNumGangs=N
 #    - Set maximum number of gangs
+# defaultNumComputeUnits=N
+#    - Default number of physical compute units (default value = 1); 
+#      applicable only to Altera-OpenCL devices
+# defaultNumSIMDWorkItems=N
+#    - Default number of work-items within a work-group executing in an SIMD manner 
+#      (default value = 1); applicable only to Altera-OpenCL devices
 # useLoopCollapse
 #    - Apply LoopCollapse optimization in ACC2GPU translation
 # useParallelLoopSwap
@@ -46,6 +52,12 @@
 # assumeNonZeroTripLoops
 #    - Assume that all loops hava non-zero iterations.
 #    - Not implemented yet
+# assumeNoAliasingAmongKernelArgs
+#    - Assume that there is no aliasing among kernel arguments
+# skipKernelLoopBoundChecking
+#    - Skip kernel-loop-boundary-checking code when generating a device kernel; 
+#      it is safe only if total number of workers equals to that of the kernel 
+#      loop iterations
 ##############################################################
 # May-beneficial options, which interact with other options. #
 # These options are not needed if kernel-specific options    #

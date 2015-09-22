@@ -104,6 +104,7 @@ do
 		############################################
 		rm -f "${workDir}/cetus_output/*.txt"
 
+
 		##############################################
 		# Move output binary to the output directory #
 		##############################################
@@ -114,6 +115,22 @@ do
 		mv ${baseExeName} ${newExeName}
 		mv ${newExeName} "${outputDir}"
 		mv ${inputKernelFile} "${outputDir}"
+		if [ -f *.aocx ]; then
+			mv *.aocx ${outputDir}
+		fi
+		if [ -f *.ptx ]; then
+			mv *.ptx ${outputDir}
+		fi
+
+		##############################################
+		# Move output log if targeting Altera OpenCL #
+		##############################################
+		if [ -d "${workDir}/cetus_output/openarc_kernel" ];then
+			cp -f "${workDir}/cetus_output/openarc_kernel/*.rpt" "${outputDir}/"
+			cp -f "${workDir}/cetus_output/openarc_kernel/sys_description.txt" "${outputDir}/"
+			cp -f "${workDir}/cetus_output/openarc_kernel/sys_description.legend.txt" "${outputDir}/"
+		fi
+
 		k=$((k+1))
 	done
 

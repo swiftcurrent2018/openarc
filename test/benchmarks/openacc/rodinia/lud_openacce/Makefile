@@ -57,8 +57,8 @@ DEFSET_ACC = -DVERIFICATION=$(VERIFICATION) -D_M_SIZE=$(_M_SIZE) -DENABLE_OPENAC
 ##########################################################
 OMP ?= 0
 MODE ?= normal
-#AOCL_BOARD ?= p385_hpc_d5
-AOCL_BOARD ?= p385_hpc_a7
+AOCL_BOARD ?= p385_hpc_d5
+#AOCL_BOARD ?= p385_hpc_a7
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
 AOCL_FLAGS ?= -v -c --report

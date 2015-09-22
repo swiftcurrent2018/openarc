@@ -37,13 +37,17 @@
 #       PERL                    : location of perl                 #
 #   - Modify target-specific test configuration (required only for #
 #     some examples, benchmarks, or other tests):                  #
-#       MPI_INCLUDES : include path for MPI                        #
-#       MPI_LIBDIR   : library path for MPI                        #
-#       FC           : fortran compiler                            #
-#       SPEC_CPU2006 : SPEC CPU 2006 installation directory        #
-#       SPEC_CFG     : SPEC CPU 2006 config file (if value does    #
-#                      not contain "/", then it names a sample     #
-#                      file included with OpenARC)                 #
+#       MPI_INCLUDES    : include path for MPI                     #
+#       MPI_LIBDIR      : library path for MPI                     #
+#       FC              : fortran compiler                         #
+#       SPEC_CPU2006    : SPEC CPU 2006 installation directory     #
+#       SPEC_CFG        : SPEC CPU 2006 config file (if value does #
+#                         not contain "/", then it names a sample  #
+#                         file included with OpenARC)              #
+#       JUNIT_CLASSPATH : Java classpath when building and running #
+#                         JUnit test suite. See test/junit/README  #
+#                         for Java packages that must be located   #
+#                         here.                                    #
 #   - Modify target-specific location of libpmemobj (required only #
 #     for NVL support):                                            #
 #       PMEMOBJ_INCLUDES : include path for libpmemobj             #
@@ -81,12 +85,19 @@ OPENARCLIB = ${HOME}/work/openarc/openarcrt
 CETUS_OUTPUT = cetus_output
 #OPENARC_ARCH = 0
 
-########################################################
-# Set the target system                                #
-# Available targets: Titan, Newark, MacBookPro, Beacon #
-#                    Atlanta                           #
-########################################################
-TARGET_SYSTEM = Titan
+########################################################################
+# Set the target system                                                #
+# Example targets: Titan, Newark, MacBookPro, Beacon Atlanta           #
+########################################################################
+# Titan: Cray XK7 system with NVIDIA GPUs                              #
+#        https://www.olcf.ornl.gov/computing-resources/titan-cray-xk7/ #
+# Beacon: Linux system with Intel Xeon Phi coprocessors (MICs)         #
+#        https://www.nics.tennessee.edu/beacon                         #
+# Newark: Linux system with NVIDIA GPUs and an Altera FPGA             #
+# Atlanta: LInux system with AMD GPUs                                  #
+# MacBookPro: OS X system with an AMD GPU                              #
+########################################################################
+TARGET_SYSTEM = Newark
 
 ########################
 # Target System: Titan #
@@ -135,6 +146,8 @@ endif
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =
+#JUNIT_CLASSPATH =
+
 #PMEMOBJ_INCLUDES =
 #PMEMOBJ_LIBDIR =
 
@@ -145,7 +158,7 @@ endif
 #########################
 ifeq ($(TARGET_SYSTEM),Newark)
 
-OPENARC_ARCH = 0
+OPENARC_ARCH = 3
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
 CC = gcc
@@ -170,12 +183,12 @@ ifeq ($(OPENARC_ARCH), 3)
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
-GBACKEND_INCLUDES = -I/opt/altera/14.1/hld/host/include -I/opt/altera/14.1/hld/board/nalla_pcie/include
-GBACKEND_LIBS = -L/opt/altera/14.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/14.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+GBACKEND_INCLUDES = -I/opt/altera/15.0/hld/host/include -I/opt/altera/15.0/hld/board/nalla_pcie/include
+GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/14.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/14.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
@@ -200,6 +213,8 @@ MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
 FC = gfortran
 SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-newark.cfg.in
+#JUNIT_CLASSPATH =
+
 #PMEMOBJ_INCLUDES =
 #PMEMOBJ_LIBDIR =
 
@@ -238,6 +253,8 @@ GFRONTEND_DEBUG = -g
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =
+#JUNIT_CLASSPATH =
+
 #PMEMOBJ_INCLUDES =
 #PMEMOBJ_LIBDIR =
 
@@ -277,6 +294,8 @@ MPI_LIBDIR = /opt/local/lib/openmpi-mp
 FC = gfortran-mp-4.9
 SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-osx.cfg.in
+#JUNIT_CLASSPATH =
+
 #PMEMOBJ_INCLUDES =
 #PMEMOBJ_LIBDIR =
 
@@ -316,6 +335,8 @@ GFRONTEND_DEBUG = -g
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =
+#JUNIT_CLASSPATH =
+
 #PMEMOBJ_INCLUDES =
 #PMEMOBJ_LIBDIR =
 

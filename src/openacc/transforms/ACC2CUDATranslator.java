@@ -895,6 +895,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		Set<Symbol> constantSet = new HashSet<Symbol>();
 		Set<Symbol> textureSet = new HashSet<Symbol>();
 		Set<Symbol> sharedROSet = new HashSet<Symbol>();
+		Set<Symbol> ROSymSet = new HashSet<Symbol>();
 		ARCAnnotation tCAnnot = at.getAnnotation(ARCAnnotation.class, "constant");
 		Set<SubArray> dataSet;
 		if( tCAnnot != null ) {
@@ -925,6 +926,10 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		if( tCAnnot != null ) {
 			dataSet = (Set<SubArray>)tCAnnot.get("noshared");
 			sharedROSet.removeAll(AnalysisTools.subarraysToSymbols(dataSet, IRSymbolOnly));
+		}
+		ACCAnnotation ROAnnot = at.getAnnotation(ACCAnnotation.class, "accreadonly");
+		if( ROAnnot != null ) {
+			ROSymSet.addAll((Set<Symbol>)ROAnnot.get("accreadonly"));
 		}
 		//Check if condition
 		Expression ifCond = null;
@@ -1185,8 +1190,12 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 								}*/
 								continue;
 							} else {
+								boolean ROSymbol = false;
+								if( ROSymSet.contains(IRSym) ) {
+									ROSymbol = true;
+								}
 								genCUDACodesForDataClause(dAnnot, IRSym, varName, startList, lengthList, typeSpecs, ifCond, asyncID, dataClauseT, 
-										mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, profileRegion, isFirstData);
+										mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, profileRegion, isFirstData, ROSymbol);
 								isFirstData = false;
 							}
 						} else {
@@ -1595,7 +1604,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 	protected void genCUDACodesForDataClause(ACCAnnotation dAnnot, Symbol IRSym, Expression hostVar, List<Expression> startList, 
 			List<Expression> lengthList, List<Specifier> typeSpecs, Expression ifCondExp, Expression asyncExp, DataClauseType dataClauseT, 
 			MallocType mallocT, MemTrType memtrT, DataRegionType dRegionType, List<Statement> inStmts, List<Statement>outStmts,
-			Statement asyncW1Stmt, Statement profileRegion, boolean isFirstData) {
+			Statement asyncW1Stmt, Statement profileRegion, boolean isFirstData, boolean ROSymbol) {
 		Annotatable at = dAnnot.getAnnotatable();
 		SymbolTable targetSymbolTable = null;
 		Set<SymbolTable> targetSymbolTables = new HashSet<SymbolTable>();
@@ -2201,6 +2210,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 						gpuVar.clone())));
 				arg_list.add(cloned_bytes.clone());
 				arg_list.add(asyncID.clone());
+				if( ROSymbol ) {
+					arg_list.add(new NameID("HI_MEM_READ_ONLY"));
+				} else {
+					arg_list.add(new NameID("HI_MEM_READ_WRITE"));
+				}
 				malloc_call.setArguments(arg_list);
 				malloc_stmt = new ExpressionStatement(malloc_call);
 				preambleList.add(malloc_stmt);
@@ -2771,6 +2785,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					arg_list.add(lengthList.get(i).clone());
 				}
 				arg_list.add(asyncID.clone());
+				if( ROSymbol ) {
+					arg_list.add(new NameID("HI_MEM_READ_ONLY"));
+				} else {
+					arg_list.add(new NameID("HI_MEM_READ_WRITE"));
+				}
 				malloc_call.setArguments(arg_list);
 				malloc_stmt = new ExpressionStatement(malloc_call);
 				preambleList.add(malloc_stmt);
@@ -3026,6 +3045,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 						(Identifier)gpuVar.clone())));
 				arg_list.add(cloned_bytes.clone());
 				arg_list.add(asyncID.clone());
+				if( ROSymbol ) {
+					arg_list.add(new NameID("HI_MEM_READ_ONLY"));
+				} else {
+					arg_list.add(new NameID("HI_MEM_READ_WRITE"));
+				}
 				malloc_call.setArguments(arg_list);
 				malloc_stmt = new ExpressionStatement(malloc_call);
 				preambleList.add(malloc_stmt);
@@ -3773,6 +3797,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		Set<Symbol> constantSet = new HashSet<Symbol>();
 		Set<Symbol> textureSet = new HashSet<Symbol>();
 		Set<Symbol> sharedROSet = new HashSet<Symbol>();
+		Set<Symbol> ROSymSet = new HashSet<Symbol>();
 		ARCAnnotation tCAnnot = at.getAnnotation(ARCAnnotation.class, "constant");
 		Set<SubArray> dataSet;
 		if( tCAnnot != null ) {
@@ -3803,6 +3828,10 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		if( tCAnnot != null ) {
 			dataSet = (Set<SubArray>)tCAnnot.get("noshared");
 			sharedROSet.removeAll(AnalysisTools.subarraysToSymbols(dataSet, IRSymbolOnly));
+		}
+		ACCAnnotation ROAnnot = at.getAnnotation(ACCAnnotation.class, "accreadonly");
+		if( ROAnnot != null ) {
+			ROSymSet.addAll((Set<Symbol>)ROAnnot.get("accreadonly"));
 		}
 		//Check if condition
 		Expression ifCond = null;
@@ -3940,9 +3969,13 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 							//               - If mainTrUnt does not have, error. Otherwise, create extern copy.
 							//           - If host variable is local, error.
 							//Step3: create and insert memory transfer code.
+							boolean ROSymbol = false;
+							if( ROSymSet.contains(IRSym) ) {
+								ROSymbol = true;
+							}
 							genCUDACodesForDataClause(uAnnot, IRSym, varName, startList, lengthList, typeSpecs, 
 									ifCond, asyncID, dataClauseT, mallocT, memtrT, regionT, inStmts, outStmts, null, 
-									profileRegion, isFirstData);
+									profileRegion, isFirstData, ROSymbol);
 							isFirstData = false;
 						} else {
 							break;
@@ -4804,6 +4837,12 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 
 		//////////////////////////////////////////////////////////////////////////
 		// Insert __syncthreads() calls for each #pragam acc barrier directive. //
+		// __syncthreads() is used to coordinate communication between the      //
+		//threads of the same block. When some threads within a block access    //
+		//the same addresses in shared or global memory, there are potential    //
+		//read-after-write, write-after-read, or write-after- write hazards for //
+		//some of these memory accesses. These data hazards can be avoided by   //
+		//synchronizing threads in-between these accesses.                      //
 		//////////////////////////////////////////////////////////////////////////
 		List<ACCAnnotation> barrierAnnots = AnalysisTools.ipCollectPragmas(
 				region, ACCAnnotation.class, "barrier", null);
@@ -6381,6 +6420,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
                 } else {
                     tItrSize = num_gangs;
                 }
+                iterspace = Symbolic.simplify(iterspace);
+                tItrSize = Symbolic.simplify(tItrSize);
                 if( tItrSize.equals(iterspace) ) {
                     continue; //we don't need to unroll this loop.
                 } else if( (tItrSize instanceof IntegerLiteral) && (iterspace instanceof IntegerLiteral) ) {
