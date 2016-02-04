@@ -54,7 +54,7 @@ public abstract class CUDATranslationTools {
 			Map<TranslationUnit, Declaration> OpenACCHeaderEndMap, boolean IRSymbolOnly,
 			boolean opt_addSafetyCheckingCode, boolean opt_UnrollOnReduction, int maxBlockSize,
 			Expression totalnumgangs, boolean kernelVerification, boolean memtrVerification, FloatLiteral EPSILON,
-			int warpSize, FloatLiteral minCheckValue, int localRedVarConf) {
+			int warpSize, FloatLiteral minCheckValue, int localRedVarConf, boolean isSingleTask) {
 		PrintTools.println("[reductionTransformation() begins] current procedure: " + cProc.getSymbolName() +
 				"\ncompute region type: " + cRegionKind + "\n", 2);
 		
@@ -2985,7 +2985,7 @@ public abstract class CUDATranslationTools {
 			List<Statement> preList, List<Statement> postList,
 			FunctionCall call_to_new_proc, Procedure new_proc, TranslationUnit main_TrUnt, 
 			Map<TranslationUnit, Declaration> OpenACCHeaderEndMap, boolean IRSymbolOnly,
-			boolean opt_addSafetyCheckingCode, Set<Symbol> arrayElmtCacheSymbols ) {
+			boolean opt_addSafetyCheckingCode, Set<Symbol> arrayElmtCacheSymbols, boolean isSingleTask ) {
 		PrintTools.println("[privateTransformation() begins] current procedure: " + cProc.getSymbolName() +
 				"\ncompute region type: " + cRegionKind + "\n", 2);
 		
@@ -3056,30 +3056,32 @@ public abstract class CUDATranslationTools {
 		//The local variable defined outside of gang loops but within a compute region
 		//will be alloced on the GPU shared memory if they are not included in any gang private clauses.
 		Set<Symbol> localGangPrivateSymbols = new HashSet<Symbol>();
-		if( region instanceof CompoundStatement ) {
-			//The local variables defined outside of gang loops but within a compute region are gang-private.
-			localGangPrivateSymbols.addAll(((CompoundStatement) region).getSymbols());
-			//symbols used to cache array elements on register should be worker-private.
-			localGangPrivateSymbols.removeAll(arrayElmtCacheSymbols);
-		}
-		List<ACCAnnotation> gangLoopAnnots = AnalysisTools.ipCollectPragmas(region, ACCAnnotation.class, "gang", null);
-		if( gangLoopAnnots != null ) {
-			for( ACCAnnotation gAnnot : gangLoopAnnots ) {
-				if( gAnnot.containsKey("worker") ) {
-					continue;
-				} else {
-					//Local variables defined in a pure gang loop are gang-private.
-					Annotatable gAt = gAnnot.getAnnotatable();
-					if( gAt instanceof ForLoop ) {
-						CompoundStatement gBody = (CompoundStatement)((ForLoop)gAt).getBody();
-						localGangPrivateSymbols.addAll(gBody.getSymbols());
-						//If the inner loop is part of the stripmined gang loop, the local variables in the inner
-						//loop should be also included.
-						Statement child = IRTools.getFirstNonDeclarationStatement(gBody);
-						if ( (child != null) && child.containsAnnotation(ACCAnnotation.class, "innergang") ) {
-							if( child instanceof ForLoop ) {
-								gBody = (CompoundStatement)((ForLoop)child).getBody();
-								localGangPrivateSymbols.addAll(gBody.getSymbols());
+		if( !isSingleTask ) {
+			if( region instanceof CompoundStatement ) {
+				//The local variables defined outside of gang loops but within a compute region are gang-private.
+				localGangPrivateSymbols.addAll(((CompoundStatement) region).getSymbols());
+				//symbols used to cache array elements on register should be worker-private.
+				localGangPrivateSymbols.removeAll(arrayElmtCacheSymbols);
+			}
+			List<ACCAnnotation> gangLoopAnnots = AnalysisTools.ipCollectPragmas(region, ACCAnnotation.class, "gang", null);
+			if( gangLoopAnnots != null ) {
+				for( ACCAnnotation gAnnot : gangLoopAnnots ) {
+					if( gAnnot.containsKey("worker") ) {
+						continue;
+					} else {
+						//Local variables defined in a pure gang loop are gang-private.
+						Annotatable gAt = gAnnot.getAnnotatable();
+						if( gAt instanceof ForLoop ) {
+							CompoundStatement gBody = (CompoundStatement)((ForLoop)gAt).getBody();
+							localGangPrivateSymbols.addAll(gBody.getSymbols());
+							//If the inner loop is part of the stripmined gang loop, the local variables in the inner
+							//loop should be also included.
+							Statement child = IRTools.getFirstNonDeclarationStatement(gBody);
+							if ( (child != null) && child.containsAnnotation(ACCAnnotation.class, "innergang") ) {
+								if( child instanceof ForLoop ) {
+									gBody = (CompoundStatement)((ForLoop)child).getBody();
+									localGangPrivateSymbols.addAll(gBody.getSymbols());
+								}
 							}
 						}
 					}

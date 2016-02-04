@@ -213,6 +213,7 @@ where clause is one of the following
 permute(list)    // for loop permutation transformation, resulting loops
                  // have loops nesting in the order of index variables in
                  // the argument list.
+unroll(unrollfactor)
 noreductionunroll(list)
 noploopswap
 noloopcollapse

@@ -19,7 +19,8 @@ public class Specifier implements Printable {
             "explicit", "&", "friend", "typedef", "private", "protected",
             "public", "restrict", "transient", "final", "abstract", "native",
             "threadsafe", "synchronized", "strictfp", "boolean", "byte",
-            "_Bool", "_Complex", "_Imaginary", "__nvl__", "__nvl_wp__"};
+            "_Bool", "_Complex", "_Imaginary", "__thread",
+            "__nvl__", "__nvl_wp__"};
 
     public static final Specifier CHAR = new Specifier(0);
     public static final Specifier WCHAR_T = new Specifier(1);
@@ -79,16 +80,22 @@ public class Specifier implements Printable {
     public static final Specifier CIMAGINARY = new Specifier(39);
 
     /**
+     * GCC's {@code __thread} storage class specifier.
+     * [Added by Joel E. Denny]
+     */
+    public static final Specifier THREAD = new Specifier(40);
+
+    /**
      * NVL's {@code __nvl__} type qualifier.
      * [Added by Joel E. Denny]
      */
-    public static final Specifier NVL = new Specifier(40);
+    public static final Specifier NVL = new Specifier(41);
 
     /**
      * NVL's {@code __nvl_wp__} type qualifier.
      * [Added by Joel E. Denny]
      */
-    public static final Specifier NVL_WP = new Specifier(41);
+    public static final Specifier NVL_WP = new Specifier(42);
 
     /** Predefined integer value of each specifiers. */
     protected int value;

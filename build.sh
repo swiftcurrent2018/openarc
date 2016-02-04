@@ -144,7 +144,7 @@ EOF
   chmod 755 bin/openarc
   ;;
   check)
-  $0 bin
+  $0 bin || exit 1
   echo "Compiling JUnit test suite..."
   if [ $enable_llvm = 0 ]; then
     echo 'error: JUnit test suite cannot be run while LLVM support is disabled'
@@ -156,9 +156,10 @@ EOF
   fi
   classpath="$ANTLR:class:$jllvm_jar:`get_config JUNIT_CLASSPATH`"
   JUNIT_SRC="$CETUSROOT/test/junit/*/*/*/*.java $CETUSROOT/test/junit/*/*/*.java"
-  javac -g -cp "$classpath" -d class $JUNIT_SRC
+  javac -g -cp "$classpath" -d class $JUNIT_SRC || exit 1
   echo "Running JUnit test suite..."
   java -Djava.library.path=jllvm -cp "$classpath" -ea:cetus... -ea:openacc... -ea:org.jllvm... org.junit.runner.JUnitCore openacc.test.JUnitSuite 2>&1 | tee check.log
+  exit ${PIPESTATUS[0]}
   ;;
   *)
   echo "Usage: $0 <target>"

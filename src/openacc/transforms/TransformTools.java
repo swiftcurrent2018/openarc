@@ -247,7 +247,7 @@ public abstract class TransformTools {
 					// Skip main procedure.
 					continue;
 				}
-				if( !pName.contains("dev__") && !pName.contains("_clnd") ) {
+				if( !pName.contains("dev__") && !pName.contains("_clnd") && !pName.contains("_GP") && !pName.contains("_TU") ) {
 					//[DEBUG] Current implementation does not detect functions used via function pointers.
 					//Therefore, we will remove unused functions only if they are created as by-product of 
 					//O2G translation (by KernelCallingProcCloning() and devProcCloning()).
@@ -266,14 +266,38 @@ public abstract class TransformTools {
 					if( notUsed ) {
 						//Check whether the procedure is used in pragma annotations.
 						//[DEBUG] For simple checking, use string comparison, but the overhead
-						//may be huge; more optimization is necessary.
+						//may be huge; more optimization is necessary, and this cannot distinguish 
+						//procedures with different suffixes.
 						for( Procedure ttProc : procList ) {
 							String ttname = ttProc.getName().toString();
 							if( !ttname.equals(pName) ) {
 								CompoundStatement ttBody = ttProc.getBody();
-								if( ttBody.toString().contains(pName) ) {
+/*								if( ttBody.toString().contains(pName) ) {
 									notUsed = false;
 									break;
+								}*/
+								DFIterator<Annotatable> iter = new DFIterator<Annotatable>(ttBody, Annotatable.class);
+								for (;;)
+								{
+									Annotatable tAn = null;
+
+									try {
+										tAn = (Annotatable)iter.next();
+									} catch (NoSuchElementException e) {
+										break;
+									}
+									List<Annotation> annotList = tAn.getAnnotations();
+									if( annotList != null ) {
+										for(Annotation tannot : annotList) {
+											if( tannot.toString().contains(pName) ) {
+												notUsed = false;
+												break;
+											}
+										}
+									}
+									if( !notUsed ) {
+										break;
+									}
 								}
 							}
 						}
@@ -332,6 +356,36 @@ public abstract class TransformTools {
 				mayContainUnusedOnes = false;
 			}
 		}
+	}
+	
+	static public void removeUnusedDeviceFunctionDeclarations(Program prog) {
+		List<TranslationUnit> trUnts = new ArrayList<TranslationUnit>();
+		for( Traversable tt : prog.getChildren() ) {
+			TranslationUnit tUnt = (TranslationUnit)tt;
+			if( !tUnt.getInputFilename().equals("openarc_kernel.cl") ) {
+				trUnts.add(tUnt);
+			}
+		}
+		for( TranslationUnit trU : trUnts ) {
+			DFIterator<ProcedureDeclarator> iter = new DFIterator<ProcedureDeclarator>(trU, ProcedureDeclarator.class);
+			iter.pruneOn(ProcedureDeclarator.class);
+			iter.pruneOn(Procedure.class);
+			iter.pruneOn(Statement.class);
+			for (;;)
+			{
+				ProcedureDeclarator procDeclr = null;
+
+				try {
+					procDeclr = (ProcedureDeclarator)iter.next();
+					if( procDeclr.getSymbolName().contains("dev__") ) {
+						trU.removeChild(procDeclr.getParent());
+					}
+				} catch (NoSuchElementException e) {
+					break;
+				}
+			}
+		}
+		
 	}
 	
 	static private String[] dummyVars = {"gpuNumThreads", "gpuNumBlocks", "gpuBytes",

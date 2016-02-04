@@ -1,8 +1,6 @@
 #include "openacc.h"
 #include "openaccrt_ext.h"
-#include <iostream>
 #include <sstream>
-#include <unistd.h>
 ////////////////////////////////////////////////////////
 //Current implementation works with CUDA5.0 or later. //
 ////////////////////////////////////////////////////////
@@ -1399,6 +1397,50 @@ HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_
     return result;
 }
 
+//[DEBUG] CUDA driver does not offer asynchronous version of cuModuleGetGlobal(), 
+//and thus HI_memcpy_const_async() is the same as HI_memcpy_const().
+HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_const_async(%d, %lu)\n", async, count);
+	}
+#endif
+    HostConf_t * tconf = getHostConf();
+    CUresult cuResult;
+    HI_error_t result = HI_success;
+    CUdeviceptr dptr;
+    size_t size;
+    cuResult = cuModuleGetGlobal( &dptr, &size, cuModule, constName.c_str());
+
+//#ifdef _OPENARC_PROFILE_
+//	double ltime = HI_get_localtime();
+//#endif
+
+    if( cuResult != CUDA_SUCCESS ) {
+#ifdef _OPENMP
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const_async()] Acquiring constant memory handle failed with error %d in tid %d\n", cuResult, omp_get_thread_num());
+		exit(1);
+#else
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const_async()] Acquiring constant memory handle failed with error %d in tid %d\n", cuResult, 0);
+		exit(1);
+#endif
+        result = HI_error;
+    }
+
+    result = HI_memcpy((void*)dptr, hostPtr, count, kind, 0);
+
+//#ifdef _OPENARC_PROFILE_
+//    tconf->totalMemTrTime += HI_get_localtime() - ltime;
+//#endif
+
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_memcpy_const_async(%d, %lu)\n", async, count);
+	}
+#endif
+    return result;
+}
+
 
 HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
         HI_MemcpyKind_t kind, int trType, int async) {
@@ -1906,9 +1948,9 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], 
 #endif
     CUresult err;
     //fprintf(stderr, "[HI_kernel_call()] GRIDSIZE %d %d %d\n", gridSize[2], gridSize[1], gridSize[0]);
+    CUstream stream = getQueue(async);
+    CUevent event = getEvent(async);
     if(async != DEFAULT_QUEUE+tconf->asyncID_offset) {
-        CUstream stream = getQueue(async);
-        CUevent event = getEvent(async);
         err = cuLaunchKernel(tconf->kernelsMap.at(this).at(kernel_name), gridSize[0], gridSize[1], gridSize[2], blockSize[0], blockSize[1], blockSize[2], 0, stream, (tconf->kernelArgsMap.at(this).at(kernel_name))->kernelParams, NULL);
 
         cuEventRecord(event, stream);
@@ -1932,6 +1974,8 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], 
 	if(tconf->KernelTimingMap.count(kernel_name) == 0) {
 		tconf->KernelTimingMap[kernel_name] = 0.0;
 	}
+    err = cuStreamSynchronize(stream);
+    err = cuStreamSynchronize(0);
     tconf->KernelTimingMap[kernel_name] += HI_get_localtime() - ltime;
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -1952,14 +1996,14 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], 
 //     streams wait on the NULL stream. Therefore, we don't need any explicit
 //     synchronization for any blocking stream. (a blocking stream
 //     is created when cuStreamCreate() is called with a default flag.)
-HI_error_t CudaDriver::HI_synchronize()
+HI_error_t CudaDriver::HI_synchronize( int forcedSync )
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_synchronize()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_synchronize(%d)\n", forcedSync);
 	}
 #endif
-	if( unifiedMemSupported == 1 ) {
+	if( (forcedSync != 0) || (unifiedMemSupported == 1) ) {
 		//cuCtxSynchronize() waits for all tasks in the current context, but we
 		//need to wait for the tasks in the default queue (NULL stream).
     	//CUresult err = cuCtxSynchronize();
@@ -1977,7 +2021,7 @@ HI_error_t CudaDriver::HI_synchronize()
 
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_synchronize()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_synchronize(%d)\n", forcedSync);
 	}
 #endif
     return HI_success;

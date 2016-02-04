@@ -35,6 +35,7 @@ import openacc.hir.*;
 public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 	protected boolean opt_addErrorCheckingCode = false;
 	protected boolean opt_shrdSclrCachingOnSM = false;
+	protected boolean addPipeEnableMacro = true;
 	
 	protected double CUDACompCapability = 1.1;
 	////////////////////////////////////////////////////////
@@ -61,7 +62,6 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 	///////////////////////////////////////////
 	// Misc. values for translation purpose. //
 	///////////////////////////////////////////
-	protected enum MallocType {ConstantMalloc, TextureMalloc, PitchedMalloc, NormalMalloc}
 	//contains param-symbol to pitch-size symbol map
 	protected Map<Symbol, Symbol> pitchedSymMap =  new HashMap<Symbol, Symbol>();
 	//contains param-symbol to texture-symbol map
@@ -1021,6 +1021,19 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			} else if( key.equals("device_resident") ) {
 				genCodeForDataClause = true;
 				memtrT = MemTrType.NoCopy;
+			} else if( key.equals("pipe") ) {
+				genCodeForDataClause = true;
+				memtrT = MemTrType.NoCopy;
+				dataClauseT = DataClauseType.Pipe;
+				mallocT = MallocType.PipeMalloc;
+			} else if( key.equals("pipein") ) {
+				genCodeForDataClause = true;
+				memtrT = MemTrType.NoCopy;
+				dataClauseT = DataClauseType.PipeIn;
+			} else if( key.equals("pipeout") ) {
+				genCodeForDataClause = true;
+				memtrT = MemTrType.NoCopy;
+				dataClauseT = DataClauseType.PipeOut;
 			} else if( key.equals("deviceptr") ) {
 				genCodeForDataClause = false;
 				memtrT = MemTrType.NoCopy;
@@ -1080,9 +1093,30 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								typeSpecs.addAll(((VariableDeclaration)tSym.getDeclaration()).getSpecifiers());
 							}
 							int dimension = lengthList.size();
+							boolean isConstArray = false;
 							mallocT = MallocType.NormalMalloc;
+							if( constantSet.contains(sym) ) {
+								mallocT = MallocType.ConstantMalloc;
+								if( dimension > 0 ) {
+									boolean constantDimension = true;
+									for( Expression tDim : lengthList ) {
+										if( (tDim == null) || !(tDim instanceof IntegerLiteral) ) {
+											constantDimension = false;
+											break;
+										}
+									}
+									if( constantDimension ) {
+										if( SymbolTools.isArray(sym) && !SymbolTools.isPointer(sym) 
+												&& sym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+											isConstArray = true;
+										}
+									}
+								}
+							}
 
-							if( key.equals("present") && mallocT.equals(MallocType.ConstantMalloc) ) {
+							//Below checking is needed only when constant memory is allocated as global variables.
+							//Temporarily disabled for now.
+/*							if( key.equals("present") && mallocT.equals(MallocType.ConstantMalloc) ) {
 								if( !foundDimensions ) {
 									Tools.exit("[ERROR in ACC2OPENCLTranslator.handleDataClauses()] Dimension information " +
 											"of the following variable is needed to be cached on the Constant memory; " +
@@ -1091,7 +1125,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 											"ACCAnnotation: " + dAnnot + "\n" +
 											"Enclosing Procedure: " + pProc.getSymbolName() + "\n");
 								}
-							}
+							}*/
 							
 							if( (memtrT == MemTrType.CopyIn) && (dimension == 0) && sharedROSet.contains(sym) &&
 									(at.containsAnnotation(ACCAnnotation.class, "kernels") 
@@ -1138,7 +1172,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 									ROSymbol = true;
 								}
 								genOpenCLCodesForDataClause(dAnnot, IRSym, varName, startList, lengthList, typeSpecs, ifCond, asyncID, dataClauseT, 
-										mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, isFirstData, ROSymbol);
+										mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, isFirstData, ROSymbol, isConstArray);
 								isFirstData = false;
 							}
 						} else {
@@ -1459,8 +1493,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 									if( gpu_sym == null ) {
 										addNewGpuSymbol = true;
 										//FIXME: how to handle this case?
-										Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(main_TrUnt);
-										main_TrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
+										Declaration tLastOpenCLDecl = OpenACCHeaderEndMap.get(main_TrUnt);
+										main_TrUnt.addDeclarationAfter(tLastOpenCLDecl, gpu_decl);
 										OpenACCHeaderEndMap.put(main_TrUnt, gpu_decl);
 										if( parentTrUnt != main_TrUnt ) {
 											gpu_declarator = gpu_declarator.clone();
@@ -1471,9 +1505,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 											extended_clonedspecs.addAll(clonedspecs);
 											gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 													gpu_declarator);
-											tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
-											parentTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl);
-											parentTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
+											tLastOpenCLDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+											parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, tAnnotDecl);
+											parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, gpu_decl);
 											OpenACCHeaderEndMap.put(parentTrUnt, gpu_decl);
 											gpuVar = new Identifier(gpu_declarator);
 										}
@@ -1486,9 +1520,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 										extended_clonedspecs.addAll(clonedspecs);
 										gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 												gpu_declarator);
-										Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
-										parentTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl);
-										parentTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
+										Declaration tLastOpenCLDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+										parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, tAnnotDecl);
+										parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, gpu_decl);
 										OpenACCHeaderEndMap.put(parentTrUnt, gpu_decl);
 										gpuVar = new Identifier(gpu_declarator);
 									}
@@ -1546,8 +1580,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 	protected void genOpenCLCodesForDataClause(ACCAnnotation dAnnot, Symbol IRSym, Expression hostVar, List<Expression> startList, 
 			List<Expression> lengthList, List<Specifier> typeSpecs, Expression ifCondExp, Expression asyncExp, DataClauseType dataClauseT, 
 			MallocType mallocT, MemTrType memtrT, DataRegionType dRegionType, List<Statement> inStmts, List<Statement>outStmts,
-			Statement asyncW1Stmt, boolean isFirstData, boolean ROSymbol) {
+			Statement asyncW1Stmt, boolean isFirstData, boolean ROSymbol, boolean isConstArray) {
 		Annotatable at = dAnnot.getAnnotatable();
+		List<Statement> preambleList = new LinkedList<Statement>();
+		List<Statement> postscriptList = new LinkedList<Statement>();
 		SymbolTable targetSymbolTable = null;
 		Set<SymbolTable> targetSymbolTables = new HashSet<SymbolTable>();
 		Traversable tt = at;
@@ -1584,7 +1620,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		
 		boolean genMallocCode = true;
 		if( (dataClauseT == DataClauseType.CheckOnly) ||
-				(dataClauseT == DataClauseType.UpdateOnly) ) {
+				(dataClauseT == DataClauseType.UpdateOnly) ||
+				(dataClauseT == DataClauseType.Pipe) ||
+				(dataClauseT == DataClauseType.PipeIn) ||
+				(dataClauseT == DataClauseType.PipeOut) ) {
 			genMallocCode = false;
 		}
 		
@@ -1662,7 +1701,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			} else {
 				scope = "compute region";
 			}
-			Tools.exit("[ERROR in ACC2OPENCLTranslator.handleCUDAMalloc()] a symbol(" +
+			Tools.exit("[ERROR in ACC2OPENCLTranslator.genOpenCLCodesForDataClause()] a symbol(" +
 					IRSym + ") in a " + scope + " is not visible; exit!");
 		}
 		if( targetSymbolTable instanceof CompoundStatement ) {
@@ -1671,7 +1710,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			}
 		}
 
-        if(asyncExp != null)
+        if((asyncExp != null) && (dataClauseT != DataClauseType.Pipe) && (dataClauseT != DataClauseType.PipeIn) &&
+        		(dataClauseT != DataClauseType.PipeOut) )
         {
             FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
             setAsyncCall.addArgument(asyncExp.clone());
@@ -1691,6 +1731,96 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		// Remove extern specifier. //
 		//////////////////////////////
 		clonedspecs.remove(Specifier.EXTERN);
+		
+		if( dataClauseT == DataClauseType.Pipe )  {
+			////////////////////////////////////////////////////////////////////
+			//Add OpenCL Extension pragma to enable Altera channel extension. //
+			////////////////////////////////////////////////////////////////////
+			if( addPipeEnableMacro ) {
+				PragmaAnnotation pAnnot = new PragmaAnnotation("OPENCL EXTENSION cl_altera_channels : enable");
+				kernelsTranslationUnit.addDeclaration(new AnnotationDeclaration(pAnnot));
+				addPipeEnableMacro = false;
+			}
+			/////////////////////////////////////////////////////////////////////////
+			// Create a pipe variable corresponding to shared_var if not existing. //
+			// Ex: float * pipe__b;                                                //
+			/////////////////////////////////////////////////////////////////////////
+			// Give a new name for the pipe variable 
+			Identifier pipeVar = null;
+			StringBuilder str = new StringBuilder(80);
+			str.append("pipe__");
+			if( hostVar instanceof AccessExpression ) {
+				str.append(TransformTools.buildAccessExpressionName((AccessExpression)hostVar));
+			} else {
+				str.append(hostVar.toString());
+			}
+			Set<Symbol> symSet = kernelsTranslationUnit.getSymbols();
+			Symbol pipe_sym = AnalysisTools.findsSymbol(symSet, str.toString());
+			if( pipe_sym != null ) {
+				pipeVar = new Identifier(pipe_sym);
+			} else {
+				// Create a new Pipe variable.
+				clonedspecs.add(0, OpenCLSpecifier.OPENCL_CHANNEL);
+				VariableDeclarator pipe_declarator = new VariableDeclarator(new NameID(str.toString()));
+				VariableDeclaration pipe_decl = new VariableDeclaration(clonedspecs, 
+						pipe_declarator);
+				kernelsTranslationUnit.addDeclaration(pipe_decl);
+				pipeVar = new Identifier(pipe_declarator);
+			}
+			return;
+		} else if( (dataClauseT == DataClauseType.PipeIn) || (dataClauseT == DataClauseType.PipeOut)  ) {
+			// Find the corresponding pipe variable 
+			Identifier pipeVar = null;
+			StringBuilder str = new StringBuilder(80);
+			str.append("pipe__");
+			if( hostVar instanceof AccessExpression ) {
+				str.append(TransformTools.buildAccessExpressionName((AccessExpression)hostVar));
+			} else {
+				str.append(hostVar.toString());
+			}
+			Set<Symbol> symSet = kernelsTranslationUnit.getSymbols();
+			Symbol pipe_sym = AnalysisTools.findsSymbol(symSet, str.toString());
+			if( pipe_sym == null ) {
+				Tools.exit("[ERROR in ACC2OPENCLTranslator.genOpenCLCodesForDataClause()] Cannot find the corresponding "
+						+ "pipe variable (" + str.toString() + ") of an input variable (" + hostVar + ").\n"
+						+ "All variables included in a pipein or pipeout clause should be defined "
+						+ "in a pipe clause of the enclosing data region.\n");
+			}
+			pipeVar = new Identifier(pipe_sym);
+			if( (dataClauseT == DataClauseType.PipeIn) ) {
+				List<ArrayAccess> arrayAccesses = IRTools.getExpressionsOfType(at, ArrayAccess.class);
+				for(ArrayAccess access : arrayAccesses)
+				{
+					Symbol accessSymbol = SymbolTools.getSymbolOf(access.getArrayName());
+					if( IRSym.equals(accessSymbol) ) {
+						FunctionCall piperead_call = new FunctionCall(new NameID("read_channel_altera"));
+						piperead_call.addArgument(pipeVar);
+						piperead_call.swapWith(access);
+					}
+				}
+			} else {
+				List<ArrayAccess> arrayAccesses = IRTools.getExpressionsOfType(at, ArrayAccess.class);
+				for(ArrayAccess access : arrayAccesses)
+				{
+					Symbol accessSymbol = SymbolTools.getSymbolOf(access.getArrayName());
+					if( IRSym.equals(accessSymbol) ) {
+						Traversable parent = access.getParent();
+						if( parent instanceof AssignmentExpression ) {
+							Expression RHS = ((AssignmentExpression)parent).getRHS().clone();
+							FunctionCall pipewrite_call = new FunctionCall(new NameID("write_channel_altera"));
+							pipewrite_call.addArgument(pipeVar);
+							pipewrite_call.addArgument(RHS);
+							pipewrite_call.swapWith((AssignmentExpression)parent);
+						} else {
+							Tools.exit("[ERROR in ACC2OPENCLTranslator.genOpenCLCodesForDataClause()] unsupported access pattern for "
+									+ "pipeout variable " + hostVar + "in the following expression: " + parent + 
+									"ACC Annotation: " + dAnnot + AnalysisTools.getEnclosingContext(at));
+						}
+					}
+				}
+			}
+			return;
+		}
 		
 		VariableDeclaration bytes_decl = (VariableDeclaration)SymbolTools.findSymbol(parentTrUnt, "gpuBytes");
 		Identifier cloned_bytes = new Identifier((VariableDeclarator)bytes_decl.getDeclarator(0));			
@@ -1753,9 +1883,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				gpu_sym = AnalysisTools.findsSymbol(symSet, str.toString());
 				if( gpu_sym == null ) {
 					addNewGpuSymbol = true;
-					Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(main_TrUnt);
-					main_TrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl);
-					main_TrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
+					Declaration tLastOpenCLDecl = OpenACCHeaderEndMap.get(main_TrUnt);
+					main_TrUnt.addDeclarationAfter(tLastOpenCLDecl, tAnnotDecl);
+					main_TrUnt.addDeclarationAfter(tLastOpenCLDecl, gpu_decl);
 					OpenACCHeaderEndMap.put(main_TrUnt, gpu_decl);
 					if( dRegionType == DataRegionType.ImplicitProgramRegion ) {
 						for( SymbolTable tTbl : targetSymbolTables ) {
@@ -1769,9 +1899,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								extended_clonedspecs.addAll(clonedspecs);
 								gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 										gpu_declarator);
-								tLastCudaDecl = OpenACCHeaderEndMap.get(tTrUnt);
-								tTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl.clone());
-								tTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
+								tLastOpenCLDecl = OpenACCHeaderEndMap.get(tTrUnt);
+								tTrUnt.addDeclarationAfter(tLastOpenCLDecl, tAnnotDecl.clone());
+								tTrUnt.addDeclarationAfter(tLastOpenCLDecl, gpu_decl);
 								OpenACCHeaderEndMap.put(tTrUnt, gpu_decl);
 								//gpuVar = new Identifier(gpu_declarator);
 							}
@@ -1786,9 +1916,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							extended_clonedspecs.addAll(clonedspecs);
 							gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 									gpu_declarator);
-							tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
-							parentTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl.clone());
-							parentTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
+							tLastOpenCLDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+							parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, tAnnotDecl.clone());
+							parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, gpu_decl);
 							OpenACCHeaderEndMap.put(parentTrUnt, gpu_decl);
 							gpuVar = new Identifier(gpu_declarator);
 						}
@@ -1802,9 +1932,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					extended_clonedspecs.addAll(clonedspecs);
 					gpu_decl = new VariableDeclaration(extended_clonedspecs, 
 							gpu_declarator);
-					Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
-					parentTrUnt.addDeclarationAfter(tLastCudaDecl, tAnnotDecl.clone());
-					parentTrUnt.addDeclarationAfter(tLastCudaDecl, gpu_decl);
+					Declaration tLastOpenCLDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+					parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, tAnnotDecl.clone());
+					parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, gpu_decl);
 					OpenACCHeaderEndMap.put(parentTrUnt, gpu_decl);
 					gpuVar = new Identifier(gpu_declarator);
 				}
@@ -1857,8 +1987,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					phost_sym = AnalysisTools.findsSymbol(symSet, str.toString());
 					if( phost_sym == null ) {
 						addNewPhostSymbol = true;
-						Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(main_TrUnt);
-						main_TrUnt.addDeclarationAfter(tLastCudaDecl, phost_decl);
+						Declaration tLastOpenCLDecl = OpenACCHeaderEndMap.get(main_TrUnt);
+						main_TrUnt.addDeclarationAfter(tLastOpenCLDecl, phost_decl);
 						OpenACCHeaderEndMap.put(main_TrUnt, phost_decl);
 						if( dRegionType == DataRegionType.ImplicitProgramRegion ) {
 							for( SymbolTable tTbl : targetSymbolTables ) {
@@ -1872,8 +2002,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 									extended_clonedspecs.addAll(clonedspecs);
 									phost_decl = new VariableDeclaration(extended_clonedspecs, 
 											phost_declarator);
-									tLastCudaDecl = OpenACCHeaderEndMap.get(tTrUnt);
-									tTrUnt.addDeclarationAfter(tLastCudaDecl, phost_decl);
+									tLastOpenCLDecl = OpenACCHeaderEndMap.get(tTrUnt);
+									tTrUnt.addDeclarationAfter(tLastOpenCLDecl, phost_decl);
 									OpenACCHeaderEndMap.put(tTrUnt, phost_decl);
 									//phostVar = new Identifier(phost_declarator);
 								}
@@ -1888,8 +2018,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								extended_clonedspecs.addAll(clonedspecs);
 								phost_decl = new VariableDeclaration(extended_clonedspecs, 
 										phost_declarator);
-								tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
-								parentTrUnt.addDeclarationAfter(tLastCudaDecl, phost_decl);
+								tLastOpenCLDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+								parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, phost_decl);
 								OpenACCHeaderEndMap.put(parentTrUnt, phost_decl);
 								phostVar = new Identifier(phost_declarator);
 							}
@@ -1903,8 +2033,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						extended_clonedspecs.addAll(clonedspecs);
 						phost_decl = new VariableDeclaration(extended_clonedspecs, 
 								phost_declarator);
-						Declaration tLastCudaDecl = OpenACCHeaderEndMap.get(parentTrUnt);
-						parentTrUnt.addDeclarationAfter(tLastCudaDecl, phost_decl);
+						Declaration tLastOpenCLDecl = OpenACCHeaderEndMap.get(parentTrUnt);
+						parentTrUnt.addDeclarationAfter(tLastOpenCLDecl, phost_decl);
 						OpenACCHeaderEndMap.put(parentTrUnt, phost_decl);
 						phostVar = new Identifier(phost_declarator);
 					}
@@ -1957,12 +2087,79 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			addCopyInStmt = true;
 			addCopyOutStmt = true;
 		}
-		List<Statement> preambleList = new LinkedList<Statement>();
-		List<Statement> postscriptList = new LinkedList<Statement>();
 		//List<Statement> kernelVerifyCodes = new LinkedList<Statement>();
 		
 					
-		if( mallocT == MallocType.NormalMalloc) { //Normal malloc.
+		if( isConstArray && (mallocT == MallocType.ConstantMalloc) ) {
+			////////////////////////////////////////////////////////////////////////
+			//Create a file-scope constant array in the kernel file.              //
+			////////////////////////////////////////////////////////////////////////
+			// FIXME: if a compute region is in a file different from that of the //
+			// enclosing data region, data may need to be copied again.           //
+			////////////////////////////////////////////////////////////////////////
+			/////////////////////////////////////
+			// Create a __constant variable. //
+			/////////////////////////////////////
+			//  __constant float a[SIZE1] = { ... };  //
+			/////////////////////////////
+			str = new StringBuilder(80);
+			str.append("const__");
+			if( hostVar instanceof AccessExpression ) {
+				str.append(TransformTools.buildAccessExpressionName((AccessExpression)hostVar));
+			} else {
+				str.append(hostVar.toString());
+			}
+			if( !SymbolTools.isGlobal(IRSym) ) {
+				str.append("__" + parentProc.getSymbolName());
+			}
+            Set<Symbol> symbolSet = kernelsTranslationUnit.getSymbols();
+            /*
+			Set<Symbol> symbolSet = null;
+			if( dRegionType == DataRegionType.ImplicitProgramRegion ) {
+				symbolSet = targetSymbolTable.getSymbols();
+			} else {
+				symbolSet = parentTrUnt.getSymbols();
+			}
+			*/
+			Symbol constantSym = AnalysisTools.findsSymbol(symbolSet, str.toString());
+			boolean addNewConstSymbol = false;
+			if( constantSym != null ) {
+				constantID = new Identifier((VariableDeclarator)constantSym);
+				//DEBUG: For implicit program-level data region, multiple constantID may be needed.
+			} else {
+				addNewConstSymbol = true;
+				List<Expression> arryDimList = new ArrayList<Expression>();
+				for( int i=0; i<lengthList.size(); i++ ) {
+					arryDimList.add(lengthList.get(i).clone());
+				}
+				ArraySpecifier arraySpecs = new ArraySpecifier(arryDimList);
+				VariableDeclarator constantRef_declarator = new VariableDeclarator(new NameID(str.toString()), arraySpecs);
+				constantRef_declarator.setInitializer(((Declarator)IRSym).getInitializer().clone());
+				List<Specifier> constspecs = new ChainedList<Specifier>();
+				constspecs.add(OpenCLSpecifier.OPENCL_CONSTANT);
+				constspecs.addAll(clonedspecs);
+				Declaration constantRef_decl = new VariableDeclaration(constspecs, constantRef_declarator);
+				constantID = new Identifier(constantRef_declarator); 
+				//Insert __constant variable declaration.
+				if( dRegionType == DataRegionType.ImplicitProgramRegion ) {
+                    //kernelsTranslationUnit.addDeclarationAfter(accHeaderDecl, constantRef_decl);
+					Procedure ttProc = AnalysisTools.findFirstProcedure(kernelsTranslationUnit);
+					if( ttProc == null ) {
+						kernelsTranslationUnit.addDeclaration(constantRef_decl);
+					} else {
+						kernelsTranslationUnit.addDeclarationBefore(ttProc, constantRef_decl);
+					}
+				} else {
+					Procedure ttProc = AnalysisTools.findFirstProcedure(kernelsTranslationUnit);
+					if( ttProc == null ) {
+						kernelsTranslationUnit.addDeclaration(constantRef_decl);
+					} else {
+						kernelsTranslationUnit.addDeclarationBefore(ttProc, constantRef_decl);
+					}
+				}
+				//PrintTools.println(kernelsTranslationUnit.toString(), 0);
+			}
+		} else if( (mallocT == MallocType.NormalMalloc) || (mallocT == MallocType.ConstantMalloc) ) { //Normal or constant malloc.
 			///////////////////////////////////////////////////////
 			// Allocate GPU global memory for the host variable. //
 			////////////////////////////////////////////////////////////////
@@ -2012,7 +2209,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						(Identifier)gpuVar.clone())));
 				arg_list.add(cloned_bytes.clone());
 				arg_list.add(asyncID.clone());
-				if( ROSymbol ) {
+/*				if( ROSymbol ) {
+					arg_list.add(new NameID("HI_MEM_READ_ONLY"));
+				} else {
+					arg_list.add(new NameID("HI_MEM_READ_WRITE"));
+				}*/
+				//To control when to allocate as R/O, we allocate R/O buffer only when in the 
+				//constant clause.
+				if( mallocT == MallocType.ConstantMalloc ) {
 					arg_list.add(new NameID("HI_MEM_READ_ONLY"));
 				} else {
 					arg_list.add(new NameID("HI_MEM_READ_WRITE"));
@@ -2297,7 +2501,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 
 		//[DEBUG] To allow separate compilation, GPU data presence check should be added to all update directives.
 		//if( (dataClauseT == DataClauseType.UpdateOnly) && addNewGpuSymbol && (mallocT != MallocType.ConstantMalloc) ) {
-		if( (dataClauseT == DataClauseType.UpdateOnly) && (mallocT != MallocType.ConstantMalloc) ) {
+		if( (dataClauseT == DataClauseType.UpdateOnly) && ((mallocT != MallocType.ConstantMalloc) || !isConstArray) ) {
 			IfStatement ifStmt = new IfStatement(presentCheck_exp.clone(), presentErrorCode.clone());
 			if( memtrT == MemTrType.CopyIn ) {
 				preambleList.add(0, ifStmt);
@@ -2309,7 +2513,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		}
 		
 		if( dataClauseT == DataClauseType.CheckOnly ) {
-			if( mallocT != MallocType.ConstantMalloc ) {
+			if( (mallocT != MallocType.ConstantMalloc) || !isConstArray ) {
 				Statement inPt = inStmts.get(0);
 				CompoundStatement pStmt = (CompoundStatement)inPt.getParent();
 				CompoundStatement elseBody = null;
@@ -2330,6 +2534,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					for( int i=1; i<inStmts.size(); i++ ) {
 						TranslationUnit tUnt = null;
 						inPt = inStmts.get(i);
+						pStmt = (CompoundStatement)inPt.getParent();
 						tt = inPt;
 						while( (tt != null) ) {
 							if( tt instanceof TranslationUnit ) {
@@ -2398,6 +2603,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					for( int i=1; i<inStmts.size(); i++ ) {
 						TranslationUnit tUnt = null;
 						inPt = inStmts.get(i);
+						pStmt = (CompoundStatement)inPt.getParent();
 						tt = inPt;
 						while( (tt != null) ) {
 							if( tt instanceof TranslationUnit ) {
@@ -2502,6 +2708,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					for( int i=1; i<outStmts.size(); i++ ) {
 						TranslationUnit tUnt = null;
 						outPt = outStmts.get(i);
+						pStmt = (CompoundStatement)outPt.getParent();
 						tt = outPt;
 						while( (tt != null) ) {
 							if( tt instanceof TranslationUnit ) {
@@ -2815,7 +3022,26 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								typeSpecs.addAll(((VariableDeclaration)tSym.getDeclaration()).getSpecifiers());
 							}
 							int dimension = lengthList.size();
+							boolean isConstArray = false;
 							mallocT = MallocType.NormalMalloc;
+							if( constantSet.contains(sym) ) {
+								mallocT = MallocType.ConstantMalloc;
+								if( dimension > 0 ) {
+									boolean constantDimension = true;
+									for( Expression tDim : lengthList ) {
+										if( (tDim == null) || !(tDim instanceof IntegerLiteral) ) {
+											constantDimension = false;
+											break;
+										}
+									}
+									if( constantDimension ) {
+										if( SymbolTools.isArray(sym) && !SymbolTools.isPointer(sym) 
+												&& sym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+											isConstArray = true;
+										}
+									}
+								}
+							}
 
 							//Step1: find symboltable containing current host variable.
 							//Step2: find GPU device variable for the host variable.
@@ -2829,7 +3055,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								ROSymbol = true;
 							}
 							genOpenCLCodesForDataClause(uAnnot, IRSym, varName, startList, lengthList, typeSpecs, 
-									ifCond, asyncID, dataClauseT, mallocT, memtrT, regionT, inStmts, outStmts, null, isFirstData, ROSymbol);
+									ifCond, asyncID, dataClauseT, mallocT, memtrT, regionT, inStmts, outStmts, null, isFirstData, ROSymbol, isConstArray);
 							isFirstData = false;
 						} else {
 							break;
@@ -2861,6 +3087,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		//HashSet<Symbol> accprivateSet = new HashSet<Symbol>();
 		//HashSet<Symbol> rcreateSet = new HashSet<Symbol>();
 		HashSet<Symbol> accreductionSet = new HashSet<Symbol>();
+		HashSet<SubArray> accPipeSet = new HashSet<SubArray>();
 		////////////////////////////////////////////////////////////////
 		// Create a mapping between a shared symbol and its subarray. //
 		////////////////////////////////////////////////////////////////
@@ -2870,6 +3097,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		
 		//////////////////////////////////////////////////////////////
 		// Extract CUDA directives attached to this compute region. //
+		// These work for OpenCL devices too.                       //
 		//////////////////////////////////////////////////////////////
 		Set<Symbol> cudaRegisterROSet = new HashSet<Symbol>();
 		Set<Symbol> cudaRegisterSet = new HashSet<Symbol>();
@@ -2884,6 +3112,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		//Set<Symbol> cudaNoRedUnrollSet = new HashSet<Symbol>();
 		Map<Symbol, Set<SubArray>> shrdArryOnRegMap = new HashMap<Symbol, Set<SubArray>>();
 		Set<SubArray> ROShrdArryOnRegSet = new HashSet<SubArray>();
+		Set<Symbol> accPresentSet = new HashSet<Symbol>();
 		
 		////////////////////////////////////////////////////////////////
 		// Extract OpenCL directives attached to this compute region. //
@@ -2930,7 +3159,16 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							if( dataClause.equals("deviceptr") ) {
 								accDevicePtrSet.add(sym);
 							} 
-							accSharedMap.put(sym, sArray);
+							if( dataClause.equals("present") ) {
+								accPresentSet.add(sym);
+							} 
+							if( !dataClause.equals("pipe") && !dataClause.equals("pipein") &&
+									!dataClause.equals("pipeout") ) {
+								accSharedMap.put(sym, sArray);
+							} else {
+								accsharedSet.remove(sym);
+								accreadonlySet.remove(sym);
+							}
 						}
 					}
 				}
@@ -3535,13 +3773,13 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		Expression totalnumgangs = null;
 		Expression totalnumworkers = null;
 		tAnnot = region.getAnnotation(ACCAnnotation.class, "seq");
-		boolean isSeqLoop = false;
+		boolean isSingleTask = false;
 		if( tAnnot != null ) {
 			if( !AnalysisTools.ipContainPragmas(region, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null) ) {
-				isSeqLoop = true;
+				isSingleTask = true;
 			}
 		}
-		if( isSeqLoop ) {
+		if( isSingleTask ) {
 			num_gangs.add(new IntegerLiteral(1));
 			num_gangs.add(new IntegerLiteral(1));
 			num_gangs.add(new IntegerLiteral(1));
@@ -3571,6 +3809,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				num_workers.add(new IntegerLiteral(1));
 				num_workers.add(new IntegerLiteral(1));
 				totalnumworkers = num_workers.get(0).clone();
+				if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
+					isSingleTask = true;
+				}
 			} else {
 				tAnnot = region.getAnnotation(ACCAnnotation.class, "gangconf");
 				if( tAnnot == null ) {
@@ -3637,6 +3878,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						m++;
 					}
 				}
+				if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
+					isSingleTask = true;
+				}
 			}
 		}
 		
@@ -3679,7 +3923,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		//////////////////////////////////////////
 		OpenCLTranslationTools.privateTransformation(cProc, region, cRegionKind, ifCond, asyncID, confRefStmt, prefixStmts,
 				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
-				opt_addSafetyCheckingCode, arrayElmtCacheSymbols );
+				opt_addSafetyCheckingCode, arrayElmtCacheSymbols, isSingleTask);
 		if( SkipGPUTranslation == 2 ) {
 			return;
 		}
@@ -3690,7 +3934,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         OpenCLTranslationTools.reductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
 				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
 				opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
-				memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
+				memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf, isSingleTask);
 		if( SkipGPUTranslation == 3 ) {
 			return;
 		}
@@ -3838,7 +4082,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			
 			if( accDevicePtrSet.contains(sharedSym) ) {
 				//Create a kernel parameter for the shared array variable.
-				ArrayList addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
+				ArrayList addSpecs;
+				//Compile may not be able to detect whether the device buffer is created as R/O or not, disabling below.
+/*				if( cudaConstantSet.contains(sharedSym) ) {
+					addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_CONSTANT));
+				} else {
+					addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
+				}*/
+				addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
 				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true, opt_AssumeNoAliasing);
 				callerProcSymSet.add(kParamVar.getSymbol());
 				if( dimension == 1 ) {
@@ -3903,7 +4154,48 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			}
 
 			MallocType mallocT = MallocType.NormalMalloc;
+			boolean isConstArray = false;
+			if( cudaConstantSet.contains(sharedSym) ) {
+				mallocT = MallocType.ConstantMalloc;
+				if( dimension > 0 ) {
+					boolean constantDimension = true;
+					for( Expression tDim : lengthList ) {
+						if( (tDim == null) || !(tDim instanceof IntegerLiteral) ) {
+							constantDimension = false;
+							break;
+						}
+					}
+					if( constantDimension ) {
+						mallocT = MallocType.ConstantMalloc;
+						if( SymbolTools.isArray(sharedSym) && !SymbolTools.isPointer(sharedSym) 
+								&& sharedSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+							isConstArray = true;
+						}
+					}
+				}
+			}
 			Set<Symbol> symSet = null;
+
+			if( isConstArray && (mallocT == MallocType.ConstantMalloc) ) {
+                symSet = kernelsTranslationUnit.getSymbols();
+				Symbol constSym = AnalysisTools.findsSymbol(symSet, constVarName);
+				if( constSym == null ) {
+					//constant symbol should have been created by either handleDataClause() or handleUpdate().
+					Tools.exit("[ERROR in ACC2OPENCLTranslation.extractComputeRegion()] Can't find __constant variable (" + constVarName + 
+							") corresponding to the host variable, " + hostVar + "; exit the program!\nEnclosing procedure: " + 
+							cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
+				}
+				Identifier constVar = new Identifier(constSym);
+				// Replace the instance of shared variable with the new gpu_var.
+				if( sharedSym instanceof AccessSymbol ) {
+					TransformTools.replaceAccessExpressions(region, (AccessSymbol)sharedSym, constVar);
+				} else {
+					TransformTools.replaceAll(region, new Identifier(sharedSym), constVar);
+				}
+				constantSymMap.put(constSym, constSym);
+				callerProcSymSet.add(constSym);
+				continue;
+			}
 			
 			SymbolTable targetSymbolTable = AnalysisTools.getIRSymbolScope(IRSym, region.getParent());
 			if( targetSymbolTable instanceof Procedure ) {
@@ -3957,8 +4249,13 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			else 
 			{
 				//Create a kernel parameter for the shared array variable.
-				//Add __global specifier for device memory
-				ArrayList addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
+				//Add __global or __constant specifier for device memory
+				ArrayList addSpecs;
+				if( cudaConstantSet.contains(sharedSym)  && !accPresentSet.contains(sharedSym)) {
+					addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_CONSTANT));
+				} else {
+					addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
+				}
 				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true, opt_AssumeNoAliasing);
 				Symbol kParamSym = kParamVar.getSymbol();
 				callerProcSymSet.add(kParamSym);
@@ -3988,6 +4285,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				}
 				
 				if( mallocT == MallocType.NormalMalloc ) {
+					//Some array-caching optimization may be put here.
+				} else if( mallocT == MallocType.ConstantMalloc ) {
 					//Some array-caching optimization may be put here.
 				}
 				// Replace all instances of the shared variable to the paremeter variable
@@ -4455,7 +4754,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		
 		//FIXME: seq loop may still need _tid for Worker-Single Mode.
 		//Disable the below condition.
-		//if( !isSeqLoop ) {
+		//if( !isSingleTask ) {
 		if( true ) {
 			/*
 			 * Create expressions for calculating global GPU thread ID (_gtid), local thread ID (_tid), 
@@ -4578,7 +4877,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		//Convert worksharing loops into if-statements. 
 		OpenCLTranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers, opt_skipKernelLoopBoundChecking);
 		
-		if( opt_forceSyncKernelCall ) {
+		//[DEBUG] We don't need this since each kernel call in the default queue will be followed by HI_synchronize() call.
+/*		if( opt_forceSyncKernelCall ) {
 			//FunctionCall syncCall = new FunctionCall(new NameID("cudaThreadSynchronize"));
             FunctionCall syncCall = new FunctionCall(new NameID("HI_synchronize"));
 			if( parent instanceof CompoundStatement ) {
@@ -4587,7 +4887,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				Tools.exit(pass_name + "[Error in extractKernelRegion()] Kernel call statement (" +
 						kernelCall_stmt + ") does not have a parent!");
 			}
-		}
+		}*/
 		
 		if( opt_addSafetyCheckingCode ) {
 			/////////////////////////////////////////////
@@ -4672,7 +4972,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		List<FunctionCall> funcList = IRTools.getFunctionCalls(at);
 		if( funcList != null ) {
 			for( FunctionCall fCall : funcList ) {
-				Procedure c_proc = fCall.getProcedure();
+				Procedure c_proc = AnalysisTools.findProcedure(fCall);
 				if( (c_proc != null) && (!StandardLibrary.contains(fCall)) ) {
 					FunctionCall new_fCall = null;
 					String callContext = "";
@@ -4861,6 +5161,20 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							for( VariableDeclaration param : oldParamList ) {
 								Symbol param_declarator = (Symbol)param.getDeclarator(0);
 								List<Specifier> typeSpecs = new ArrayList<Specifier>();
+								Symbol argSym = argSymList.get(i);
+								boolean isScalar = true;
+								if( SymbolTools.isArray(param_declarator) || SymbolTools.isPointer(param_declarator) ) {
+									isScalar = false;
+								}
+								if( !isScalar && (argSym != null) ) {
+									if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+										typeSpecs.add(OpenCLSpecifier.OPENCL_GLOBAL);
+									} else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+										typeSpecs.add(OpenCLSpecifier.OPENCL_CONSTANT);
+									} else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+										typeSpecs.add(OpenCLSpecifier.OPENCL_LOCAL);
+									}
+								}
 								typeSpecs.addAll(param.getSpecifiers());
 /*								if( typeSpecs.remove(Specifier.RESTRICT) ) {
 									param.getSpecifiers().remove(Specifier.RESTRICT);
@@ -4868,6 +5182,15 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 									typeSpecs.add(OpenCLSpecifier.RESTRICT);
 								}*/
 								VariableDeclaration cloned_decl = (VariableDeclaration)param.clone();
+								if( !isScalar && (argSym != null) ) {
+									if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+										cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);;
+									} else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+										cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_CONSTANT);;
+									} else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+										cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_LOCAL);;
+									}
+								}
 								Identifier paramID = new Identifier(param_declarator);
 								Symbol cloned_param_declr = (Symbol) cloned_decl.getDeclarator(0);
 								if( cloneProcedure ) {
@@ -4875,7 +5198,6 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								} else {
 									newCallerParamSymSet.add(param_declarator);
 								}
-								Symbol argSym = argSymList.get(i);
 								if( !callContext.equals("") ) {
 									char symType = callContext.charAt(i);
 									if( symType == '1' ) { //pitched malloc
@@ -4949,30 +5271,54 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								i++;
 							}
 						}
+						if( cloneProcedure ) {
+							//Replace consant array symbols with the compiler-generated global constant array symbol.
+							Set<Symbol> pAccessedSymbols = AnalysisTools.getAccessedVariables(body, true);
+							Set<Symbol> kernelGlobalSymbols = kernelsTranslationUnit.getSymbols();
+							for(Symbol pSym : pAccessedSymbols) {
+								if( SymbolTools.isGlobal(pSym) ) {
+									if( SymbolTools.isArray(pSym) && !SymbolTools.isPointer(pSym) 
+											&& pSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+										String symNameBase = null;
+										if( pSym instanceof AccessSymbol) {
+											symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)pSym);
+										} else {
+											symNameBase = pSym.getSymbolName();
+										}
+										String constVarName = "const__" + symNameBase;
+										Symbol IRSym = pSym;
+										if( pSym instanceof PseudoSymbol ) {
+											IRSym = ((PseudoSymbol)pSym).getIRSymbol();
+										}
+										if( !SymbolTools.isGlobal(IRSym) ) {
+											constVarName += "__" + c_proc.getSymbolName();
+										}
+										Symbol constSym = AnalysisTools.findsSymbol(kernelGlobalSymbols, constVarName);
+										if( constSym == null ) {
+											//constant symbol should have been created by either handleDataClause() or handleUpdate().
+											Tools.exit("[ERROR in ACC2OPENCLTranslation.devProcCloning()] Can't find __constant variable (" + constVarName + 
+													") corresponding to the host variable, " + pSym.getSymbolName() + "; exit the program!\nEnclosing procedure: " + 
+													c_proc.getSymbolName() + "\n");
+										}
+										Identifier constVar = new Identifier(constSym);
+										// Replace the instance of shared variable with the new gpu_var.
+										if( pSym instanceof AccessSymbol ) {
+											TransformTools.replaceAccessExpressions(body, (AccessSymbol)pSym, constVar);
+										} else {
+											TransformTools.replaceAll(body, new Identifier(pSym), constVar);
+										}
+									}
+
+								}
+							}
+						}
 
 						if( cloneProcedure ) {
 							////////////////////////////
 							// Add the new procedure. //
 							////////////////////////////
-							//if( (trUnt == tu) && (!AnalysisTools.isInHeaderFile(c_proc, trUnt)) ) {
-							//	trUnt.addDeclarationAfter(c_proc, new_proc);
-							//} else {
-							//{
-								//Procedure firstProc = AnalysisTools.findFirstProcedure(trUnt);
-								//trUnt.addDeclarationBefore(firstProc, new_proc);
-
-								trUnt.addDeclaration(new_proc);
-								devProcStack.push(new_proc);
-								//[DEBUG] Copying the new procedure to kernelTranslationUnit is deferred to the end of 
-/*								//extractComputeREgion().
-                            Procedure fp = AnalysisTools.findFirstProcedure(kernelsTranslationUnit);
-                            if(fp != null) {
-                                kernelsTranslationUnit.addDeclarationBefore(fp, new_proc);
-                            }
-                            else {
-                                kernelsTranslationUnit.addDeclaration(new_proc);
-                            }*/
-							//}
+							trUnt.addDeclaration(new_proc);
+							devProcStack.push(new_proc);
 							////////////////////////////////////////////////////////////////////////
 							//If the current procedure has annotations, copy them to the new one. //
 							////////////////////////////////////////////////////////////////////////
@@ -5062,7 +5408,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							//     1) Update symbols in the new procedure, including symbols       //
 							//        in ACCAnnoations.                                            //
 							/////////////////////////////////////////////////////////////////////////
-							SymbolTools.linkSymbol(new_proc);
+							//[DEBUG] the new device function will be moved to the kernelTranslationUnit at the end of 
+							//the ACC2OPENCLTranslator, and thus below checking will complain missing declation if
+							//a device function accesses kernel-file-global-constant array.
+							SymbolTools.linkSymbol(new_proc, 0);
 							ACCAnalysis.updateSymbolsInACCAnnotations(new_proc, null);
 						}
 
@@ -5302,6 +5651,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                 Expression lb = LoopTools.getLowerBoundExpression(ploop);
                 Expression ub = LoopTools.getUpperBoundExpression(ploop);
                 Expression tItrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+                num_workers = Symbolic.simplify(num_workers);
+                tItrSize = Symbolic.simplify(tItrSize);
                 if( tItrSize.equals(num_workers) ) {
                     continue; //we don't need to unroll this loop.
                 }

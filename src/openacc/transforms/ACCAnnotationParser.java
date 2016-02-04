@@ -73,7 +73,7 @@ public class ACCAnnotationParser extends TransformPass
 					////////////////////////////////////////////////////////////////////////////
 					PragmaAnnotation pAnnot = annot_list.get(0);
 					//////////////////////////////////////////////////////////////////////////
-					// The above pAnnot may be a standalone CetusAnnotation, OmpAnnotation, //
+					// The above pAnnot may be a stand alone CetusAnnotation, OmpAnnotation, //
 					// InlineAnnotation, PragmaAnnotation.Event, or PragmaAnnotation.Range. //
 					// If so, skip it.                                                      //
 					// (The below annotations are child classes of PragmaAnnotation.)       //
@@ -91,79 +91,101 @@ public class ACCAnnotationParser extends TransformPass
 						PrintTools.println("\n[WARNING in ACCAnnotationParser] Pragma annotation, "
 								+ pAnnot +", does not have name.\n", 0);
 						continue;
-					}
-					old_annot = modifyAnnotationString(old_annot);
+					} else if( old_annot.startsWith("unroll") ) {
+						//Recognize #pragma unroll N as a PragmaAnnotation and attach it to the following
+						//annotatable IR.
+						new_annot = pAnnot.clone();
+						attach_to_next_annotatable = true;
+					} else {
+						old_annot = modifyAnnotationString(old_annot);
 
-					/* -------------------------------------------------------------------------
-					 * STEP 1:
-					 * Find the annotation type by parsing the text in the input annotation and
-					 * create a new Annotation of the corresponding type
-					 * -------------------------------------------------------------------------
-					 */
-					String[] token_array = old_annot.split("\\s+");
-					// If old_annot string has a leading space, the 2nd token should be checked.
-					//String old_annot_key = token_array[1];
-					String old_annot_key = token_array[0];
-					/* Check for OpenACC annotations */
-					if (old_annot_key.compareTo("acc")==0) {
-						/* ---------------------------------------------------------------------
-						 * Parse the contents:
-						 * ACCParser puts the OpenACC directive parsing results into new_map
-						 * ---------------------------------------------------------------------
+						/* -------------------------------------------------------------------------
+						 * STEP 1:
+						 * Find the annotation type by parsing the text in the input annotation and
+						 * create a new Annotation of the corresponding type
+						 * -------------------------------------------------------------------------
 						 */
-						new_map = new HashMap<String, Object>();
-						attach_to_next_annotatable = ACCParser.parse_acc_pragma(new_map, token_array, macroMap);
-						/* Create an ACCAnnotation and copy the parsed contents from new_map
-						 * into a new ACCAnnotation */
-						new_annot = new ACCAnnotation();
-						for (String key : new_map.keySet())
-							new_annot.put(key, new_map.get(key));
-					} else if ((old_annot_key.compareTo("openarc")==0)) {
-						String old_annot_key2 = token_array[1];
-						if( old_annot_key2.equals("#") ) { //Preprocess macros on OpenACC/OpenARC directives.
-							ACCParser.preprocess_acc_pragma(token_array, macroMap);
-							continue;
-						} else {
+						String[] token_array = old_annot.split("\\s+");
+						// If old_annot string has a leading space, the 2nd token should be checked.
+						//String old_annot_key = token_array[1];
+						String old_annot_key = token_array[0];
+						/* Check for OpenACC annotations */
+						if (old_annot_key.compareTo("acc")==0) {
 							/* ---------------------------------------------------------------------
 							 * Parse the contents:
-							 * ACCParser puts the OpenARC directive parsing results into new_map
+							 * ACCParser puts the OpenACC directive parsing results into new_map
 							 * ---------------------------------------------------------------------
 							 */
 							new_map = new HashMap<String, Object>();
-							attach_to_next_annotatable = ACCParser.parse_openarc_pragma(new_map, token_array, macroMap);
+							attach_to_next_annotatable = ACCParser.parse_acc_pragma(new_map, token_array, macroMap);
 							/* Create an ACCAnnotation and copy the parsed contents from new_map
 							 * into a new ACCAnnotation */
-							new_annot = new ARCAnnotation();
+							new_annot = new ACCAnnotation();
+							for (String key : new_map.keySet())
+								new_annot.put(key, new_map.get(key));
+						} else if ((old_annot_key.compareTo("openarc")==0)) {
+							String old_annot_key2 = token_array[1];
+							if( old_annot_key2.equals("#") ) { //Preprocess macros on OpenACC/OpenARC directives.
+								ACCParser.preprocess_acc_pragma(token_array, macroMap);
+								continue;
+							} else {
+								/* ---------------------------------------------------------------------
+								 * Parse the contents:
+								 * ACCParser puts the OpenARC directive parsing results into new_map
+								 * ---------------------------------------------------------------------
+								 */
+								new_map = new HashMap<String, Object>();
+								attach_to_next_annotatable = ACCParser.parse_openarc_pragma(new_map, token_array, macroMap);
+								/* Create an ACCAnnotation and copy the parsed contents from new_map
+								 * into a new ACCAnnotation */
+								new_annot = new ARCAnnotation();
+								for (String key : new_map.keySet())
+									new_annot.put(key, new_map.get(key));
+							}
+						} else if ((old_annot_key.compareTo("aspen")==0)) {
+							/* ---------------------------------------------------------------------
+							 * Parse the contents:
+							 * ACCParser puts the Aspen directive parsing results into new_map
+							 * ---------------------------------------------------------------------
+							 */
+							new_map = new HashMap<String, Object>();
+							attach_to_next_annotatable = ACCParser.parse_aspen_pragma(new_map, token_array, macroMap);
+							/* Create an ACCAnnotation and copy the parsed contents from new_map
+							 * into a new ACCAnnotation */
+							new_annot = new ASPENAnnotation();
+							for (String key : new_map.keySet())
+								new_annot.put(key, new_map.get(key));
+						} else if ((old_annot_key.compareTo("nvl")==0)) {
+							/* ---------------------------------------------------------------------
+							 * Parse the contents:
+							 * ACCParser puts the NVL directive parsing results into new_map
+							 * ---------------------------------------------------------------------
+							 */
+							new_map = new HashMap<String, Object>();
+							attach_to_next_annotatable = ACCParser.parse_nvl_pragma(new_map, token_array, macroMap);
+							/* Create an ACCAnnotation and copy the parsed contents from new_map
+							 * into a new ACCAnnotation */
+							new_annot = new NVLAnnotation();
 							for (String key : new_map.keySet())
 								new_annot.put(key, new_map.get(key));
 						}
-					} else if ((old_annot_key.compareTo("aspen")==0)) {
-						/* ---------------------------------------------------------------------
-						 * Parse the contents:
-						 * ACCParser puts the Aspen directive parsing results into new_map
-						 * ---------------------------------------------------------------------
-						 */
-						new_map = new HashMap<String, Object>();
-						attach_to_next_annotatable = ACCParser.parse_aspen_pragma(new_map, token_array, macroMap);
-						/* Create an ACCAnnotation and copy the parsed contents from new_map
-						 * into a new ACCAnnotation */
-						new_annot = new ASPENAnnotation();
-						for (String key : new_map.keySet())
-							new_annot.put(key, new_map.get(key));
-					}
-					else {
-						//Check whether current annotation accidentally missed acc prefix; if so print error.
-						if( ACCAnnotation.OpenACCDirectiveSet.contains(old_annot_key) ) {
-							Tools.exit("[ACCAnnotationParsing Error] the following annotation seems to be an OpenACC directive, but" +
-									" \"acc\" prefix seems to be omitted. If so, please add it.\nAnnotation: " + pAnnot + "\n");
-						} else if( ARCAnnotation.OpenARCDirectiveSet.contains(old_annot_key) ) {
-							Tools.exit("[ACCAnnotationParsing Error] the following annotation seems to be an OpenARC directive, but" +
-									" \"openarc\" prefix seems to be omitted. If so, please add it.\nAnnotation: " + pAnnot + "\n");
-						} else if( ASPENAnnotation.aspen_directives.contains(old_annot_key) ) {
-							Tools.exit("[ACCAnnotationParsing Error] the following annotation seems to be an ASPEN directive, but" +
-									" \"aspen\" prefix seems to be omitted. If so, please add it.\nAnnotation: " + pAnnot + "\n");
-						} else {
-							continue;
+						else {
+							//Check whether current annotation accidentally missed acc prefix; if so print error.
+							if( ACCAnnotation.OpenACCDirectiveSet.contains(old_annot_key) ) {
+								Tools.exit("[ACCAnnotationParsing Error] the following annotation seems to be an OpenACC directive, but" +
+										" \"acc\" prefix seems to be omitted. If so, please add it.\nAnnotation: " + pAnnot + "\n");
+							} else if( ARCAnnotation.OpenARCDirectiveSet.contains(old_annot_key) ) {
+								Tools.exit("[ACCAnnotationParsing Error] the following annotation seems to be an OpenARC directive, but" +
+										" \"openarc\" prefix seems to be omitted. If so, please add it.\nAnnotation: " + pAnnot + "\n");
+							} else if( ASPENAnnotation.aspen_directives.contains(old_annot_key) ) {
+								Tools.exit("[ACCAnnotationParsing Error] the following annotation seems to be an ASPEN directive, but" +
+										" \"aspen\" prefix seems to be omitted. If so, please add it.\nAnnotation: " + pAnnot + "\n");
+							} else if( NVLAnnotation.nvl_directives.contains(old_annot_key) ) {
+								Tools.exit("[ACCAnnotationParsing Error] the following annotation seems to be a NVL directive, but" +
+										" \"nvl\" prefix seems to be omitted. If so, please add it.\nAnnotation: " + pAnnot + "\n");
+							} else {
+								continue;
+							}
 						}
 					}
 
@@ -228,6 +250,11 @@ public class ACCAnnotationParser extends TransformPass
 								}
 							} else if( annot_to_be_attached instanceof ASPENAnnotation ) {
 								if( ((ASPENAnnotation)annot_to_be_attached).isValidTo(container) ) {
+									container.annotate(annot_to_be_attached);
+									attachedSet.add(annot_to_be_attached);
+								}
+							} else if( annot_to_be_attached instanceof NVLAnnotation ) {
+								if( ((NVLAnnotation)annot_to_be_attached).isValidTo(container) ) {
 									container.annotate(annot_to_be_attached);
 									attachedSet.add(annot_to_be_attached);
 								}

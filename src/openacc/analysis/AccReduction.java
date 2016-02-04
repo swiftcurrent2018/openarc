@@ -78,6 +78,13 @@ public class AccReduction extends AnalysisPass {
 				Set<Symbol> parallelRegionRedSymbols = new HashSet<Symbol>();
 				if( !kernelLoop ) {
 					enCompAnnot = AnalysisTools.ipFindFirstPragmaInParent(at, ACCAnnotation.class, ACCAnnotation.computeRegions, false, null, null);
+					if( enCompAnnot == null ) {
+								PrintTools.println("\n[WARNING in AccReduction.start()] can not find the enclosing compute region of the " +
+										"following reduction loop;  " +
+										cAnnot + "; reduction transformation for this loop will be skipped!\n" + AnalysisTools.getEnclosingContext(at), 0);
+								continue;
+						
+					}
 					if( enCompAnnot.containsKey("parallel") ) {
 						enParallelRegion = enCompAnnot.getAnnotatable();
 						ACCAnnotation pRedAnnot = enParallelRegion.getAnnotation(ACCAnnotation.class, "accreduction");

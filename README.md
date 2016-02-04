@@ -234,6 +234,12 @@ used to specify the number of  threads in a thread block.) If a compute region
 has only gang clauses without any worker clause (ignoring vector clauses), 
 the compiler may automatically add worker clause where appropriate.
 
+- OpenACC standard assumes that there is an implicit barrier at the end of
+each compute region if the async clause is not present, but the OpenARC runtime
+may skip the implicit barrier if safe. To disable this optimization, which may be
+necessary for correct timing of the compute region execution time, set the
+forceSyncKernelCall commandline option to 1.
+
 - Current implementation allows data regions to have compute regions 
 interprocedurally, but a compute region can have a function call only if 
 the called fuction does not contain any OpenACC loop directive.  

@@ -589,6 +589,10 @@ storageClassSpecifier returns [Specifier cspec]
 {cspec = Specifier.TYPEDEF; hastypedef = true; putPragma(scstypedef,symtab);}
         |
         cspec = functionStorageClassSpecifier
+        |
+        // [Support for GCC extension __thread added by Joel E. Denny]
+        "__thread"
+{cspec = Specifier.THREAD;}
         ;
 
 
@@ -2500,11 +2504,40 @@ postfixExpr returns [Expression ret_expr]
 {
 ret_expr=null;
 Expression expr1=null;
+Expression expr2=null;
+List tname = null;
 }
         :
         expr1=primaryExpr
 {ret_expr = expr1;}
         ( ret_expr=postfixSuffix[expr1] )?
+        // [NVL support added by Joel E. Denny]
+        | "__builtin_nvl_get_root"
+        (
+        (
+        LPAREN
+        ( expr1 = assignExpr )
+        COMMA
+        ( tname = typeName2 )
+        RPAREN
+        )
+{ret_expr = new NVLGetRootExpression(expr1, tname);}
+        )
+        ( ret_expr=postfixSuffix[ret_expr] )?
+        | "__builtin_nvl_alloc_nv"
+        (
+        (
+        LPAREN
+        ( expr1 = assignExpr )
+        COMMA
+        ( expr2 = assignExpr )
+        COMMA
+        ( tname = typeName2 )
+        RPAREN
+        )
+{ret_expr = new NVLAllocNVExpression(expr1, expr2, tname);}
+        )
+        ( ret_expr=postfixSuffix[ret_expr] )?
         ;
 
 
@@ -3314,6 +3347,11 @@ public void initialize()
       new Integer(LITERAL_int));
   literals.put(new ANTLRHashString("__int8", this),
       new Integer(LITERAL_int));
+  // [NVL support added by Joel E. Denny]
+  literals.put(new ANTLRHashString("__builtin_nvl_get_root", this),
+      new Integer(LITERAL___builtin_nvl_get_root));
+  literals.put(new ANTLRHashString("__builtin_nvl_alloc_nv", this),
+      new Integer(LITERAL___builtin_nvl_alloc_nv));
 }
 
 LineObject lineObject = new LineObject();

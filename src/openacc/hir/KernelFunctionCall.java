@@ -84,6 +84,7 @@ public class KernelFunctionCall extends FunctionCall
   public static void defaultPrint(KernelFunctionCall call, PrintWriter p)
   {
 	  int targetArch = 0;
+	  int forcedSyncCall = 0;
 	  String value = Driver.getOptionValue("targetArch");
 	  if( value != null ) {
 		  targetArch = Integer.valueOf(value).intValue();
@@ -93,6 +94,10 @@ public class KernelFunctionCall extends FunctionCall
 		  {
 			  targetArch = Integer.valueOf(value).intValue();
 		  }
+	  }
+	  value = Driver.getOptionValue("forceSyncKernelCall");
+	  if( value != null ) {
+		  forcedSyncCall = Integer.valueOf(value).intValue();
 	  }
 
 	  if (call.needs_parens)
@@ -192,7 +197,11 @@ public class KernelFunctionCall extends FunctionCall
 	p.println(");");
 	if(call.getConfArgument(3) == null)
 	{
-		p.print("HI_synchronize()");
+		if( forcedSyncCall == 0) {
+			p.print("HI_synchronize(0)");
+		} else {
+			p.print("HI_synchronize(1)");
+		}
 	}
     if (call.needs_parens)
       p.print(")");

@@ -62,19 +62,23 @@ import openacc.transforms.FaultInjectionTransformation;
 public class WorkerSingleModeTransformation extends TransformPass {
 	private static String pass_name = "[WorkerSingleModeTransformation]";
 	private static IDExpression threadID = null;
+	private int target_arch = 0;
 
 	/**
 	 * @param program
 	 */
-	public WorkerSingleModeTransformation(Program program) {
+	public WorkerSingleModeTransformation(Program program, int tarch) {
 		super(program);
 		//threadID = SymbolTools.getOrphanID("_tid");
 		threadID = new NameID("_tid");
+		target_arch = tarch;
+		verbosity = 1;
 	}
 	
-	public WorkerSingleModeTransformation(Program program, IDExpression tid) {
+	public WorkerSingleModeTransformation(Program program, IDExpression tid, int tarch) {
 		super(program);
 		threadID = tid;
+		target_arch = tarch;
 	}
 
 	/* (non-Javadoc)
@@ -103,6 +107,25 @@ public class WorkerSingleModeTransformation extends TransformPass {
 				if( cAnnot.get(kernelType).equals("false") ) {
 					//System.err.println("Following compute region will be skipped " + cAnnot);
 					continue;
+				}
+				if( target_arch == 3 ) {
+					if( kernelType.equals("parallel") ) {
+						Expression num_gangs = cAnnot.get("num_gangs");
+						Expression num_workers = cAnnot.get("num_workers");
+						if( (num_gangs != null) && (num_gangs instanceof IntegerLiteral) 
+								&& (num_workers != null) && (num_workers instanceof IntegerLiteral) ) {
+							if( (((IntegerLiteral)num_gangs).getValue() == 1) && (((IntegerLiteral)num_workers).getValue() == 1) ) {
+								//Skip a single worker-item kernel.
+								continue;
+							}
+						}
+					}
+					if( cAnnot.containsKey("seq") ) {
+						if( !AnalysisTools.ipContainPragmas(cAnnot.getAnnotatable(), ACCAnnotation.class, ACCAnnotation.worksharingClauses, false, null) ) {
+							//Skip a single worker-item kernel.
+							continue;
+						}
+					}
 				}
 				Annotatable at = cAnnot.getAnnotatable();
 				if ( at instanceof ForLoop ) {

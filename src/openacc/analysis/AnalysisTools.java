@@ -16,7 +16,6 @@ import java.util.LinkedList;
 
 import openacc.hir.CUDASpecifier;
 import openacc.hir.CudaStdLibrary;
-
 import cetus.exec.Driver;
 import cetus.hir.*;
 import openacc.hir.*;
@@ -135,7 +134,7 @@ public abstract class AnalysisTools {
 	 * @param st input Traversable object to be searched.
 	 * @return the set of accessed global symbols, visible in the current scope.
 	 */
-	public static Set<Symbol> getAccessedGlobalSymbols(Traversable st, Map<String, Symbol> visibleGSymMap) {
+	public static Set<Symbol> getAccessedGlobalSymbols(Traversable st, Map<String, Symbol> visibleGSymMap, boolean printWarning) {
 		Map<String, Symbol> gSymMap;
 		Set<Symbol> rSet = new HashSet<Symbol>();
 		Set<Symbol> aSet = AnalysisTools.getAccessedVariables(st, true);
@@ -165,7 +164,7 @@ public abstract class AnalysisTools {
 			if( SymbolTools.isGlobal(sym) ) {
 				if( gSymMap.containsKey(sym.getSymbolName()) ) {
 					rSet.add(gSymMap.get(sym.getSymbolName()));
-				} else {
+				} else if( printWarning) {
 					Procedure tProc = IRTools.getParentProcedure(st);
 					String tProcName = "Unknown";
 					if( tProc != null ) {
@@ -3597,6 +3596,50 @@ public abstract class AnalysisTools {
 			}
 		}
 		return procDecl;
+	}
+
+	/**
+	 * Find a procedure definition of the input function call, fCall.
+	 * Unlike the FunctionCall.getProcedure(), this will search other translation units 
+	 * even if no procedure declaration exists for the input function call in the 
+	 * enclosing translation unit.
+	 * 
+	 * @param fCall
+	 * @return
+	 */
+	public static Procedure findProcedure(FunctionCall fCall) {
+        Traversable t = fCall;
+        do {
+            if (t == null) {
+                return null;
+            }
+            t = t.getParent();
+        } while (!(t instanceof SymbolTable));
+        SymbolTable table = (SymbolTable)t;
+        Declaration decl = null;
+        try {
+            decl = table.findSymbol((IDExpression)fCall.getName());
+        } catch(ClassCastException e) {
+            return null;
+        }
+        if (decl instanceof Procedure) {
+            return (Procedure)decl;
+        } else { 
+            t = fCall;
+            while (t.getParent() != null) {
+                t = t.getParent();
+            }
+            Program prog = (Program)t;
+            List<Traversable> prog_children = prog.getChildren();
+            for (int i = 0; i < prog_children.size(); i++) {
+                TranslationUnit tu = (TranslationUnit)prog_children.get(i);
+                Object o = tu.findSymbol((IDExpression)fCall.getName());
+                if (o != null && o instanceof Procedure) {
+                    return (Procedure)o;
+                }
+            }
+            return null;
+        }
 	}
 	
 	public static int getBitLengthOfType(List<Specifier> typespecs) {

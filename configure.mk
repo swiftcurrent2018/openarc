@@ -26,6 +26,7 @@ $(BUILD_CFG): $(COMMON_DEPS)
 	echo 'fc = $(call cmd2abs, $(FC))' >> $@
 	echo 'spec_cpu2006 = $(SPEC_CPU2006)' >> $@
 	echo 'spec_cfg = $(SPEC_CFG)' >> $@
+	echo 'pmem_libdir = $(PMEM_LIBDIR)' >> $@
 
 $(OPENARC_CC): $(OPENARC_CC_IN) $(COMMON_DEPS)
 	mkdir -p $(OPENARC_CC_DIR)
@@ -36,7 +37,7 @@ $(OPENARC_CC): $(OPENARC_CC_IN) $(COMMON_DEPS)
 	sed \
 	  -e 's|@CC@|$(call cmd2abs, $(CC))|g' \
 	  -e 's|@CPP@|$(call cmd2abs, $(CPP))|g' \
-	  -e 's|@PMEMOBJ_INCLUDES@|$(PMEMOBJ_INCLUDES)|g' \
-	  -e 's|@PMEMOBJ_LIBDIR@|$(PMEMOBJ_LIBDIR)|g' \
+	  -e 's|@PMEM_INCLUDES@|$(PMEM_INCLUDES)|g' \
+	  -e 's|@PMEM_LIBDIR@|$(PMEM_LIBDIR)|g' \
 	$< >> $@
 	chmod +x $@

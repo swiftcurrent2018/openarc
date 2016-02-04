@@ -105,37 +105,45 @@ public class Parser {
         // and end of a header file
         // Create the Antlr-derived lexer and parser through the ClassLoader
         // so antlr.jar will be required only if the Antlr parser is used.
+        // [Modified by Joel E. Denny to skip step 1 when -emitLLVM is
+        // specified because the BuildLLVM pass doesn't need step 1, which
+        // causes some relative include bugs.]
         try {
-            Class class_PreCLexer =
-                    loader.loadClass("cetus.base.grammars.PreCLexer");
             class_TokenStream = loader.loadClass("antlr.TokenStream");
-            params[0] = InputStream.class;
-            args[0] = new DataInputStream(new FileInputStream(input_filename));
-            PreCLexer lexer = (PreCLexer)
-                    class_PreCLexer.getConstructor(params).newInstance(args);
-            Class class_PreCParser =
-                    loader.loadClass("cetus.base.grammars.PreCParser");
-            params[0] = class_TokenStream;
-            args[0] = lexer;
-            PreCParser parser = (PreCParser)
-                    class_PreCParser.getConstructor(params).newInstance(args);
             filename = (new File(input_filename)).getName();
-            prename = "cppinput_" + filename;
-            File prefile = new File(pwd, prename);
-            prefile.deleteOnExit();
-            FileOutputStream fo = new FileOutputStream(prefile);
-            // Add option to print pre annotated input file before
-            // calling external preprocessor and exit
-            // [Modified by Joel E. Denny to use input_filename instead of
-            // filename so parser can adjust relative includes for change of
-            // directory.]
-            if (Driver.getOptionValue("debug_preprocessor_input") != null) {
-                parser.programUnit(System.out,input_filename);
-                fo.close();
-                Tools.exit(0);
+            if (Driver.getOptionValue("emitLLVM") != null) {
+                prename = input_filename;
             }
-            parser.programUnit(new PrintStream(fo), input_filename);
-            fo.close();
+            else {
+                Class class_PreCLexer =
+                        loader.loadClass("cetus.base.grammars.PreCLexer");
+                params[0] = InputStream.class;
+                args[0] = new DataInputStream(new FileInputStream(input_filename));
+                PreCLexer lexer = (PreCLexer)
+                        class_PreCLexer.getConstructor(params).newInstance(args);
+                Class class_PreCParser =
+                        loader.loadClass("cetus.base.grammars.PreCParser");
+                params[0] = class_TokenStream;
+                args[0] = lexer;
+                PreCParser parser = (PreCParser)
+                        class_PreCParser.getConstructor(params).newInstance(args);
+                prename = "cppinput_" + filename;
+                File prefile = new File(pwd, prename);
+                prefile.deleteOnExit();
+                FileOutputStream fo = new FileOutputStream(prefile);
+                // Add option to print pre annotated input file before
+                // calling external preprocessor and exit
+                // [Modified by Joel E. Denny to use input_filename instead of
+                // filename so parser can adjust relative includes for change of
+                // directory.]
+                if (Driver.getOptionValue("debug_preprocessor_input") != null) {
+                    parser.programUnit(System.out,input_filename);
+                    fo.close();
+                    Tools.exit(0);
+                }
+                parser.programUnit(new PrintStream(fo), input_filename);
+                fo.close();
+            }
         } catch (ClassNotFoundException e) {
             System.err.println("cetus: could not load class " + e);
             Tools.exit(1);

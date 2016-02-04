@@ -103,6 +103,8 @@ public interface TraversableVisitor {
       public void visit(StringLiteral node);
     public void visit(MinMaxExpression node);
     public void visit(NewExpression node);
+    public void visit(NVLGetRootExpression node);
+    public void visit(NVLAllocNVExpression node);
     public void visit(OffsetofExpression node);
     public void visit(RangeExpression node);
     public void visit(SizeofExpression node);

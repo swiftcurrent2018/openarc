@@ -4,8 +4,10 @@
 package openacc.transforms;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import openacc.analysis.ACCAnalysis;
 import openacc.analysis.AnalysisTools;
@@ -29,7 +31,7 @@ import cetus.transforms.LoopNormalization;
 import cetus.transforms.TransformPass;
 
 /**
- * Normalize OpenACC gang/worker/vector loops.
+ * Normalize OpenACC gang/worker/vector loops
  * 
  * @author Seyong Lee <lees2@ornl.gov>
  *         Future Technologies Group
@@ -60,9 +62,11 @@ public class ACCWorkshareLoopNormalization extends TransformPass {
 	 */
 	@Override
 	public void start() {
-		// TODO Auto-generated method stub
+		Set<String> clauseSet = new HashSet<String>(ACCAnnotation.worksharingClauses);
+		//clauseSet.add("tile");
+		//clauseSet.add("collapse");
 		List<ACCAnnotation> workshareLoops = 
-			AnalysisTools.collectPragmas(program, ACCAnnotation.class, ACCAnnotation.worksharingClauses, false);
+			AnalysisTools.collectPragmas(program, ACCAnnotation.class, clauseSet, false);
 		if( workshareLoops != null ) {
 			for( ACCAnnotation annot : workshareLoops ) {
 				Annotatable at = annot.getAnnotatable();

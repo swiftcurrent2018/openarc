@@ -16,7 +16,6 @@ import java.util.Set;
 import openacc.analysis.ACCAnalysis;
 import openacc.analysis.AnalysisTools;
 import openacc.hir.ACCAnnotation;
-
 import cetus.analysis.CallGraph;
 import cetus.analysis.CallGraph.Node;
 import cetus.exec.Driver;
@@ -64,6 +63,7 @@ public class GlobalVariableParameterization extends TransformPass {
 	private Map<Procedure, Set<Symbol>> proc2gsymMap;
 	private boolean IRSymbolOnly;
 	private boolean AssumeNoAliasingAmongKernelArgs = false;
+	private boolean shrdArryCachingOnConst = false;
 
 	/**
 	 * @param program
@@ -72,6 +72,8 @@ public class GlobalVariableParameterization extends TransformPass {
 		super(program);
 		IRSymbolOnly = IRSymOnly;
 		AssumeNoAliasingAmongKernelArgs = NoAliasing;
+		disable_protection = true;
+		verbosity = 1;
 	}
 
 	/* (non-Javadoc)
@@ -92,6 +94,10 @@ public class GlobalVariableParameterization extends TransformPass {
 		String value = Driver.getOptionValue("SetAccEntryFunction");
 		if( (value != null) && !value.equals("1") ) {
 			mainEntryFunc = value;
+		}
+		value = Driver.getOptionValue("shrdArryCachingOnConst");
+		if( value != null ) {
+			shrdArryCachingOnConst = true;
 		}
 		//Step1: Generate a list of device functions called in GPU kernels
 		Map<TranslationUnit, Integer> trCntMap = new HashMap<TranslationUnit, Integer>(); 
@@ -159,14 +165,24 @@ public class GlobalVariableParameterization extends TransformPass {
 					Set<Symbol> tSet = SymbolTools.getGlobalSymbols(tr);
 					visibleGSymMap = new HashMap<String, Symbol>();
 					for( Symbol gS : tSet ) {
-						visibleGSymMap.put(gS.getSymbolName(), gS);
+						if( !shrdArryCachingOnConst || !SymbolTools.isArray(gS) || SymbolTools.isPointer(gS) 
+								|| !gS.getTypeSpecifiers().contains(Specifier.CONST) ) {
+							visibleGSymMap.put(gS.getSymbolName(), gS);
+						}
 					}
 					tr2gsymmap.put(tr, visibleGSymMap);
 				}
 				CompoundStatement cBody = tProc.getBody();
 				if( cBody != null ) {
 					//DEBUG: below call will add IR symbols only.
-					gSymSet.addAll(AnalysisTools.getAccessedGlobalSymbols(cBody, visibleGSymMap));
+					//gSymSet.addAll(AnalysisTools.getAccessedGlobalSymbols(cBody, visibleGSymMap));
+					Set<Symbol> ttSymSet = AnalysisTools.getAccessedGlobalSymbols(cBody, visibleGSymMap, false);
+					for(Symbol ttSym : ttSymSet ) {
+						if( !shrdArryCachingOnConst || !SymbolTools.isArray(ttSym) || SymbolTools.isPointer(ttSym) 
+								|| !ttSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+							gSymSet.add(ttSym);
+						}
+					}
 					Node node = (Node)cgMap.get(tProc);
 					List<Procedure> callees = node.getCallees();
 					if( callees != null ) {
@@ -207,8 +223,9 @@ public class GlobalVariableParameterization extends TransformPass {
 					devProcCloning(at, trUnt, trCntMap.get(trUnt).toString(), null, devProcMap, proc2gsymParamMap, accROSet);
 				}
 			}
-
 		}
+		//Remove unused procedures created in this pass.
+		TransformTools.removeUnusedProcedures(program);
 	}
 	
 	private void devProcCloning(Traversable at, TranslationUnit trUnt, String TrCnt, Procedure callerProc,
@@ -217,7 +234,7 @@ public class GlobalVariableParameterization extends TransformPass {
 		List<FunctionCall> funcList = IRTools.getFunctionCalls(at);
 		if( funcList != null ) {
 			for( FunctionCall fCall : funcList ) {
-				Procedure c_proc = fCall.getProcedure();
+				Procedure c_proc = AnalysisTools.findProcedure(fCall);
 				if( (c_proc != null) && proc2gsymMap.containsKey(c_proc) ) {
 					Set<Symbol> gSymSet = proc2gsymMap.get(c_proc);
 					if( !gSymSet.isEmpty() ) {
@@ -491,7 +508,7 @@ public class GlobalVariableParameterization extends TransformPass {
 							//     1) Update symbols in the new procedure, including symbols       //
 							//        in ACCAnnoations.                                            //
 							/////////////////////////////////////////////////////////////////////////
-							SymbolTools.linkSymbol(new_proc);
+							SymbolTools.linkSymbol(new_proc, 1);
 							ACCAnalysis.updateSymbolsInACCAnnotations(new_proc, null);
 							
 							////////////////////////////////////////////////////////////////////////

@@ -73,7 +73,8 @@ public abstract class ACC2GPUTranslator {
     protected int targetModel = 0; //0 for CUDA, 1 for OpenCL
 
 	protected enum MemTrType {NoCopy, CopyIn, CopyOut, CopyInOut}
-	protected enum DataClauseType {CheckOnly, CheckNMalloc, Malloc, UpdateOnly}
+	protected enum DataClauseType {CheckOnly, CheckNMalloc, Malloc, UpdateOnly, Pipe, PipeIn, PipeOut}
+	protected enum MallocType {ConstantMalloc, TextureMalloc, PitchedMalloc, NormalMalloc, PipeMalloc}
 	
 	////////////////////////////////////////////////////////////////////
 	// HashMap containing TranlationUnit to hidden comment indicating //
@@ -98,6 +99,7 @@ public abstract class ACC2GPUTranslator {
 	protected boolean memtrVerification = false;
 	protected boolean enableFaultInjection = false;
 	protected boolean enableCustomProfiling = false;
+	protected boolean enablePipeTransformation = false;
 	
 	protected FloatLiteral marginOfError = new FloatLiteral(1.0e-6);
 	protected FloatLiteral minCheckValue = null;
@@ -206,6 +208,52 @@ public abstract class ACC2GPUTranslator {
 				}
 				handleDataRegions(cProc, dataRegionAnnots);
 				convComputeRegionsToGPUKernels(cProc, parallelRegionAnnots, kernelsRegionAnnots);
+				//Postprocessing for pipe clauses.
+				List<ACCAnnotation>  pipeAnnots = IRTools.collectPragmas(program, ACCAnnotation.class, "pipe");
+				List<FunctionCall> funcCallList = IRTools.getFunctionCalls(program);
+				for( ACCAnnotation tAnnot : pipeAnnots ) {
+					if( tAnnot.containsKey("declare") ) {
+						Traversable ptt = tAnnot.getAnnotatable().getParent();
+						List<ACCAnnotation>  computeAnnots = AnalysisTools.ipCollectPragmas(ptt, ACCAnnotation.class, 
+								ACCAnnotation.pipeIOClauses, false, null);
+						Set<Annotatable> visitedRegions = new HashSet<Annotatable>();
+						for( ACCAnnotation cAnnot : computeAnnots ) {
+							Annotatable pAt = cAnnot.getAnnotatable();
+							if( !visitedRegions.contains(pAt) ) {
+								visitedRegions.add(pAt);
+								ACCAnnotation dAnnot = AnalysisTools.ipFindFirstPragmaInParent(pAt, ACCAnnotation.class, "data", funcCallList, null);
+								if( dAnnot != null ) {
+									Annotatable dAt = dAnnot.getAnnotatable();
+									if( !visitedRegions.contains(dAt) ) {
+										visitedRegions.add(dAt);
+										FunctionCall waitCall = new FunctionCall(new NameID("acc_wait_all"));
+										Statement waitCallStmt = new ExpressionStatement(waitCall);
+										Traversable parent = dAt.getParent();
+										if( (parent instanceof CompoundStatement) && (dAt instanceof Statement) ) {
+											((CompoundStatement)parent).addStatementAfter((Statement)dAt, waitCallStmt);
+										} else {
+											Tools.exit("[ERROR in the ACC2GPUTranslator.start()] pipe clauses are attached to wrong IR object:\n" + 
+													"ACC Annotation: " + dAnnot +
+													AnalysisTools.getEnclosingContext(dAt));
+										}
+									}
+								}
+							}
+						}
+					} else {
+						Annotatable pAt = tAnnot.getAnnotatable();
+						FunctionCall waitCall = new FunctionCall(new NameID("acc_wait_all"));
+						Statement waitCallStmt = new ExpressionStatement(waitCall);
+						Traversable parent = pAt.getParent();
+						if( (parent instanceof CompoundStatement) && (pAt instanceof Statement) ) {
+							((CompoundStatement)parent).addStatementAfter((Statement)pAt, waitCallStmt);
+						} else {
+							Tools.exit("[ERROR in the ACC2GPUTranslator.start()] pipe clauses are attached to wrong IR object:\n" + 
+									"ACC Annotation: " + tAnnot +
+									AnalysisTools.getEnclosingContext(pAt));
+						}
+					}
+				}
 			}
 		}
 		VariableDeclarator kernel_declarator = new VariableDeclarator(new NameID("kernel_str"), new ArraySpecifier(new IntegerLiteral(accKernelsList.size())));
@@ -492,6 +540,10 @@ public abstract class ACC2GPUTranslator {
 				targetArch = Integer.valueOf(value).intValue();
 			}
 		}
+		
+		if( targetArch == 3 ) {
+			enablePipeTransformation = true;
+		}
 
 		value = Driver.getOptionValue("assumeNoAliasingAmongKernelArgs");
 		if( value != null ) {
@@ -507,17 +559,53 @@ public abstract class ACC2GPUTranslator {
 	}
 	
 	protected void handleDeclareDirectives(List<ACCAnnotation> declareAnnots) {
+		Set<String> mallocCallSet =
+		new HashSet<String>(Arrays.asList("malloc", "calloc", "_mm_malloc", "posix_memalign", "aligned_alloc", "valloc"));
 		for( ACCAnnotation dAnnot : declareAnnots ) {
 			DataRegionType regionT;
 			List<Statement> firstStmts = new LinkedList<Statement>();
 			List<Statement> lastStmts = new LinkedList<Statement>();
 			Annotatable at = dAnnot.getAnnotatable();
 			Procedure cProc = IRTools.getParentProcedure(at);
+			//[FIXME] firstStmts should be the malloc statements for the data in the declare directive.
+			//For now, we simply checks malloc/calloc/_mm_malloc/posix_memalign/alligned_alloc/valloc functions in the direct children.
 			if( cProc == null ) {
 				//Decalre directive is for implicit region for the whole program.
 				regionT = DataRegionType.ImplicitProgramRegion;
 				for( FunctionCall acc_init : acc_init_list ) {
-					firstStmts.add(acc_init.getStatement());
+					Statement refStmt = acc_init.getStatement();
+					Statement firstMallocStmt = null;
+					Statement lastMallocStmt = null;
+					if( refStmt.getParent() instanceof CompoundStatement ) {
+						List<Traversable> childlist = refStmt.getParent().getChildren();
+						for( int i=0; i<childlist.size(); i++ ) {
+							List<FunctionCall> fCallList = IRTools.getFunctionCalls(childlist.get(i));
+							boolean foundMallocStmt = false;
+							if( fCallList != null ) {
+								for( FunctionCall fCall : fCallList ) {
+									if( mallocCallSet.contains(fCall.getName().toString()) ) {
+										foundMallocStmt = true;
+										break;
+									}
+								}
+							}
+							if( foundMallocStmt ) {
+								if( firstMallocStmt == null ) {
+									firstMallocStmt = (Statement)childlist.get(i);
+								}
+								lastMallocStmt = (Statement)childlist.get(i);
+							} else {
+								if( firstMallocStmt != null ) {
+									break;
+								}
+							}
+						}
+					}
+					if( lastMallocStmt != null ) {
+						firstStmts.add(lastMallocStmt);
+					} else {
+						firstStmts.add(refStmt);
+					}
 				}
 				for( FunctionCall acc_shutdown : acc_shutdown_list ) {
 					lastStmts.add(acc_shutdown.getStatement());
@@ -542,9 +630,36 @@ public abstract class ACC2GPUTranslator {
 				//Declare directive is for implicit region within a function.
 				regionT = DataRegionType.ImplicitProcedureRegion;
 				CompoundStatement funcBody = cProc.getBody();
-				Statement firstStmt = IRTools.getFirstNonDeclarationStatement(funcBody);
-				if( firstStmt != null ) {
-					firstStmts.add(firstStmt);
+				Statement refStmt = IRTools.getFirstNonDeclarationStatement(funcBody);
+				Statement firstMallocStmt = null;
+				Statement lastMallocStmt = null;
+				List<Traversable> childlist = funcBody.getChildren();
+				for( int i=0; i<childlist.size(); i++ ) {
+					List<FunctionCall> fCallList = IRTools.getFunctionCalls(childlist.get(i));
+					boolean foundMallocStmt = false;
+					if( fCallList != null ) {
+						for( FunctionCall fCall : fCallList ) {
+							if( mallocCallSet.contains(fCall.getName().toString()) ) {
+								foundMallocStmt = true;
+								break;
+							}
+						}
+					}
+					if( foundMallocStmt ) {
+						if( firstMallocStmt == null ) {
+							firstMallocStmt = (Statement)childlist.get(i);
+						}
+						lastMallocStmt = (Statement)childlist.get(i);
+					} else {
+						if( firstMallocStmt != null ) {
+							break;
+						}
+					}
+				}
+				if( lastMallocStmt != null ) {
+					firstStmts.add(lastMallocStmt);
+				} else {
+					firstStmts.add(refStmt);
 				}
 				/*
 				 * Find return statements in the implicit function.

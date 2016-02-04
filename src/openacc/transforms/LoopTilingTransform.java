@@ -35,7 +35,7 @@ public class LoopTilingTransform extends TransformPass
 
 	
 	//@Override
-	public void start()
+	public void start_1D()
 	{
 
 		//////////////////////////////////////////////////////////////////////
@@ -107,7 +107,11 @@ public class LoopTilingTransform extends TransformPass
 							enclosingCompRegion = (Statement)att;
 							break;
 						} else {
-							att = (Annotatable)att.getParent();
+							if( att.getParent() instanceof Annotatable ) {
+								att = (Annotatable)att.getParent();
+							} else {
+								break;
+							}
 						}
 					}
 				}
@@ -284,7 +288,7 @@ public class LoopTilingTransform extends TransformPass
 		}
 	}
 	
-	public void start_incorrect()
+	public void start()
 	{
 		
 		///////////////////////////////////////////////////////////////////
@@ -353,6 +357,10 @@ public class LoopTilingTransform extends TransformPass
 					if (t instanceof Procedure) break;
 					t = t.getParent(); 
 				}
+				if( t == null ) {
+					Tools.exit("[ERROR in LoopTilingTransformation.collapseLoop()] Cannot find an enclosing procedure for the following loop:\n"
+					+ accLoop + "\n");
+				}
 				Procedure proc = (Procedure)t;
 				Statement enclosingCompRegion = null;
 				if( !accLoop.containsAnnotation(ACCAnnotation.class, "kernels") && 
@@ -364,13 +372,18 @@ public class LoopTilingTransform extends TransformPass
 							enclosingCompRegion = (Statement)att;
 							break;
 						} else {
-							att = (Annotatable)att.getParent();
+							if( att.getParent() instanceof Annotatable ) {
+								att = (Annotatable)att.getParent();
+							} else {
+								break;
+							}
 						}
 					}
 				}
 				ArrayList<Symbol> indexSymbols = new ArrayList<Symbol>();
 				ArrayList<ForLoop> indexedLoops = new ArrayList<ForLoop>();
 				indexedLoops.add(accLoop);
+				OmpAnnotation ompAnnot = accLoop.getAnnotation(OmpAnnotation.class, "for");
 				ACCAnnotation tileAnnot = accLoop.getAnnotation(ACCAnnotation.class, "tile");
 				Object tileClause = tileAnnot.get("tile");
 				List<Expression> exprList = (List<Expression>)tileClause;
@@ -403,14 +416,16 @@ public class LoopTilingTransform extends TransformPass
 					Expression upperbound = LoopTools.getUpperBoundExpression(currentLoop);
 
 					Expression newLowerbound = new IntegerLiteral(0);
-					Expression newUpperbound = Symbolic.add(Symbolic.subtract(upperbound, lowerbound), new IntegerLiteral(1));
+					//Expression newUpperbound = Symbolic.add(Symbolic.subtract(upperbound, lowerbound), new IntegerLiteral(1));
+					Expression newUpperbound = Symbolic.subtract(upperbound, lowerbound);
 
 					Expression indexVar = LoopTools.getIndexVariable(currentLoop);
 					BinaryExpression condition = (BinaryExpression)currentLoop.getCondition();
 
 					currentLoop.setInitialStatement(new ExpressionStatement(new AssignmentExpression(indexVar.clone(), AssignmentOperator.NORMAL, newLowerbound)));
-					currentLoop.setCondition(new BinaryExpression(indexVar.clone(), BinaryOperator.COMPARE_LT, newUpperbound));
-					currentLoop.setStep(new AssignmentExpression(indexVar.clone(), AssignmentOperator.ADD, new IntegerLiteral(tileSize)));
+					currentLoop.setCondition(new BinaryExpression(indexVar.clone(), BinaryOperator.COMPARE_LE, Symbolic.divide(newUpperbound, new IntegerLiteral(tileSize))));
+					currentLoop.setStep(new AssignmentExpression(indexVar.clone(), AssignmentOperator.ADD, new IntegerLiteral(1)));
+					//IRTools.replaceAll(currentLoop.getBody(), indexVar, Symbolic.multiply(new IntegerLiteral(tileSize), indexVar.clone()));
 
 					Identifier newIndex = null;
 					if( enclosingCompRegion instanceof CompoundStatement ) {
@@ -431,31 +446,33 @@ public class LoopTilingTransform extends TransformPass
 							tileAnnot.put("private", privateSet);
 						}
 						privateSet.add(AnalysisTools.createSubArray(newIndex.getSymbol(), true, null));
+						if( ompAnnot != null ) {
+							Set<String> ompPrivSet = ompAnnot.get("private");
+							if( ompPrivSet == null ) {
+								ompPrivSet = new HashSet<String>();
+								ompAnnot.put("private", ompPrivSet);
+							}
+							ompPrivSet.add(newIndex.toString());
+						}
 					}
 
-					Expression newInit = new AssignmentExpression(newIndex.clone(), AssignmentOperator.NORMAL, indexVar.clone());
+					Expression newIndexExp = Symbolic.add(Symbolic.multiply(new IntegerLiteral(tileSize), indexVar.clone()), lowerbound.clone());
+					Expression newInit = new AssignmentExpression(newIndex.clone(), AssignmentOperator.NORMAL, newIndexExp.clone());
 
-					Expression bound = null;
-					if(condition.getOperator() == BinaryOperator.COMPARE_LE)
-					{
-						bound = upperbound;
-					}
-					else if(condition.getOperator() == BinaryOperator.COMPARE_LT)
-					{
-						bound = Symbolic.add(upperbound, new IntegerLiteral(1));
-					}
-					PrintTools.println(condition.getOperator().toString() + " " + bound, 0);
-					Expression newCondition = new BinaryExpression(newIndex.clone(), condition.getOperator(),
-							new FunctionCall(new NameID("MIN"), bound,
-									Symbolic.add(Symbolic.add(indexVar.clone(), new IntegerLiteral(tileSize)), lowerbound)));
+					Expression newCondition = new BinaryExpression(newIndex.clone(), BinaryOperator.COMPARE_LE,
+							new FunctionCall(new NameID("MIN"), upperbound,
+									Symbolic.add(newIndexExp.clone(), new IntegerLiteral(tileSize-1))));
 					Expression newStep = new UnaryExpression(UnaryOperator.POST_INCREMENT, newIndex.clone());
 
 					ForLoop newTiledLoop = null;
+					Statement innermostLoopBody = indexedLoops.get(exprList.size()-1).getBody();
 					if(i == 0)
 					{
-						newTiledLoop = new ForLoop(new ExpressionStatement(newInit),newCondition,newStep,indexedLoops.get(exprList.size()-1).getBody().clone());
+						newTiledLoop = new ForLoop(new ExpressionStatement(newInit),newCondition,newStep,innermostLoopBody.clone());
 						tiledLoop = newTiledLoop;
-						tiledLoop.setParent(indexedLoops.get(exprList.size()-1));
+						CompoundStatement cstmt_tmp = new CompoundStatement();
+						cstmt_tmp.addStatement(tiledLoop);
+						innermostLoopBody.swapWith(cstmt_tmp);
 					}
 					else
 					{
@@ -463,36 +480,50 @@ public class LoopTilingTransform extends TransformPass
 						CompoundStatement cstmt_tmp = new CompoundStatement();
 						cstmt_tmp.addStatement(newTiledLoop);
 						tiledLoop.getBody().swapWith(cstmt_tmp);
-						if( i == exprList.size()-1 && tileAnnot.containsKey("worker")){
+						if( (i == exprList.size()-1) ){
 							ACCAnnotation newPragma = new ACCAnnotation();
 							tiledLoop.annotate(newPragma);
 							Object worker = tileAnnot.get("worker");
 							newPragma.put("loop", "true");
-							newPragma.put("worker", worker);
+							if( worker != null ) {
+								newPragma.put("worker", worker);
+								tileAnnot.remove("worker");
+							}
 							Expression ColLevel = new IntegerLiteral(exprList.size());
 							newPragma.put("collapse", ColLevel);
-							tileAnnot.remove("worker");
-							tileAnnot.put("collapse", ColLevel);
-							/////////////////////////////////////////////////
-							// [FIXME] nullPointerException occurs at this //
-							//         collapse function call              //
-							/////////////////////////////////////////////////
-							CollapseTransformation.collapseLoop(tiledLoop);
-							newPragma.remove("collapse");
-
+							tileAnnot.put("collapse", ColLevel.clone());
+							if( ompAnnot != null ) {
+								Expression newIndext = LoopTools.getIndexVariable(tiledLoop);
+								Set<String> ompPrivSet = ompAnnot.get("private");
+								if( ompPrivSet == null ) {
+									ompPrivSet = new HashSet<String>();
+									ompAnnot.put("private", ompPrivSet);
+								}
+								ompPrivSet.add(newIndext.toString());
+							}
 						}
-
 					}
-
 					IRTools.replaceAll(newTiledLoop.getBody(), indexVar, newIndex.clone());
-					((ForLoop)indexedLoops.get(exprList.size()-1)).setBody(tiledLoop.clone());
-
+					if( (i == exprList.size()-1) ){
+						CollapseTransformation.collapseLoop(tiledLoop);
+						ACCAnnotation newPragma = tiledLoop.getAnnotation(ACCAnnotation.class, "collapse");
+						newPragma.remove("collapse");
+					}
 				}
 				ArrayList<ForLoop> newIndexedLoops = new ArrayList<ForLoop>();
 				newIndexedLoops.add(accLoop);
 				CollapseTransformation.collapseLoop(newIndexedLoops.get(0));
 				tileAnnot.remove("collapse");
 				LoopNormalization.normalizeLoop(newIndexedLoops.get(0));
+				if( ompAnnot != null ) {
+					Expression newIndext = LoopTools.getIndexVariable(accLoop);
+					Set<String> ompPrivSet = ompAnnot.get("private");
+					if( ompPrivSet == null ) {
+						ompPrivSet = new HashSet<String>();
+						ompAnnot.put("private", ompPrivSet);
+					}
+					ompPrivSet.add(newIndext.toString());
+				}
 			}
 			PrintTools.println("[INFO] Number of tiled OpenACC loops: " + tiledLoops, 0);
 

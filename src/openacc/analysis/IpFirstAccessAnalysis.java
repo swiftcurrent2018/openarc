@@ -902,7 +902,7 @@ public class IpFirstAccessAnalysis extends AnalysisPass {
 													if( tSet.contains(tSym) ) {
 														codeMotionIsAllowed = false;
 													} else if( SymbolTools.isGlobal(tSym) ) {
-														tSet = AnalysisTools.getAccessedGlobalSymbols(Att, null);
+														tSet = AnalysisTools.getAccessedGlobalSymbols(Att, null, true);
 														if( tSet.contains(tSym) ) {
 															codeMotionIsAllowed = false;
 														}

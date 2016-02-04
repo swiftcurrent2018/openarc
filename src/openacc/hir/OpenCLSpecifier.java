@@ -18,13 +18,14 @@ public class OpenCLSpecifier extends Specifier
   private static HashMap<String, OpenCLSpecifier> spec_map = new HashMap(24);
 
   private static String[] names =
-    {   "__kernel", "__global", "__local", "__constant" };
+    {   "__kernel", "__global", "__local", "__constant", "channel" };
 
   /* The following type-specifiers are added to support CUDA */
   public static final OpenCLSpecifier OPENCL_KERNEL	= new OpenCLSpecifier(0);
   public static final OpenCLSpecifier OPENCL_GLOBAL	= new OpenCLSpecifier(1);
   public static final OpenCLSpecifier OPENCL_LOCAL	= new OpenCLSpecifier(2);
   public static final OpenCLSpecifier OPENCL_CONSTANT	= new OpenCLSpecifier(3);
+  public static final OpenCLSpecifier OPENCL_CHANNEL	= new OpenCLSpecifier(4);
 
   protected int cvalue;
 

@@ -4,6 +4,7 @@ import cetus.hir.TranslationUnit;
 import cetus.hir.Tools;
 import cetus.exec.CetusParser;
 import cetus.exec.CommandLineOptionSet;
+import cetus.exec.Driver;
 
 import java.io.*;
 import java.util.Arrays;
@@ -91,34 +92,42 @@ public class CetusCParser implements CetusParser {
         Class class_TokenStream = null;
         // pre step to handle header files
         // Insert markers for start and end of a header file
+        // [Modified by Joel E. Denny to skip step 1 when -emitLLVM is
+        // specified because the BuildLLVM pass doesn't need step 1, which
+        // causes some relative include bugs.]
         try  {
-            InputStream istream =
-                    new DataInputStream(new FileInputStream(input_filename));
-            PreCLexer lexer = new PreCLexer(istream);
-            PreCParser parser = new PreCParser(lexer);
             filename = (new File(input_filename)).getName();
-            prename = "cppinput_" + filename;
-            File prefile = new File(pwd, prename);
-            prefile.deleteOnExit();
-            FileOutputStream fo = new FileOutputStream(prefile);
-            // Add option to print pre annotated input file before
-            // calling external preprocessor and exit
-            // [Modified by Joel E. Denny to use input_filename instead of
-            // filename so parser can adjust relative includes for change of
-            // directory.]
-            if (options.getValue("debug_preprocessor_input") != null) {
-                parser.programUnit(System.out,input_filename);
-                fo.close();
-                Tools.exit(0);
+            if (Driver.getOptionValue("emitLLVM") != null) {
+                prename = input_filename;
             }
-            parser.programUnit(new PrintStream(fo), input_filename);
-            fo.close();
+            else {
+                InputStream istream =
+                        new DataInputStream(new FileInputStream(input_filename));
+                PreCLexer lexer = new PreCLexer(istream);
+                PreCParser parser = new PreCParser(lexer);
+                prename = "cppinput_" + filename;
+                File prefile = new File(pwd, prename);
+                prefile.deleteOnExit();
+                FileOutputStream fo = new FileOutputStream(prefile);
+                // Add option to print pre annotated input file before
+                // calling external preprocessor and exit
+                // [Modified by Joel E. Denny to use input_filename instead of
+                // filename so parser can adjust relative includes for change of
+                // directory.]
+                if (options.getValue("debug_preprocessor_input") != null) {
+                    parser.programUnit(System.out,input_filename);
+                    fo.close();
+                    Tools.exit(0);
+                }
+                parser.programUnit(new PrintStream(fo), input_filename);
+                fo.close();
+            }
         } catch (FileNotFoundException e) {
             System.err.println("cetus: could not read input file " + e);
             Tools.exit(1);
         } catch (IOException e) {
             System.err.println(
-                    "cetus: could not create intermdiate output file " + e);
+                    "cetus: could not create intermediate output file " + e);
             Tools.exit(1);
         } catch (Exception e) {
             System.err.println("cetus: exception: " + e);

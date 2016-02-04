@@ -7,6 +7,7 @@ import java.util.*;
 * searches.
 */
 public final class SymbolTools {
+	static private int verbosity = 2;
 
     private SymbolTools() {
     }
@@ -42,6 +43,12 @@ public final class SymbolTools {
         String msg = String.format("%d updates in %.2f seconds",
                                    num_updates[0], Tools.getTime(timer));
         PrintTools.printlnStatus(0, "[LinkSymbol]", msg);
+    }
+
+    public static void linkSymbol(Traversable t, int tverbosity) {
+    	verbosity = tverbosity;
+    	linkSymbol(t);
+    	verbosity = 2;
     }
 
     /**
@@ -188,11 +195,16 @@ public final class SymbolTools {
         if (ret == null) {
             if (parent instanceof FunctionCall &&
                 id == ((FunctionCall)parent).getName()) {
-                System.err.print("[WARNING] Function without declaration ");
+            	if( verbosity > 1 ) {
+            		System.err.print("[WARNING] Function without declaration ");
+            		System.err.println(id + " from " + parent);
+            	}
             } else {
-                System.err.print("[WARNING] Undeclared symbol ");
+            	if( verbosity > 0 ) {
+            		System.err.print("[WARNING] Undeclared symbol ");
+            		System.err.println(id + " from " + parent);
+            	}
             }
-            System.err.println(id + " from " + parent);
         }
         return ret;
     }

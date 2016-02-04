@@ -18,6 +18,9 @@ public abstract class TransformPass {
     /** Flags for skipping consistency checking */
     protected boolean disable_protection;
 
+    /** [Added by Seyong Lee] Flags for setting verbosity level of consistency checking */
+    static protected int verbosity = 2;
+
     /** Flags for skipping analysis invalidation */
     protected boolean disable_invalidation;
 
@@ -46,7 +49,9 @@ public abstract class TransformPass {
                 throw new InternalError("Inconsistent IR after " +
                                         pass.getPassName());
             }
-            SymbolTools.linkSymbol(pass.program);
+            //SymbolTools.linkSymbol(pass.program);
+            SymbolTools.linkSymbol(pass.program, verbosity);
+            verbosity = 2;
         }
         // Invalidates points-to relations.
         // TODO: what about ddgraph ?

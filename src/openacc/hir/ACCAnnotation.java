@@ -45,6 +45,8 @@ public class ACCAnnotation extends PragmaAnnotation
  * 		deviceptr( list ) 
  * 		private( list ) 
  * 		firstprivate( list ) 
+ *      pipein( list )
+ *      pipeout( list )
  * <p>     
  * #pragma acc kernels [clause[[,] clause]...]
  * <p>     
@@ -65,6 +67,8 @@ public class ACCAnnotation extends PragmaAnnotation
  * 		present_or_create( list ) 
  * 		pcreate( list ) 
  * 		deviceptr( list ) 
+ *      pipein( list )
+ *      pipeout( list )
  * <p>     
  * #pragma acc data [clause[[,] clause]...]
  * <p>     
@@ -84,6 +88,7 @@ public class ACCAnnotation extends PragmaAnnotation
  * 		present_or_create( list ) 
  * 		pcreate( list ) 
  * 		deviceptr( list ) 
+ *      pipe( list )
  * <p>     
  * #pragma acc host_data [clause[[,] clause]...]
  * <p>     
@@ -131,6 +136,7 @@ public class ACCAnnotation extends PragmaAnnotation
  * 		pcreate( list ) 
  * 		deviceptr( list ) 
  * 		device_resident( list ) 
+ * 		pipe( list ) 
  * <p>     
  * #pragma acc update clause[[,] clause]...
  * <p>     
@@ -170,7 +176,7 @@ public class ACCAnnotation extends PragmaAnnotation
 		"accglobal", "accshared", "accprivate", "accreduction", "accdeviceptr",
 		"accexplicitshared", "accreadonly",
 		"iterspace", "rcreate", "gangdim", "workerdim", "gangconf", "workerconf",
-		"totalnumgangs", "totalnumworkers", "tile" ));
+		"totalnumgangs", "totalnumworkers", "tile", "pipe", "pipein", "pipeout" ));
 
 	// Pragmas used with optional value
 	private static final Set<String> optional_values = 
@@ -185,7 +191,8 @@ public class ACCAnnotation extends PragmaAnnotation
 					"routine", "if", "async", "refname", "num_gang", "num_workers", "vector_length", 
 					"collapse", "gang", "worker", "vector", "seq", "independent", "tile",
 					"reduction", "copy", "copyin", "copyout", "create", "present", "pcopy", "pcopyin",
-					"pcopyout", "pcreate", "deviceptr", "device_resident", "private", "firstprivate"
+					"pcopyout", "pcreate", "pipe", "pipein", "pipeout", "deviceptr", "device_resident", 
+					"private", "firstprivate"
 					));
 	
 	// List of OpenACC directives.
@@ -217,6 +224,7 @@ public class ACCAnnotation extends PragmaAnnotation
 	"if", "async", "num_gangs", "num_workers", "vector_length", "reduction", "copy", "copyin", "copyout",
 	"create", "present", "present_or_copy", "pcopy", "present_or_copyin", "pcopyin", "present_or_copyout",
 	"pcopyout", "present_or_create", "pcreate", "deviceptr", "device_resident", "host", "device", "private",
+	"pipe", "pipein", "pipeout",
 	"firstprivate", "use_device", "collapse", "gang", "worker", "vector", "seq", "independent", "bind",
 	"nohost", "nowait", "type", "tile"
 	));
@@ -238,15 +246,20 @@ public class ACCAnnotation extends PragmaAnnotation
 	
 	// Data clauses
 	public static final Set<String> dataClauses = new HashSet(Arrays.asList("copy", "copyin", "copyout",
-			"create", "present", "pcopy", "pcopyin", "pcopyout", "pcreate", "deviceptr", "device_resident" ));
+			"create", "present", "pcopy", "pcopyin", "pcopyout", "pcreate", "deviceptr", "device_resident",
+			"pipe", "pipein", "pipeout"));
 	
 	public static final Set<String> noMemTrDataClauses = new HashSet(Arrays.asList("create", "present", "pcreate",
-			"deviceptr", "device_resident"));
+			"deviceptr", "device_resident", "pipe", "pipein", "pipeout"));
 	
 	public static final Set<String> memTrDataClauses = new HashSet(Arrays.asList("copy", "copyin", "copyout",
 			"pcopy", "pcopyin", "pcopyout" ));
 	
 	public static final Set<String> memTrUpdateClauses = new HashSet(Arrays.asList("host", "device"));
+
+	public static final Set<String> pipeClauses = new HashSet(Arrays.asList("pipe", "pipein", "pipeout"));
+
+	public static final Set<String> pipeIOClauses = new HashSet(Arrays.asList("pipein", "pipeout"));
 	
 	public static final Set<String> internalDataClauses =
 		new HashSet<String>(Arrays.asList("accglobal", "accshared", "accprivate",

@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <unistd.h>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -161,7 +162,7 @@ public:
     virtual HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args) = 0;
     virtual HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type) = 0;
     virtual HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE) = 0;
-    virtual HI_error_t HI_synchronize( )=0;
+    virtual HI_error_t HI_synchronize( int forcedSync = 0 )=0;
 
     // Memory Allocation
     virtual HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE)= 0;
@@ -194,6 +195,9 @@ public:
         return HI_success;
     }
     virtual HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+        return HI_success;
+    }
+    virtual HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
         return HI_success;
     }
     virtual void HI_set_async(int asyncId)=0;
@@ -970,7 +974,7 @@ extern void HI_hostinit(int numhostthreads);
 extern HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
 extern HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
 extern HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
-extern HI_error_t HI_synchronize();
+extern HI_error_t HI_synchronize( int forcedSync = 0);
 
 /////////////////////////////
 //Device Memory Allocation //
@@ -1002,6 +1006,7 @@ extern HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
 //	size_t spitch, size_t widthInBytes, size_t height, size_t depth,
 //	HI_MemcpyKind_t kind, int async);
 extern HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
+extern HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async);
 
 ////////////////////////////////////////////////
 // Experimental API to support unified memory //

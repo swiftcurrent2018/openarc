@@ -92,6 +92,12 @@ public class AccPrivatization extends AnalysisPass {
 					Annotatable enCompRegion = null;
 					if( !kernelLoop ) {
 						enCompAnnot = AnalysisTools.ipFindFirstPragmaInParent(at, ACCAnnotation.class, ACCAnnotation.computeRegions, false, fCallList, null);
+						if( enCompAnnot == null ) {
+							PrintTools.println("\n[WARNING in AccPrivatization.start()] can not find the enclosing compute region of the " +
+									"following loop with a private clause;  " +
+									cAnnot + "; privatization transformation for this loop will be skipped!\n" + AnalysisTools.getEnclosingContext(at), 0);
+							continue;
+						}
 /*						if( enCompAnnot.containsKey("parallel") ) {
 							enCompRegion = enCompAnnot.getAnnotatable();
 						}*/

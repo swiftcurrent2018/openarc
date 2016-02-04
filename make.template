@@ -145,7 +145,7 @@ ifeq ($(MODE),profile)
 CFLAGS2 += $(GFRONTEND_DEBUG) $(OMP_FLAGS2) $(COMMONCINCLUDES)
 ACCRTLIB = $(ACCRT_BASE)pf
 else
-CFLAGS2 += $(OMP_FLAGS2) $(COMMONCINCLUDES)
+CFLAGS2 += $(COMMONCFLAGS) $(OMP_FLAGS2) $(COMMONCINCLUDES)
 ACCRTLIB = $(ACCRT_BASE)
 endif
 
@@ -157,6 +157,7 @@ CLIBS2 += $(CLIBS2_BASE) -l$(ACCRTLIB)
 ################
 # Make targets #
 ################
+.PHONY: ACC CPU TCPU LLVM all COMPILE_HOST COMPILE_KERNEL makedirectories
 ACC: $(BENCHMARK)_ACC
 CPU: $(BENCHMARK)_CPU
 TCPU: $(BENCHMARK)_TCPU
@@ -165,18 +166,22 @@ all: ACC CPU
 
 $(BENCHMARK)_CPU: $(CSRCS) makedirectories
 	$(CC) $(DEFSET_CPU) $(CFLAGS1) -o $(BENCHMARK_CPU) $(CSRCS) $(CLIBS1)
+	$(POSTCMD)
 
 $(BENCHMARK)_TCPU: $($(CETUS_OUTPUT)/$(CSRCS)) makedirectories
 	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_CPU) $(CFLAGS1) -I ../ -o ../$(BENCHMARK_TCPU) $(CSRCS) $(CLIBS1); cd ../
+	$(POSTCMD)
 
 $(BENCHMARK)_LLVM: $(CSRCS) makedirectories
 	$(OPENARCLIB)/../bin/openarc-cc $(DEFSET_LLVM) $(CFLAGS1_LLVM) -o $(BENCHMARK_LLVM) $(CSRCS) $(CLIBS1_LLVM)
+	$(POSTCMD)
 
-$(BENCHMARK)_ACC: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
+$(BENCHMARK)_ACC: COMPILE_HOST COMPILE_KERNEL
+	$(POSTCMD)
+
+COMPILE_HOST: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
 	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
 	cd $(CETUS_OUTPUT); grep resilience $(KERNEL_FILE) > /dev/null && cp $(OPENARCLIB)/$(RESILIENCE_FILE) $(OPENARCLIB)/resilience.h ../$(TARGET); cd ../
-	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/$(KERNEL_BINARY); fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
-	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
 
 COMPILE_KERNEL: $($(CETUS_OUTPUT)/$(KERNLE_FILE)) makedirectories
 	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/$(KERNEL_BINARY); fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi

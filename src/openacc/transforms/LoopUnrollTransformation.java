@@ -26,6 +26,7 @@ public class LoopUnrollTransformation extends TransformPass {
   public LoopUnrollTransformation(Program program, int factor) {
     super(program);
     unrollFactor = factor;
+    verbosity = 1;
   }
 
   /* (non-Javadoc)

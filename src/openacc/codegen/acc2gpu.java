@@ -39,6 +39,7 @@ public class acc2gpu extends CodeGenPass
 	private boolean addSafetyCheckingCode = false;
 	private boolean disableStatic2GlobalConversion = false;
 	private boolean assumeNoAliasingAmongKernelArgs = false;
+	private int cloneKernelCallingProcedures = 1;
 	private int doNotRemoveUnusedSymbols = 0;
 	//private boolean kernelCallingProcCloning = false;
 	private boolean MemTrOptOnLoops = false;
@@ -255,6 +256,11 @@ public class acc2gpu extends CodeGenPass
 			assumeNoAliasingAmongKernelArgs = true;
 		}
 
+		value = Driver.getOptionValue("CloneKernelCallingProcedures");
+		if( value != null ) {
+			cloneKernelCallingProcedures = Integer.valueOf(value).intValue();
+		}
+
 		if( OPENARC_ARCH == 3 ) {
 			value = Driver.getOptionValue("defaultNumComputeUnits");
 			if( value != null ) {
@@ -339,7 +345,9 @@ public class acc2gpu extends CodeGenPass
 		////////////////////////////////////////////////////////////////////////////////
 		// Clone procedures containing compute regions and are called more than once. //
 		////////////////////////////////////////////////////////////////////////////////
-		TransformPass.run(new KernelCallingProcCloning(program));
+		if( cloneKernelCallingProcedures != 0 ) {
+			TransformPass.run(new KernelCallingProcCloning(program));
+		}
 		
 		if( AccAnalysisOnly == 2 ) {
 			cleanAnnotations();
@@ -365,6 +373,8 @@ public class acc2gpu extends CodeGenPass
 		// For nested worker loops, workerdim(n) is added to each worker loop too.      //
 		//////////////////////////////////////////////////////////////////////////////////
 		TransformPass.run(new ACCLoopDirectivePreprocessor(program));
+
+		TransformPass.run(new PipeTransformation(program, OPENARC_ARCH==3));
 		
 		if( AccAnalysisOnly == 3 ) {
 			cleanAnnotations();
@@ -600,7 +610,7 @@ public class acc2gpu extends CodeGenPass
 		//Insert #pragma acc barrier at the end of pure-worker loop if it does not
 		//have reduction clause and it is not the last worker loop.
 		//If nowait clause exists, do not insert the barrier.
-		TransformPass.run(new WorkerSingleModeTransformation(program));
+		TransformPass.run(new WorkerSingleModeTransformation(program, OPENARC_ARCH));
 		
 		/////////////////////////////////////////////
 		//Collapse loops with collapse(n) clauses. //
@@ -665,6 +675,14 @@ public class acc2gpu extends CodeGenPass
 			PrintTools.println("[removeUnusedSymbols] begin", 0);
 			TransformTools.removeUnusedSymbols(program);
 			PrintTools.println("[removeUnusedSymbols] end", 0);
+		}
+		/////////////////////////////////////////////////////////////////////////
+		// Remove device function declarations in host-side translation units. //
+		/////////////////////////////////////////////////////////////////////////
+		if( doNotRemoveUnusedSymbols != 1 ) {
+			PrintTools.println("[removeUnusedDeviceFunctionDeclarations] begin", 0);
+			TransformTools.removeUnusedDeviceFunctionDeclarations(program);
+			PrintTools.println("[removeUnusedDeviceFunctionDeclarations] end", 0);
 		}
 
 		/////////////////////////////////////////////////////////////////////////

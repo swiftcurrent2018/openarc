@@ -236,8 +236,14 @@ public class ACC2GPUDriver extends Driver
 		"Configure how local reduction variables are generated; \n" + 
 		"N = 2 (local scalar reduction variables are allocated in the GPU shared memory and local array reduction variables are cached on the shared memory) \n" +
 		"N = 1 (local scalar reduction variables are allocated in the GPU shared memory and local array reduction variables are cached on the shared memory if included in CUDA sharedRO/sharedRW clause) (default) \n" +
-		"N = 0 (All local reduction variables are allocated in the GPU global memory and not cached in the GPU shared memory.) \n");
+		"N = 0 (All local reduction variables are allocated in the GPU global memory and not cached in the GPU shared memory.)");
 		optionsWithIntArgument.add("localRedVarConf");
+
+		options.add(options.TRANSFORM, "CloneKernelCallingProcedures", "N",
+		"Clone procedures calling compute regions; \n" + 
+		"N = 1 (Enable this kernel-calling-procedure cloning) (default) \n" +
+		"N = 0 (Disable this kernel-calling-procedure cloning)");
+		optionsWithIntArgument.add("CloneKernelCallingProcedures");
 		
 		options.add(options.UTILITY, "assumeNonZeroTripLoops",
 		"Assume that all loops have non-zero iterations");
@@ -368,8 +374,8 @@ public class ACC2GPUDriver extends Driver
 		optionsWithIntArgument.add("cudaMaxGridDimSize");
 		
 		options.add(options.TRANSFORM, "forceSyncKernelCall", 
-		"If enabled, cudaThreadSynchronize() call is inserted right after each kernel call " +
-		"to force explicit synchronization; useful for debugging");
+		"If enabled, HI_synchronize(1) call is inserted right after each kernel call in the default queue" +
+		" to force explicit synchronization; useful for debugging or timing the kernel execution.");
 		
 		options.add(options.TRANSFORM, "shrdSclrCachingOnReg",
 		"Cache shared scalar variables onto GPU registers");
@@ -413,7 +419,7 @@ public class ACC2GPUDriver extends Driver
     // Do not let java String interning happen here so that we can compare by
     // reference later to see if the default value is still set.
     String cpp = BuildConfig.getBuildConfig().getProperty("cpp");
-    preprocessorDefault = cpp + " -CC -I.";
+    preprocessorDefault = cpp + " -CC";
     setOptionValue("preprocessor", preprocessorDefault);
 	}
 	
@@ -713,6 +719,11 @@ public class ACC2GPUDriver extends Driver
 	public void run(String[] args)
 	{
 		parseCommandLine(args);
+		if( getOptionValue("emitLLVM") == null )
+		{
+			String newCPPCMD = getOptionValue("preprocessor") + " -I.";
+			setOptionValue("preprocessor", newCPPCMD);
+		}
 		//Add include-path to the preprocessor command if existing.
 		//[DEBUG] Current implementation allows only one "addIncludePath" commandline option.
 		//To specify multiple include-paths, they should be specified in the configuration file.

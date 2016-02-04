@@ -89,7 +89,7 @@ public:
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
     HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
     HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
-    HI_error_t HI_synchronize();
+    HI_error_t HI_synchronize( int forcedSync = 0 );
     HI_error_t destroy();
     HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
@@ -119,6 +119,7 @@ public:
     HI_error_t createKernelArgMap();
     HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size);
     HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
+    HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async);
     void HI_set_async(int asyncId);
     void HI_wait(int arg);
     void HI_wait_ifpresent(int arg);
@@ -182,7 +183,7 @@ public:
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
     HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
     HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
-    HI_error_t HI_synchronize();
+    HI_error_t HI_synchronize( int forcedSync = 0 );
     HI_error_t destroy();
     HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
     HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);

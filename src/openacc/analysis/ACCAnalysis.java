@@ -458,9 +458,11 @@ public class ACCAnalysis extends AnalysisPass
 		List<FunctionCall> gFuncCallList = IRTools.getFunctionCalls(program);
 		//Step1: Create internal data structure to keep information on program-level internal data region.
 		Set<Symbol> progAccSharedSymbols = new HashSet<Symbol>();
+		//Set<Symbol> progAccPipeSymbols = new HashSet<Symbol>();
 		Set<Symbol> tProgAccSharedSymbols = new HashSet<Symbol>();
 		Set<String> progAccSharedSymbolStrings = new HashSet<String>();
 		programAnnot.put("accshared", progAccSharedSymbols);
+		//programAnnot.put("accpipe", progAccPipeSymbols);
 		programAnnot.put("accglobal", progAccSharedSymbolStrings);
 		//Step2: For each explicit data region or compute region, create accshared set which contains symbols used 
 		//       in the data clauses of the construct. The accshared set will be stored in "acc internal" internal ACCAnnotation.
@@ -532,6 +534,7 @@ public class ACCAnalysis extends AnalysisPass
 							} else {
 								if( !directiveType.equals("data") && ACCAnnotation.privateClauses.contains(aKey) ) {
 									accPrivateSymbols.addAll(symDSet);
+								//} else if( !ACCAnnotation.pipeClauses.contains(aKey) ){
 								} else {
 									accSharedSymbols.addAll(symDSet);
 								}
@@ -660,6 +663,7 @@ public class ACCAnalysis extends AnalysisPass
 									Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: a variable, " + sym.getSymbolName() +
 											", appears more than once in the data clauses for  the same implicit data region:\n" + 
 											"Implicit data region: " + implicitDataRegion + "\nDeclare directive: " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
+								//} else if( !ACCAnnotation.pipeClauses.contains(aKey) ){
 								} else {
 									accSharedSymbols.add(sym);
 									tDataSet.add(subArr);
@@ -742,10 +746,10 @@ public class ACCAnalysis extends AnalysisPass
 					for( Symbol sym : dataSymbols ) {
 						if( SymbolTools.isGlobal(sym) ) {
 							if( progAccSharedSymbolStrings.contains(sym.getSymbolName()) ) {
-								Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: a variable, " + sym.getSymbolName() +
+								PrintTools.println("[WARNING in ACCAnalysis.declareDirectiveAnalysis()]: a variable, " + sym.getSymbolName() +
 										", appears in data clauses for both program-level implicit data region" + 
 										" and data region or compute region in a procedure, " + cProc.getSymbolName() + 
-										"\nEnclosing Translatin Unit: " + ((TranslationUnit)cProc.getParent()).getOutputFilename() + "\n");
+										"\nEnclosing Translatin Unit: " + ((TranslationUnit)cProc.getParent()).getOutputFilename() + "\n", 1);
 							}
 						}
 					}
@@ -799,6 +803,8 @@ public class ACCAnalysis extends AnalysisPass
 					if( pragAnnot instanceof ACCAnnotation ) {
 						ACCAnnotList.add(pragAnnot);
 					} else if( pragAnnot instanceof ARCAnnotation ) {
+						ACCAnnotList.add(pragAnnot);
+					} else if( pragAnnot instanceof NVLAnnotation ) {
 						ACCAnnotList.add(pragAnnot);
 					}
 				}

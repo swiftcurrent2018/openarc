@@ -12,8 +12,8 @@ use FindBin qw($RealBin);
 my $CPP = '@CPP@';
 my $CC = '@CC@';
 my $CETUS_OUTDIR = 'cetus_output';
-my $PMEMOBJ_INCLUDES = '@PMEMOBJ_INCLUDES@';
-my $PMEMOBJ_LIBDIR = '@PMEMOBJ_LIBDIR@';
+my $PMEM_INCLUDES = '@PMEM_INCLUDES@';
+my $PMEM_LIBDIR = '@PMEM_LIBDIR@';
 
 my $LLVM_BIN = "$RealBin/../llvm/install/bin";
 my $LLVM_LLC = "$LLVM_BIN/llc";
@@ -26,7 +26,8 @@ sub main {
 
   # clean up
   run("rm -rf ".shesc($CETUS_OUTDIR)
-      ." && mkdir -p ".shesc($CETUS_OUTDIR)."/opt",
+      ." && mkdir -p ".shesc($CETUS_OUTDIR)."/opt-phase1"
+      ." ".shesc($CETUS_OUTDIR)."/opt-phase2",
       "Cetus output directory cleanup");
 
   # parse args
@@ -35,9 +36,14 @@ sub main {
   my $cppOpts = " -I. -D_OPENARC_";
   my $ldOpts = "";
   my $llcOpts = "";
+  my $optPhase2Opts = "";
   my $inCFileArgs = "";
-  my $inOFileArgs = "";
+  my $inObjFileArgs = "";
   my $compileOnly = 0;
+  my $nvlAddTxsPass = 0;
+  my $nvlAddSafetyPass = 1;
+  my $nvlAddRefCountingPass = 1;
+  my $nvlAddPersistsPass = 0;
   for (my $argi = 0; $argi <= $#_; ++$argi) {
     my $arg = $_[$argi];
     if ($arg eq "-o") {
@@ -52,6 +58,30 @@ sub main {
     }
     elsif ($arg eq "-ffitl") {
       $arcOpts .= " -enableFaultInjection";
+    }
+    elsif ($arg eq "-fnvl-add-txs") {
+      $nvlAddTxsPass = 1;
+    }
+    elsif ($arg eq "-fno-nvl-add-txs") {
+      $nvlAddTxsPass = 0;
+    }
+    elsif ($arg eq "-fnvl-add-safety") {
+      $nvlAddSafetyPass = 1;
+    }
+    elsif ($arg eq "-fno-nvl-add-safety") {
+      $nvlAddSafetyPass = 0;
+    }
+    elsif ($arg eq "-fnvl-add-ref-counting") {
+      $nvlAddRefCountingPass = 1;
+    }
+    elsif ($arg eq "-fno-nvl-add-ref-counting") {
+      $nvlAddRefCountingPass = 0;
+    }
+    elsif ($arg eq "-fnvl-add-persists") {
+      $nvlAddPersistsPass = 1;
+    }
+    elsif ($arg eq "-fno-nvl-add-persists") {
+      $nvlAddPersistsPass = 0;
     }
     elsif ($arg =~ /^-D/ || $arg =~ /^-I/ || $arg =~ /^-U/) {
       my $opt = substr $arg, 0, 2;
@@ -70,23 +100,33 @@ sub main {
     }
     elsif ($arg =~ /^-O/) {
       $llcOpts .= " " . shesc($arg);
+      # opt doesn't support -O0, so just don't call opt for that case.
+      if ($arg eq "-O0") {
+        $optPhase2Opts = "";
+      }
+      else {
+        $optPhase2Opts .= " " . shesc($arg);
+      }
     }
-    elsif ($arg =~ /^-g/) {
+    elsif ($arg eq "-fPIC") {
+      $llcOpts .= " -relocation-model=pic";
+    }
+    elsif ($arg eq "-g") {
     }
     elsif ($arg =~ /^-/) {
       die "unknown option: $arg\n";
     }
-    elsif ($arg =~ /\.o$/) {
-      $inOFileArgs .= " " . shesc($arg);
+    elsif ($arg =~ /\.(?:o|a|so|dylib)$/) {
+      $inObjFileArgs .= " " . shesc($arg);
     }
     else {
       $inCFileArgs .= " " . shesc($arg);
     }
   }
   $cppOpts .= " -I$RealBin/../openarcrt -I$RealBin/../nvl/include";
-  if ($PMEMOBJ_INCLUDES) { $cppOpts .= " -I$PMEMOBJ_INCLUDES"; }
+  if ($PMEM_INCLUDES) { $cppOpts .= " -I$PMEM_INCLUDES"; }
   $ldOpts .= " -L$RealBin/../openarcrt -L$RealBin/../nvl/rt";
-  if ($PMEMOBJ_LIBDIR) { $ldOpts .= " -L$PMEMOBJ_LIBDIR"; }
+  if ($PMEM_LIBDIR) { $ldOpts .= " -L$PMEM_LIBDIR"; }
 
   # run openarc and llc
   my $outFiles = "";
@@ -113,12 +153,31 @@ sub main {
         }
       }
       $outFiles .= " ".shesc($outFile);
-      my $optFile = "$CETUS_OUTDIR/opt/$fileBase.bc";
-      $cmd = shesc($LLVM_OPT)." -fitl -nvl ".shesc($file)
-             ." -o ".shesc($optFile);
-      run($cmd, "opt for $file");
-      $cmd = shesc($LLVM_LLC)." -filetype=obj".$llcOpts." ".shesc($optFile)
-             ." -o ".shesc($outFile);
+      # For some reason, opt wants to run -O1, -O2, etc. passes before our
+      # passes regardless of the order in which we specify them on the
+      # command line, so we have to call opt twice.
+      my $optPhase1File = "$CETUS_OUTDIR/opt-phase1/$fileBase.bc";
+      $cmd = shesc($LLVM_OPT)
+             ." -fitl"
+             .($nvlAddTxsPass ? " -nvl-add-txs" : "")
+             .($nvlAddSafetyPass ? " -nvl-add-safety" : "")
+             .($nvlAddRefCountingPass ? " -nvl-add-ref-counting" : "")
+             .($nvlAddPersistsPass ? " -nvl-add-persists" : "")
+             ." -nvl-lower-pointers"
+             ." ".shesc($file)." -o ".shesc($optPhase1File);
+      run($cmd, "opt phase 1 for $file");
+      my $optPhase2File;
+      if ($optPhase2Opts) {
+        $optPhase2File = "$CETUS_OUTDIR/opt-phase2/$fileBase.bc";
+        $cmd = shesc($LLVM_OPT).$optPhase2Opts." ".shesc($optPhase1File)
+               ." -o ".shesc($optPhase2File);
+        run($cmd, "opt phase 2 for $file");
+      }
+      else {
+        $optPhase2File = $optPhase1File;
+      }
+      $cmd = shesc($LLVM_LLC)." -filetype=obj".$llcOpts." "
+             .shesc($optPhase2File)." -o ".shesc($outFile);
       run($cmd, "llc for $file");
     }
   }
@@ -129,7 +188,7 @@ sub main {
     if ($outOptFile) {
       $cmd .= " -o ".$outOptFile;
     }
-    $cmd .= $outFiles . $inOFileArgs . $ldOpts;
+    $cmd .= $outFiles . $inObjFileArgs . $ldOpts;
     run($cmd, "linking");
   }
 

@@ -762,20 +762,20 @@ HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSiz
 	return return_status;
 }
 
-HI_error_t HI_synchronize()
+HI_error_t HI_synchronize( int forcedSync )
 {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_synchronize()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_synchronize(%d)\n", forcedSync);
 	}
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t* conf = getHostConf();
-    return_status = conf->device->HI_synchronize();
+    return_status = conf->device->HI_synchronize(forcedSync);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_synchronize()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_synchronize(%d)\n", forcedSync);
 	}
 	conf->KernelSyncCnt++;
 	conf->totalKernelSyncTime += (HI_get_localtime() - ltime);
@@ -1815,6 +1815,33 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const(%ld)\n", count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
+	}
+#endif
+	return return_status;
+}
+
+HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
+	HI_error_t return_status;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const_async(%d, %ld)\n",async, count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
+	}
+#endif
+	if( hostPtr == NULL ) {
+    	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] NULL host pointer; exit!\n");
+        exit(1);
+	}
+    HostConf_t * tconf = getHostConf();
+    if( tconf->isOnAccDevice == 0 ) {
+        fprintf(stderr, "[ERROR in HI_memcpy_const_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        exit(1);
+    }    
+    return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async);
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const_async(%d, %ld)\n",async, count);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif

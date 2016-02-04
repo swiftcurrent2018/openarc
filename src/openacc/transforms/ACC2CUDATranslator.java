@@ -60,7 +60,6 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 	///////////////////////////////////////////
 	// Misc. values for translation purpose. //
 	///////////////////////////////////////////
-	protected enum MallocType {ConstantMalloc, TextureMalloc, PitchedMalloc, NormalMalloc}
 	//contains param-symbol to pitch-size symbol map
 	protected Map<Symbol, Symbol> pitchedSymMap =  new HashMap<Symbol, Symbol>();
 	//contains param-symbol to texture-symbol map
@@ -1721,7 +1720,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			} else {
 				scope = "compute region";
 			}
-			Tools.exit("[ERROR in ACC2CUDATranslator.handleCUDAMalloc()] a symbol(" +
+			Tools.exit("[ERROR in ACC2CUDATranslator.genCUDACodesForDataClause()] a symbol(" +
 					IRSym + ") in a " + scope + " is not visible; exit!");
 		}
 		if( targetSymbolTable instanceof CompoundStatement ) {
@@ -2580,11 +2579,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			
 			///////////////////////////////////////////////
 			// Copyin the host data into the GPU memory. //
-			//////////////////////////////////////////////////////////////////////////////////////////////
-			// gpuBytes=sizeof(float)*((2048+2)*(2048+2));                                              //
-			// HI_memcpy(constant__x, hostPtr, gpuBytes, HI_MemcpyHostToDevice, 1);               //
-			// HI_memcpy_async(constant__x, hostPtr, gpuBytes, HI_MemcpyHostToDevice, 1, asyncID);//
-			//////////////////////////////////////////////////////////////////////////////////////////////
+			/////////////////////////////////////////////////////////////////////////////////////////////////////
+			// gpuBytes=sizeof(float)*((2048+2)*(2048+2));                                                     //
+			// HI_memcpy_const((void *)hostPtr, "constant__x", HI_MemcpyHostToDevice, gpuBytes);               //
+			// HI_memcpy_const_async((void *)hostPtr, "constant__x", HI_MemcpyHostToDevice, gpuBytes, asyncID);//
+			/////////////////////////////////////////////////////////////////////////////////////////////////////
 			if( addCopyInStmt || ((dataClauseT == DataClauseType.CheckOnly) && addNewConstSymbol) ) {
 				Expression biexp = sizeof_expr.clone();
 				for( int i=0; i<lengthList.size(); i++ )
@@ -2599,13 +2598,18 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				if( asyncExp == null ) {
 					copyinCall = new FunctionCall(new NameID("HI_memcpy_const"));
 				} else {
+					//[DEBUG] OpenARC CUDA driver uses cuModuleGetGlobal() driver API, but it does not offer
+					//asynchronous version.
 					copyinCall = new FunctionCall(new NameID("HI_memcpy_const_async"));
 				}
+				List<Specifier> castspecs = new LinkedList<Specifier>();
+				castspecs.add(Specifier.VOID);
+				castspecs.add(PointerSpecifier.UNQUALIFIED);
 				if( lengthList.size() == 0 ) { //hostVar is scalar.
 					//copyinCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
 					//		constantID.clone()));
-					copyinCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
-							hostVar.clone()));
+					copyinCall.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF, 
+							hostVar.clone())));
 				} else {
 					//if( partialArrayPassing ) {
 					//	copyinCall.addArgument(new BinaryExpression(constantID.clone(), BinaryOperator.ADD,
@@ -2614,10 +2618,10 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					//	copyinCall.addArgument(constantID.clone());
 					//}
 					if( partialArrayPassing ) {
-						copyinCall.addArgument(new BinaryExpression(hostVar.clone(), BinaryOperator.ADD,
-								startList.get(0).clone()));
+						copyinCall.addArgument(new Typecast(castspecs, new BinaryExpression(hostVar.clone(), BinaryOperator.ADD,
+								startList.get(0).clone())));
 					} else {
-						copyinCall.addArgument(hostVar.clone());
+						copyinCall.addArgument(new Typecast(castspecs, hostVar.clone()));
 					}
 				}
                 /*
@@ -3377,6 +3381,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					for( int i=1; i<inStmts.size(); i++ ) {
 						TranslationUnit tUnt = null;
 						inPt = inStmts.get(i);
+						pStmt = (CompoundStatement)inPt.getParent();
 						tt = inPt;
 						while( (tt != null) ) {
 							if( tt instanceof TranslationUnit ) {
@@ -3462,6 +3467,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					for( int i=1; i<inStmts.size(); i++ ) {
 						TranslationUnit tUnt = null;
 						inPt = inStmts.get(i);
+						pStmt = (CompoundStatement)inPt.getParent();
 						tt = inPt;
 						while( (tt != null) ) {
 							if( tt instanceof TranslationUnit ) {
@@ -3583,6 +3589,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					for( int i=1; i<outStmts.size(); i++ ) {
 						TranslationUnit tUnt = null;
 						outPt = outStmts.get(i);
+						pStmt = (CompoundStatement)outPt.getParent();
 						tt = outPt;
 						while( (tt != null) ) {
 							if( tt instanceof TranslationUnit ) {
@@ -4665,13 +4672,13 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		Expression totalnumgangs = null;
 		Expression totalnumworkers = null;
 		tAnnot = region.getAnnotation(ACCAnnotation.class, "seq");
-		boolean isSeqLoop = false;
+		boolean isSingleTask = false;
 		if( tAnnot != null ) {
 			if( !AnalysisTools.ipContainPragmas(region, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null) ) {
-				isSeqLoop = true;
+				isSingleTask = true;
 			}
 		}
-		if( isSeqLoop ) {
+		if( isSingleTask ) {
 			num_gangs.add(new IntegerLiteral(1));
 			num_gangs.add(new IntegerLiteral(1));
 			num_gangs.add(new IntegerLiteral(1));
@@ -4701,6 +4708,9 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				num_workers.add(new IntegerLiteral(1));
 				num_workers.add(new IntegerLiteral(1));
 				totalnumworkers = num_workers.get(0).clone();
+				if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
+					isSingleTask = true;
+				}
 			} else {
 				tAnnot = region.getAnnotation(ACCAnnotation.class, "gangconf");
 				if( tAnnot == null ) {
@@ -4767,6 +4777,9 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 						m++;
 					}
 				}
+				if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
+					isSingleTask = true;
+				}
 			}
 		}
 		
@@ -4809,7 +4822,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		//////////////////////////////////////////
 		CUDATranslationTools.privateTransformation(cProc, region, cRegionKind, ifCond, asyncID, confRefStmt, prefixStmts, 
 				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
-				opt_addSafetyCheckingCode, arrayElmtCacheSymbols);
+				opt_addSafetyCheckingCode, arrayElmtCacheSymbols, isSingleTask);
 		if( SkipGPUTranslation == 2 ) {
 			return;
 		}
@@ -4820,7 +4833,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		CUDATranslationTools.reductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts, 
 				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
 				opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
-				memtrVerification, marginOfError, warpSize, minCheckValue, localRedVarConf);
+				memtrVerification, marginOfError, warpSize, minCheckValue, localRedVarConf, isSingleTask);
 		if( SkipGPUTranslation == 3 ) {
 			return;
 		}
@@ -5632,7 +5645,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		
 		//FIXME: seq loop may still need _tid for Worker-Single Mode.
 		//Disable the below condition.
-		//if( !isSeqLoop ) {
+		//if( !isSingleTask ) {
 		if( true ) {
 			/*
 			 * Create expressions for calculating global GPU thread ID (_gtid), local thread ID (_tid), 
@@ -5755,8 +5768,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		//Convert worksharing loops into if-statements. 
 		CUDATranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers, opt_skipKernelLoopBoundChecking);
 		
-		if( opt_forceSyncKernelCall ) {
-			//FunctionCall syncCall = new FunctionCall(new NameID("cudaThreadSynchronize"));
+		//[DEBUG] We don't need this since each kernel call in the default queue will be followed by HI_synchronize() call.
+/*		if( opt_forceSyncKernelCall ) {
             FunctionCall syncCall = new FunctionCall(new NameID("HI_synchronize"));
 			if( parent instanceof CompoundStatement ) {
 				((CompoundStatement)parent).addStatementAfter(kernelCall_stmt, new ExpressionStatement(syncCall));
@@ -5764,7 +5777,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				Tools.exit(pass_name + "[Error in extractKernelRegion()] Kernel call statement (" +
 						kernelCall_stmt + ") does not have a parent!");
 			}
-		}
+		}*/
 		
 		if( opt_addSafetyCheckingCode ) {
 			/////////////////////////////////////////////
@@ -5853,7 +5866,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				if( StandardLibrary.contains(fCall) ) {
 					continue;
 				}
-				Procedure c_proc = fCall.getProcedure();
+				Procedure c_proc = AnalysisTools.findProcedure(fCall);
 				if( (c_proc == null) && (currTrUnt != trUnt) ) {
 					List<Procedure> procList = IRTools.getProcedureList(program);
 					for( Procedure tProc : procList ) {
@@ -6139,31 +6152,53 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 						}
 
 						if( cloneProcedure ) {
+							//Replace consant array symbols with the compiler-generated global constant array symbol.
+							Set<Symbol> pAccessedSymbols = AnalysisTools.getAccessedVariables(body, true);
+							Set<Symbol> kernelGlobalSymbols = kernelsTranslationUnit.getSymbols();
+							for(Symbol pSym : pAccessedSymbols) {
+								if( SymbolTools.isGlobal(pSym) ) {
+									if( SymbolTools.isArray(pSym) && !SymbolTools.isPointer(pSym) 
+											&& pSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+										String symNameBase = null;
+										if( pSym instanceof AccessSymbol) {
+											symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)pSym);
+										} else {
+											symNameBase = pSym.getSymbolName();
+										}
+										String constVarName = "const__" + symNameBase;
+										Symbol IRSym = pSym;
+										if( pSym instanceof PseudoSymbol ) {
+											IRSym = ((PseudoSymbol)pSym).getIRSymbol();
+										}
+										if( !SymbolTools.isGlobal(IRSym) ) {
+											constVarName += "__" + c_proc.getSymbolName();
+										}
+										Symbol constSym = AnalysisTools.findsSymbol(kernelGlobalSymbols, constVarName);
+										if( constSym == null ) {
+											//constant symbol should have been created by either handleDataClause() or handleUpdate().
+											Tools.exit("[ERROR in ACC2CUDATranslation.devProcCloning()] Can't find __constant variable (" + constVarName + 
+													") corresponding to the host variable, " + pSym.getSymbolName() + "; exit the program!\nEnclosing procedure: " + 
+													c_proc.getSymbolName() + "\n");
+										}
+										Identifier constVar = new Identifier(constSym);
+										// Replace the instance of shared variable with the new gpu_var.
+										if( pSym instanceof AccessSymbol ) {
+											TransformTools.replaceAccessExpressions(body, (AccessSymbol)pSym, constVar);
+										} else {
+											TransformTools.replaceAll(body, new Identifier(pSym), constVar);
+										}
+									}
+
+								}
+							}
+						}
+
+						if( cloneProcedure ) {
 							////////////////////////////
 							// Add the new procedure. //
 							////////////////////////////
-							//if( (trUnt == tu) && (!AnalysisTools.isInHeaderFile(c_proc, trUnt)) ) {
-							//	trUnt.addDeclarationAfter(c_proc, new_proc);
-							//} else {
-							//{
-							//Procedure firstProc = AnalysisTools.findFirstProcedure(trUnt);
-							//trUnt.addDeclarationBefore(firstProc, new_proc);
-							{
-								trUnt.addDeclaration(new_proc);
-								devProcStack.push(new_proc);
-								//[DEBUG] Copying the new procedure to kernelsTranslationUnit is deferred to the end of 
-								//extractComputeREgion().
-/*								if(AnalysisTools.getProcedureDeclarators(kernelsTranslationUnit).size() > 0)
-								{
-									Procedure firstProc = AnalysisTools.findFirstProcedure(kernelsTranslationUnit);
-									kernelsTranslationUnit.addDeclarationBefore(firstProc, new_proc);
-								}
-								else
-								{
-									kernelsTranslationUnit.addDeclaration(new_proc);
-								}*/
-							}
-							//}
+							trUnt.addDeclaration(new_proc);
+							devProcStack.push(new_proc);
 							////////////////////////////////////////////////////////////////////////
 							//If the current procedure has annotations, copy them to the new one. //
 							////////////////////////////////////////////////////////////////////////
@@ -6253,7 +6288,10 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 							//     1) Update symbols in the new procedure, including symbols       //
 							//        in ACCAnnoations.                                            //
 							/////////////////////////////////////////////////////////////////////////
-							SymbolTools.linkSymbol(new_proc);
+							//[DEBUG] the new device function will be moved to the kernelTranslationUnit at the end of 
+							//the ACC2CUDATranslator, and thus below checking will complain missing declation if
+							//a device function accesses kernel-file-global-constant array.
+							SymbolTools.linkSymbol(new_proc, 0);
 							ACCAnalysis.updateSymbolsInACCAnnotations(new_proc, null);
 						}
 
@@ -6493,6 +6531,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
                 Expression lb = LoopTools.getLowerBoundExpression(ploop);
                 Expression ub = LoopTools.getUpperBoundExpression(ploop);
                 Expression tItrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+                num_workers = Symbolic.simplify(num_workers);
+                tItrSize = Symbolic.simplify(tItrSize);
                 if( tItrSize.equals(num_workers) ) {
                     continue; //we don't need to unroll this loop.
                 }

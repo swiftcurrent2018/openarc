@@ -472,6 +472,8 @@ public class ACCParser {
 	 * 		deviceptr( list ) 
 	 * 		private( list ) 
 	 * 		firstprivate( list ) 
+	 *      pipein( list )
+	 *      pipeout( list )
 	 * <p>     
 	 * #pragma acc kernels [clause[[,] clause]...]
 	 * <p>     
@@ -492,6 +494,8 @@ public class ACCParser {
 	 * 		present_or_create( list ) 
 	 * 		pcreate( list ) 
 	 * 		deviceptr( list ) 
+	 *      pipein( list )
+	 *      pipeout( list )
 	 * <p>     
 	 * #pragma acc data [clause[[,] clause]...]
 	 * <p>     
@@ -511,6 +515,7 @@ public class ACCParser {
 	 * 		present_or_create( list ) 
 	 * 		pcreate( list ) 
 	 * 		deviceptr( list ) 
+	 *      pipe( list )
 	 * <p>     
 	 * #pragma acc host_data [clause[[,] clause]...]
 	 * <p>     
@@ -558,6 +563,7 @@ public class ACCParser {
 	 * 		pcreate( list ) 
 	 * 		deviceptr( list ) 
 	 * 		device_resident( list ) 
+	 *      pipe( list )
 	 * <p>     
 	 * #pragma acc update clause[[,] clause]...
 	 * <p>     
@@ -1158,6 +1164,8 @@ public class ACCParser {
 	 * 		deviceptr( list ) 
 	 * 		private( list ) 
 	 * 		firstprivate( list ) 
+	 *      pipein( list )
+	 *      pipeout( list )
 	 * --------------------------------------------------------------- */
 	private static void parse_acc_parallel()
 	{
@@ -1198,6 +1206,8 @@ public class ACCParser {
 					case acc_deviceptr	:	parse_acc_dataclause(tok); break;
 					case acc_private	:	parse_acc_dataclause(tok); break;
 					case acc_firstprivate	:	parse_acc_dataclause(tok); break;
+					case acc_pipein 		:	parse_acc_dataclause(tok); break;
+					case acc_pipeout 		:	parse_acc_dataclause(tok); break;
 					default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 					}
 				} catch( Exception e) {
@@ -1236,6 +1246,8 @@ public class ACCParser {
 	 * 		deviceptr( list ) 
 	 * 		private( list ) 
 	 * 		firstprivate( list ) 
+	 * 		pipein( list ) 
+	 * 		pipeout( list ) 
 	 * 		collapse( n )
 	 * 		gang
 	 * 		worker
@@ -1285,6 +1297,8 @@ public class ACCParser {
 				case acc_seq		: parse_acc_noargclause(tok); break;
 				case acc_independent		: parse_acc_noargclause(tok); break;
                 case acc_tile		: parse_expressionlist(tok); break;
+				case acc_pipein 		:	parse_acc_dataclause(tok); break;
+				case acc_pipeout 		:	parse_acc_dataclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -1316,6 +1330,8 @@ public class ACCParser {
 	 * 		present_or_create( list ) 
 	 * 		pcreate( list ) 
 	 * 		deviceptr( list ) 
+	 * 		pipein( list ) 
+	 * 		pipeout( list ) 
 	 * --------------------------------------------------------------- */
 	private static void parse_acc_kernels()
 	{
@@ -1350,6 +1366,8 @@ public class ACCParser {
 					case acc_present_or_create	:	parse_acc_dataclause("pcreate"); break;
 					case acc_pcreate	:	parse_acc_dataclause(tok); break;
 					case acc_deviceptr	:	parse_acc_dataclause(tok); break;
+					case acc_pipein 		:	parse_acc_dataclause(tok); break;
+					case acc_pipeout 		:	parse_acc_dataclause(tok); break;
 					default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 					}
 				} catch( Exception e) {
@@ -1382,6 +1400,8 @@ public class ACCParser {
 	 * 		present_or_create( list ) 
 	 * 		pcreate( list ) 
 	 * 		deviceptr( list ) 
+	 * 		pipein( list ) 
+	 * 		pipeout( list ) 
 	 * 		collapse( n )
 	 * 		gang [( scalar-integer-expression )]
 	 * 		worker [( scalar-integer-expression )]
@@ -1429,6 +1449,8 @@ public class ACCParser {
 				case acc_private	:	parse_acc_dataclause(tok); break;
 				case acc_reduction		:	parse_acc_reduction(tok); break;
                 case acc_tile		: parse_expressionlist(tok); break;
+				case acc_pipein 		:	parse_acc_dataclause(tok); break;
+				case acc_pipeout 		:	parse_acc_dataclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + tok);
 				}
 			} catch( Exception e) {
@@ -1507,6 +1529,7 @@ public class ACCParser {
 	 * 		present_or_create( list ) 
 	 * 		pcreate( list ) 
 	 * 		deviceptr( list ) 
+	 * 		pipe( list ) 
 	 * --------------------------------------------------------------- */
 	private static void parse_acc_data()
 	{
@@ -1536,6 +1559,7 @@ public class ACCParser {
 				case acc_present_or_create	:	parse_acc_dataclause("pcreate"); break;
 				case acc_pcreate	:	parse_acc_dataclause(tok); break;
 				case acc_deviceptr	:	parse_acc_dataclause(tok); break;
+				case acc_pipe 		:	parse_acc_dataclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -1580,6 +1604,7 @@ public class ACCParser {
 				case acc_pcopyin		:	parse_acc_dataclause(tok); break;
 				case acc_present_or_create	:	parse_acc_dataclause("pcreate"); break;
 				case acc_pcreate	:	parse_acc_dataclause(tok); break;
+				case acc_pipe 		:	parse_acc_dataclause(tok); break;
 				//[TODO] add async, wait clause handlers.
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
@@ -1688,6 +1713,7 @@ public class ACCParser {
 	 * 		pcreate( list ) 
 	 * 		deviceptr( list ) 
 	 * 		device_resident( list ) 
+	 * 		pipe( list ) 
 	 * --------------------------------------------------------------- */
 	private static void parse_acc_declare()
 	{
@@ -1718,6 +1744,7 @@ public class ACCParser {
 				case acc_pcreate	:	parse_acc_declaredataclause(tok); declclauseexist = true; break;
 				case acc_deviceptr	:	parse_acc_declaredataclause(tok); declclauseexist = true; break;
 				case acc_device_resident	:	parse_acc_declaredataclause(tok); declclauseexist = true; break;
+				case acc_pipe 		:	parse_acc_declaredataclause(tok); declclauseexist = true; break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -3626,6 +3653,64 @@ public class ACCParser {
 		}*/
 	}
 
+    /**
+     * Parse NVL pragmas, which are stored as raw text after Cetus parsing.
+     * 
+     * @param input_map HashMap that will contain the parsed output pragmas
+     * @param str_array input pragma string that will be parsed.
+     * @return true if the pragma will be attached to the following non-pragma
+     *         statement. Or, it returns false, if the pragma is stand-alone.
+     */
+	public static boolean parse_nvl_pragma(HashMap input_map, String [] str_array, HashMap<String, String>macro_map)
+	{
+		acc_map = input_map;
+		token_array = str_array;
+		token_index = 1; // "nvl" has already been matched
+		//token_index = 2; // If there is a leading space, use this one.
+		macroMap = macro_map;
+
+		PrintTools.println(display_tokens(), 9);
+
+		String token = get_token();
+		String construct = "nvl_" + token;
+		try {
+			switch (nvl_directives.valueOf(construct)) {
+			case nvl_atomic 		: parse_nvl_atomic(); return true;
+			//		default : throw new NonOmpDirectiveException();
+			default : ACCParserError("Not Supported Construct");
+			}
+		} catch( Exception e) {
+			ACCParserError("Error occured during parsing " + token + " directive.\n" + "Error message: " + e);
+		}
+		return true;		// meaningless return because it is unreachable
+	}
+	
+	private static void parse_nvl_atomic() {
+		String directiveName = null;
+		directiveName = "atomic";
+		PrintTools.println("ACCParser is parsing ["+directiveName+"] directive", 3);
+		addToMap("atomic", "_directive");
+		while (end_of_token() == false) {
+			String token = get_token();
+			if( token.equals("") ) continue; //Skip empty string, which may occur due to macro.
+			String clause = "nvl_" + token;
+			if( token.equals(",") ) continue; //Skip comma between clauses, if existing.
+			PrintTools.println("clause=" + clause, 3);
+			try {
+				switch (nvl_clauses.valueOf(clause)) {
+				case nvl_heap  : parse_acc_confclause(token); break;
+				case nvl_default : parse_acc_stringargclause(token); break;
+				case nvl_backup : parse_acc_dataclause(token); break;
+				case nvl_clobber : parse_acc_dataclause(token); break;
+				case nvl_readonly : parse_acc_dataclause(token); break;
+				default : ACCParserError("NoSuchNVLConstruct : " + clause);
+				}
+			} catch( Exception e) {
+				ACCParserError("Error occured during parsing " + token + " clause.\n" + "Error message: " + e);
+			}
+		}
+	}
+	
 	private static void notSupportedWarning(String text)
 	{
 		System.out.println("Not Supported OpenACC Annotation: " + text); 
@@ -3793,7 +3878,10 @@ public class ACCParser {
 		acc_nohost,
 		acc_nowait,
 		acc_type,
-        acc_tile
+        acc_tile,
+        acc_pipe,
+        acc_pipein,
+        acc_pipeout
 	}
 	
 	public static enum ainfo_clause
@@ -3969,6 +4057,20 @@ public class ACCParser {
 		aspen_allocates,
 		aspen_resizes,
 		aspen_frees
+	}
+	
+	public static enum nvl_directives
+	{
+		nvl_atomic,
+	}
+	
+	public static enum nvl_clauses
+	{
+		nvl_heap,
+		nvl_default,
+		nvl_backup,
+		nvl_clobber,
+		nvl_readonly,
 	}
 
 

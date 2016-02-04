@@ -7,6 +7,7 @@ import java.util.*;
 
 import cetus.hir.*;
 import cetus.analysis.LoopTools;
+import cetus.transforms.LoopNormalization;
 import cetus.transforms.TransformPass;
 import openacc.hir.*;
 import openacc.analysis.AnalysisTools;
@@ -26,6 +27,7 @@ public class CollapseTransformation extends TransformPass {
 	 */
 	public CollapseTransformation(Program program) {
 		super(program);
+		verbosity = 1;
 	}
 
 	/* (non-Javadoc)
@@ -74,9 +76,13 @@ public class CollapseTransformation extends TransformPass {
 	public static int collapseLoop(ForLoop accLoop) {
 		int collapsedLoops = 0;
 		Traversable t = (Traversable)accLoop;
-		while(true) {
+		while(t != null) {
 			if (t instanceof Procedure) break;
 			t = t.getParent(); 
+		}
+		if( t == null ) {
+			Tools.exit("[ERROR in CollapseTransformatin.collapseLoop()] Cannot find an enclosing procedure for the following loop:\n"
+					+ accLoop + "\n");
 		}
 		Procedure proc = (Procedure)t;
 		Statement enclosingCompRegion = null;
@@ -89,7 +95,11 @@ public class CollapseTransformation extends TransformPass {
 					enclosingCompRegion = (Statement)att;
 					break;
 				} else {
-					att = (Annotatable)att.getParent();
+					if( att.getParent() instanceof Annotatable ) {
+						att = (Annotatable)att.getParent();
+					} else {
+						break;
+					}
 				}
 			}
 		}
@@ -97,6 +107,7 @@ public class CollapseTransformation extends TransformPass {
 		ArrayList<ForLoop> indexedLoops = new ArrayList<ForLoop>();
 		indexedLoops.add(accLoop);
 		ACCAnnotation collapseAnnot = accLoop.getAnnotation(ACCAnnotation.class, "collapse");
+		OmpAnnotation ompAnnot = accLoop.getAnnotation(OmpAnnotation.class, "for");
 		int collapseLevel = (int)((IntegerLiteral)collapseAnnot.get("collapse")).getValue();
 		boolean pnest = true;
 		pnest = AnalysisTools.extendedPerfectlyNestedLoopChecking(accLoop, collapseLevel, indexedLoops, null);
@@ -113,6 +124,7 @@ public class CollapseTransformation extends TransformPass {
 			return collapsedLoops;
 		}
 		for( ForLoop currLoop : indexedLoops ) {
+			//LoopNormalization.normalizeLoop(currLoop);
 			indexSymbols.add(LoopTools.getLoopIndexSymbol(currLoop));
 		}
 		collapsedLoops++;
@@ -128,6 +140,8 @@ public class CollapseTransformation extends TransformPass {
 			cStmt.addStatement(fBody);
 			tRefStmt = fBody;
 		}
+		//System.out.println("Loops to collapse: \n" + accLoop + "\n");
+		//System.out.println("Innermost loop body: \n" + cStmt + "\n");
 		//If const symbol declaration exists, old index variables may be used in its initialization.
 		//In this case, expression statements assigning the old index variables should be put before
 		//the const symbol declaration.
@@ -184,6 +198,14 @@ public class CollapseTransformation extends TransformPass {
 				collapseAnnot.put("private", privateSet);
 			}
 			privateSet.add(AnalysisTools.createSubArray(newIndex.getSymbol(), true, null));
+			if( ompAnnot != null ) {
+				Set<String> ompPrivSet = ompAnnot.get("private");
+				if( ompPrivSet == null ) {
+					ompPrivSet = new HashSet<String>();
+					ompAnnot.put("private", ompPrivSet);
+				}
+				ompPrivSet.add(newIndex.toString());
+			}
 		}
 		if( !collapseAnnot.containsKey("gang") && !collapseAnnot.containsKey("worker") &&
 				!collapseAnnot.containsKey("vector") && !collapseAnnot.containsKey("seq") ) {

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Created with IntelliJ IDEA.
@@ -63,6 +64,7 @@ public class OpenCLArrayFlattener extends TransformPass
 
             Procedure kernelProc = (Procedure)decl;
             CompoundStatement kernelBody = kernelProc.getBody();
+            Set<Symbol> paramSyms = kernelProc.getSymbols();
 
             //Flatten all array accesses
             List<ArrayAccess> arrayAccesses = IRTools.getExpressionsOfType(kernelBody, ArrayAccess.class);
@@ -79,9 +81,10 @@ public class OpenCLArrayFlattener extends TransformPass
 
                     Expression indexExpr = accessIndices.get(0);
 
-					// Skip for shared memory
-					if(accessSymbol.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL))
+					// Skip locally defined variables.
+					if( !paramSyms.contains(accessSymbol) ) {
 						continue;
+					}
 
 					/*
 					PrintTools.println("access: " + access.toString(),0);
@@ -245,7 +248,12 @@ public class OpenCLArrayFlattener extends TransformPass
                 }
             }
             for( Declaration refD : replaceDeclMap.keySet() ) {
-            	kernelProc.replaceDeclaration(refD, replaceDeclMap.get(refD));
+            	Declaration nDecl = replaceDeclMap.get(refD);
+            	kernelProc.replaceDeclaration(refD, nDecl);
+            	if( nDecl instanceof VariableDeclaration ) {
+            		Symbol nSym = (Symbol)((VariableDeclaration)nDecl).getDeclarator(0);
+            		IRTools.replaceAll(kernelProc.getBody(), new Identifier(nSym), new Identifier(nSym));
+            	}
             }
         }
     }

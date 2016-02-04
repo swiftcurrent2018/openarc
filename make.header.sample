@@ -48,10 +48,10 @@
 #                         JUnit test suite. See test/junit/README  #
 #                         for Java packages that must be located   #
 #                         here.                                    #
-#   - Modify target-specific location of libpmemobj (required only #
-#     for NVL support):                                            #
-#       PMEMOBJ_INCLUDES : include path for libpmemobj             #
-#       PMEMOBJ_LIBDIR   : library path for libpmemobj             #
+#   - Modify target-specific location of Intel's pmem libraries    #
+#     (required only for NVL support):                             #
+#       PMEM_INCLUDES : include path for pmem                      #
+#       PMEM_LIBDIR   : library path for pmem                      #
 #                                                                  #
 # When specifying CPP, you must specify a C preprocessor and       #
 # command-line options that disable C language extensions that     #
@@ -96,6 +96,8 @@ CETUS_OUTPUT = cetus_output
 # Newark: Linux system with NVIDIA GPUs and an Altera FPGA             #
 # Atlanta: LInux system with AMD GPUs                                  #
 # MacBookPro: OS X system with an AMD GPU                              #
+# Kold: a mini cluster consisting of four HP SL250 nodes used for      #
+#       pilot studies within the Keeneland project.                    #
 ########################################################################
 TARGET_SYSTEM = Newark
 
@@ -148,8 +150,8 @@ endif
 #SPEC_CFG =
 #JUNIT_CLASSPATH =
 
-#PMEMOBJ_INCLUDES =
-#PMEMOBJ_LIBDIR =
+#PMEM_INCLUDES =
+#PMEM_LIBDIR =
 
 endif
 
@@ -158,7 +160,7 @@ endif
 #########################
 ifeq ($(TARGET_SYSTEM),Newark)
 
-OPENARC_ARCH = 3
+OPENARC_ARCH = 0
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
 CC = gcc
@@ -171,7 +173,7 @@ ifeq ($(OPENARC_ARCH), 0)
 BACKENDCXX = nvcc
 CC_FLAGS_PREFIX = -Xcompiler
 GBACKEND_FLAGS = -arch sm_20 -O3
-GBACKEND_INCLUDES = -I/opt/cuda/6.5/cuda/include
+GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
 GBACKEND_LIBS = -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
@@ -194,7 +196,7 @@ else
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
-GBACKEND_INCLUDES = -I/opt/cuda/6.5/cuda/include
+GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
 GBACKEND_LIBS = -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
@@ -205,18 +207,72 @@ endif
 endif
 
 LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
-LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128
+LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
 PERL = perl
 
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
 FC = gfortran
-SPEC_CPU2006 = /spec/cpu2006/1.0.1
+#SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-newark.cfg.in
-#JUNIT_CLASSPATH =
+#JUNIT_CLASSPATH = /junit-4.11.jar:/hamcrest-core-1.3.jar:/system-rules-1.9.0.jar
 
-#PMEMOBJ_INCLUDES =
-#PMEMOBJ_LIBDIR =
+#PMEM_INCLUDES = /pmem-git/src/include
+#PMEM_LIBDIR = /pmem-git/src/debug
+
+endif
+
+#########################
+# Target System: Kold #
+#########################
+ifeq ($(TARGET_SYSTEM),Kold)
+
+OPENARC_ARCH = 0
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = mpicc
+CXX = mpic++
+CPP = $(CC) -E
+GMACROS = -D OPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D _OPENARC_PROFILE_=1
+
+ifeq ($(OPENARC_ARCH), 0)
+BACKENDCXX = nvcc
+CC_FLAGS_PREFIX = -Xcompiler
+GBACKEND_FLAGS = -arch sm_20 -O3
+GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
+GBACKEND_LIBS = -lcuda -lOpenCL
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB) -lcuda
+GFRONTEND_DEBUG = -g
+else
+BACKENDCXX = g++
+CC_FLAGS_PREFIX = 
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
+GBACKEND_LIBS = -lOpenCL
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB) -lOpenCL
+GFRONTEND_DEBUG = -g
+endif
+
+LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
+LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
+PERL = perl
+
+MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
+MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+FC = gfortran
+#SPEC_CPU2006 = /spec/cpu2006/1.0.1
+SPEC_CFG = spec-newark.cfg.in
+#JUNIT_CLASSPATH = /junit-4.11.jar:/hamcrest-core-1.3.jar:/system-rules-1.9.0.jar
+
+#PMEM_INCLUDES = /home/f6l/work/tools/nvml/src/include
+#PMEM_LIBDIR = /home/f6l/work/tools/nvml/src/debug
 
 endif
 
@@ -244,19 +300,19 @@ GFRONTEND_INCLUDES = -I$(OPENARCLIB)
 GFRONTEND_LIBS = -L$(OPENARCLIB) -lOpenCL
 GFRONTEND_DEBUG = -g
 
-#LLVM_TARGET_TRIPLE =
-#LLVM_TARGET_DATA_LAYOUT =
-#PERL = perl
+LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
+LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
+PERL = perl
 
-#MPI_INCLUDES =
-#MPI_LIBDIR =
-#FC =
-#SPEC_CPU2006 =
-#SPEC_CFG =
-#JUNIT_CLASSPATH =
+MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
+MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+FC = gfortran
+#SPEC_CPU2006 = /spec/cpu2006/1.0.1
+SPEC_CFG = spec-newark.cfg.in
+#JUNIT_CLASSPATH = /junit-4.11.jar:/hamcrest-core-1.3.jar:/system-rules-1.9.0.jar
 
-#PMEMOBJ_INCLUDES =
-#PMEMOBJ_LIBDIR =
+#PMEM_INCLUDES = /pmem-git/src/include
+#PMEM_LIBDIR = /pmem-git/src/debug
 
 endif
 
@@ -286,7 +342,7 @@ GFRONTEND_LIBS = -L$(OPENARCLIB) -framework OpenCL
 GFRONTEND_DEBUG = -g
 
 LLVM_TARGET_TRIPLE = x86_64-apple-macosx10.9.0
-LLVM_TARGET_DATA_LAYOUT = e-m:o-i64:64-f80:128-n8:16:32:64-S128
+LLVM_TARGET_DATA_LAYOUT = e-m:o-i64:64-f80:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
 PERL = perl
 
 MPI_INCLUDES = /opt/local/include/openmpi-mp
@@ -296,8 +352,8 @@ SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-osx.cfg.in
 #JUNIT_CLASSPATH =
 
-#PMEMOBJ_INCLUDES =
-#PMEMOBJ_LIBDIR =
+#PMEM_INCLUDES =
+#PMEM_LIBDIR =
 
 endif
 
@@ -337,8 +393,8 @@ GFRONTEND_DEBUG = -g
 #SPEC_CFG =
 #JUNIT_CLASSPATH =
 
-#PMEMOBJ_INCLUDES =
-#PMEMOBJ_LIBDIR =
+#PMEM_INCLUDES =
+#PMEM_LIBDIR =
 
 endif
 
