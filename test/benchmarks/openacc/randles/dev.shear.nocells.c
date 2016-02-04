@@ -92,6 +92,7 @@ int main(int argc, char **argv) {
 	int 	i, ix, iy, iz, is, ik, istate, j, i1, js;
 
 	double strt_time, end_time;
+	double strt_time2, end_time2;
 
 	// read state vectors */
 	fp = fopen("states19.i", "r");
@@ -433,6 +434,7 @@ int main(int argc, char **argv) {
 #else
 			#pragma acc update host(distr[0:MC][0:LX_MAX][0:LY_MAX][0:LZ_MAX])
 #endif
+			strt_time2 = my_timer();
 			printf("%d\n", n_step);
 			
 			char fname[15];
@@ -511,12 +513,15 @@ int main(int argc, char **argv) {
         	}
 
 	        fclose(vtk_fp);  
+			end_time2 = my_timer();
 		}
 		
 	
 	}
 	end_time = my_timer();
 	printf("Main Computation Time = %lf sec\n", end_time - strt_time);
+	printf("Output Print Time = %lf sec\n", end_time2 - strt_time2);
+	printf("Net Computation Time = %lf sec\n", (end_time - strt_time)-(end_time2 - strt_time2));
 
 	return 0;
 }
