@@ -6,7 +6,7 @@ elif [ $# -eq 1 ]; then
 	inputSize=$1
 	blockSize=16
 else
-	inputSize=8192
+	inputSize=2048
 	blockSize=16
 fi
 
@@ -44,3 +44,10 @@ echo ""
 echo "====> To run the compiled binary:"
 echo "\$ cd bin; matmul_ACC"
 echo ""
+if [ -f "./cetus_output/openarc_kernel.cl" ]; then
+    cd ./cetus_output
+    cp "openarc_kernel.cl" "openarc_kernel.tmp"
+    cat "openarc_kernel.tmp" | sed '/cl_khr_fp64/d' > "openarc_kernel.cl"
+    rm "openarc_kernel.tmp"
+fi
+

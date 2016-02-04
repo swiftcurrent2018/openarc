@@ -5,6 +5,9 @@ function usage()
     echo "./tBatchTuning.bash"
     echo "List of options:"
     echo -e "\t-h --help"
+    echo -e "\t-c --clean"
+    echo -e "\t-p --purge"
+    echo -e "\t-cr --checkresults"
     echo -e "\t-t=tLevel --tuninglevel=tLevel"
     echo -e "\t-m=tMode --mode=tMode"
     echo -e "\t-n=N --numitr=N"
@@ -49,8 +52,11 @@ tMode=3
 numItr=1
 
 # Selected experiment numbers
-experiments=(31 29 38 41 6 4 13 16)
+#experiments=(31 29 38 41 6 4 13 16)
+experiments=( )
 
+cleanResults=0
+checkResults=0
 while [ "$1" != "" ]; do
     PARAM=`echo $1 | awk -F= '{print $1}'`
     VALUE=`echo $1 | awk -F= '{print $2}'`
@@ -59,8 +65,17 @@ while [ "$1" != "" ]; do
             usage
             exit
             ;;  
+        -c | --clean)
+            cleanResults=1
+            ;;  
+        -p | --purge)
+            cleanResults=2
+            ;;  
         -t | --tuninglevel)
             tLevel=${VALUE}
+            ;;  
+        -cr | --checkresults)
+            checkResults=1
             ;;  
         -m | --mode)
             tMode=${VALUE}
@@ -109,9 +124,11 @@ benchmark="$(basename `pwd`)"
 inputCFiles=( "spmul.c" "timer.c" )
 inputHeaderFiles=( )
 inputFiles=( "${inputCFiles[@]}" "${inputHeaderFiles[@]}" )
+INPUTDIR="${HOME}/SPMULInput"
 
 # OpenARC options (common to all inputs) to translate the benchmark.
-openarcOptionBase=( "macro=VERIFICATION=1,HOST_MEM_ALIGNMENT=1" )
+#openarcOptionBase=( "macro=VERIFICATION=1,HOST_MEM_ALIGNMENT=1" )
+openarcOptionBase=( "macro=VERIFICATION=1" )
 # commandline options (common to all inputs) to run the benchmark.
 cmdOptionBase=""
 
@@ -139,6 +156,30 @@ fi
 cleanCmd="make clean"
 makeCmd="make ACC"
 baseExeName="spmul_ACC"
+
+if [ $cleanResults -gt 0 ]; then
+
+###############################################################
+# Step0:  Delete all tuning output files except for log files #
+###############################################################
+echo " "
+echo "==> Step0:  Delete tuning output files and exit."
+echo " "
+rm -rf tuning_conf
+rm -f TuningOptions.txt
+rm -f userDirective*.txt
+rm -rf bin cetus_input cetus_output
+for filename in ${inputFiles[@]}
+do
+	rm -f $filename
+done
+if [ $cleanResults -gt 1 ]; then
+	rm -f *.log
+	rm -f *.log_extracted1
+fi
+exit
+
+fi
 
 if [ $tMode -eq 0 ] || [ $tMode -eq 3 ]; then
 
@@ -336,6 +377,9 @@ do
 		rm -f "${workDir}/${filename}"
 		inputSrc="${inputDir}/${filename}"
 		cp -f ${inputSrc} ${workDir}
+		cp "${filename}" "${filename}_tmp"
+		cat "${filename}_tmp" | sed "s|_INPUTDIR_|${INPUTDIR}/|g" > "${filename}"
+		rm -f "${filename}_tmp"
 	done
 
 	k=0
@@ -510,9 +554,11 @@ do
         if [ -f *.aocx ]; then
             mv *.aocx ${outputDir}
         fi  
-        if [ -f *.ptx ]; then
-            mv *.ptx ${outputDir}
-        fi  
+		tPTXFiles=( `ls *.ptx` )
+		for ptxFile in ${tPTXFiles[@]}
+		do	
+            mv ${ptxFile} ${outputDir}
+		done
 
         ##############################################
         # Move output log if targeting Altera OpenCL #
@@ -555,7 +601,7 @@ do
 	echo " " >> ${logFile}
 	echo "## Input Data : ${inputClass}" >> ${logFile}
 	# Input-specific options to run the benchmark.
-	inputOption="/home/f6l/SPMULInput/kkt_power.rbC"
+	inputOption="${INPUTDIR}/kkt_power.rbC"
 	# commandline options to run the benchmark.
 	cmdOption="${cmdOptionBase} ${inputOption}"
 
@@ -581,12 +627,20 @@ do
 		echo " " | tee -a ${logFile}
 		echo "## Execution Command: ${exeCmd}" | tee -a ${logFile}
 		echo " " | tee -a ${logFile}
-		n=0
-		while [ $n -lt ${numItr} ]
-		do	
-			./${exeCmd} 2>&1 | tee -a ${logFile}
-			n=$((n+1))
-		done
+		if [ -f ${newExeName} ]; then
+			n=0
+			while [ $n -lt ${numItr} ]
+			do	
+				./${exeCmd} 2>&1 | tee -a ${logFile}
+				n=$((n+1))
+			done
+		else
+			echo "[ERROR] executable does not exist!" | tee -a ${logFile}
+		fi
+		which Timer >> /dev/null
+		if [ $? -eq 0 ]; then
+			Timer 3
+		fi
 		k=$((k+1))
 	done
 
@@ -597,6 +651,25 @@ fi
 
 cd ${workDir}
 rm -f test.out
+for filename in ${inputFiles[@]}
+do
+	rm -f $filename
+done
 echo " " >> ${logFile}
 echo "## Batch Run Ends .... " >> ${logFile}
 date >> ${logFile}
+
+if [ $checkResults -gt 0 ]; then
+
+#########################
+# Step7:  Check Results #
+#########################
+echo " "
+echo "==> Step7:  Check Results."
+echo " "
+cd ${workDir}
+if [ -f "${benchmark}_Run.log" ]; then
+	./checkResults.pl "${benchmark}_Run.log" 
+fi
+
+fi 

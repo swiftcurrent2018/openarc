@@ -20,7 +20,15 @@
 #endif
 
 #ifndef VERIFICATION
-#define VERIFICATION 1
+#define VERIFICATION 0
+#endif
+
+#ifndef HOST_MEM_ALIGNMENT
+#define HOST_MEM_ALIGNMENT 1
+#endif
+
+#if HOST_MEM_ALIGNMENT == 1
+#define AOCL_ALIGNMENT 64
 #endif
 
 #define N _N_
@@ -56,7 +64,6 @@ MatrixMultiplication_openacc(float * a, float * b, float * c)
       for (j=0; j<N; j++)
         {
 	  float sum = 0.0 ;
-#pragma openarc transform unroll(_UNROLL_FAC_)
 #pragma acc loop seq
 	  for (k=0; k<P; k++) {
 	    sum += b[i*P+k]*c[k*N+j] ;
@@ -104,10 +111,22 @@ int main()
   float *a_CPU, *b_CPU, *c_CPU;
   int i,j;
   double elapsed_time;
+#if HOST_MEM_ALIGNMENT == 1
+        void *p;
+#endif
 
+#if HOST_MEM_ALIGNMENT == 1
+  posix_memalign(&p, AOCL_ALIGNMENT, _N_*_N_*sizeof(float));
+  a = (float *)p;
+  posix_memalign(&p, AOCL_ALIGNMENT, _N_*_N_*sizeof(float));
+  b = (float *)p;
+  posix_memalign(&p, AOCL_ALIGNMENT, _N_*_N_*sizeof(float));
+  c = (float *)p;
+#else
   a = (float *) malloc(M*N*sizeof(float));
   b = (float *) malloc(M*P*sizeof(float));
   c = (float *) malloc(P*N*sizeof(float));
+#endif
   a_CPU = (float *) malloc(M*N*sizeof(float));
   b_CPU = (float *) malloc(M*P*sizeof(float));
   c_CPU = (float *) malloc(P*N*sizeof(float));

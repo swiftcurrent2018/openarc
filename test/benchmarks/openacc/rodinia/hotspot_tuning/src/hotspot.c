@@ -483,9 +483,9 @@ int main(int argc, char **argv)
 		  L2Norm = sqrt(deltaL2Norm / nonAccL2Norm);
 			
 			if (L2Norm < 1e-6)
-        printf("Verification: Successful\n");
+        printf("Verification: Successful ( L2Norm = %g )\n", L2Norm);
 		  else
-		      printf("Verification: Failed (L2Norm = %g)\n", L2Norm);
+		      printf("Verification: Failed ( L2Norm = %g )\n", L2Norm);
 
 			free(tempCPU);
 			free(powerCPU);

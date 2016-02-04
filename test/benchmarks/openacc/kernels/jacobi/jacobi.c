@@ -2,17 +2,24 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
+#if OMP == 1
+#include <omp.h>
+#endif
 
 #ifndef VERIFICATION
 #define VERIFICATION 0
 #endif
 
+#ifndef LOOP_TILING
+#define LOOP_TILING 0
+#endif
+
 #define ITER 	10
 
 #ifndef SIZE
-#define SIZE 	2048 //128 * 16
+//#define SIZE 	2048 //128 * 16
 //#define SIZE    4096 //256 * 16
-//#define SIZE    8192 //256 * 32
+#define SIZE    8192 //256 * 32
 //#define SIZE  12288 //256 * 48
 #ifdef _OPENARC_
 #pragma openarc #define SIZE 2048
@@ -132,11 +139,18 @@ int main (int argc, char *argv[])
     }
 
     done_time = my_timer ();
+    printf ("Accelerator Elapsed time = %lf sec\n", done_time - strt_time);
 
 #if VERIFICATION >= 1
 
+    strt_time = my_timer ();
+
     for (k = 0; k < ITER; k++)
     {
+#if LOOP_TILING == 1
+#pragma acc loop tile(16,16)
+#endif
+#pragma omp parallel for shared(a_CPU,b_CPU) private(i,j)
         for (i = 1; i <= SIZE; i++)
         {
             for (j = 1; j <= SIZE; j++)
@@ -145,6 +159,10 @@ int main (int argc, char *argv[])
             }
         }
 
+#if LOOP_TILING == 1
+#pragma acc loop tile(16,16)
+#endif
+#pragma omp parallel for shared(a_CPU,b_CPU) private(i,j)
         for (i = 1; i <= SIZE; i++)
         {
             for (j = 1; j <= SIZE; j++)
@@ -153,6 +171,9 @@ int main (int argc, char *argv[])
             }
         }
     }
+
+    done_time = my_timer ();
+    printf ("Reference CPU time = %lf sec\n", done_time - strt_time);
 #if VERIFICATION == 1
 	{
 		double cpu_sum = 0.0;
@@ -245,8 +266,6 @@ int main (int argc, char *argv[])
     }
     printf("Diagonal sum = %.10E\n", sum);
 #endif
-    //printf ("done_time = %lf\n", done_time);
-    printf ("Accelerator Elapsed time = %lf sec\n", done_time - strt_time);
 
     return 0;
 }

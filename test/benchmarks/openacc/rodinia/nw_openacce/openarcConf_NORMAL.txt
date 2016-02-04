@@ -389,7 +389,7 @@ defaultNumWorkers=64
 # Misc. Cetus configururation #
 ###############################
 #outdir=cetus_output
-macro=VERIFICATION=1,_MAX_ROWS_=__inputData1__,_BSIZE_=__blockSize__
+macro=VERIFICATION=1,_MAX_ROWS_=__inputData1__,_BSIZE_=__blockSize__,HOST_MEM_ALIGNMENT=1
 #dump-options
 #dump-system-options
 #induction
@@ -410,9 +410,9 @@ addIncludePath=__openarcrt__
 #AccParallelization=N
 #SkipGPUTranslation=N
 #ASPENModelGen=mode=N
-#assumeNoAliasingAmongKernelArgs
-#skipKernelLoopBoundChecking
+assumeNoAliasingAmongKernelArgs
+skipKernelLoopBoundChecking
 #defaultNumComputeUnits=N
-#defaultNumSIMDWorkItems=N
+defaultNumSIMDWorkItems=2
 #disableDefaultCachingOpts
 #NOPTION#

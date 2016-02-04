@@ -6,7 +6,7 @@ elif [ $# -eq 1 ]; then
 	inputSize=$1
 	verLevel=0
 else
-	inputSize=2048
+	inputSize=8192
 	verLevel=0
 fi
 

@@ -3,10 +3,10 @@ if [ $# -ge 1 ]; then
 	inputData1=$1
 else
 	#default values for _MAX_ROWS_
-	inputData1=2049
-	#inputData1 = 4097
-	#inputData1 = 8193
-	#inputData1 = 16385
+	#inputData1=2049
+	#inputData1=4097
+	inputData1=8193
+	#inputData1=16385
 fi
 
 verLevel=0

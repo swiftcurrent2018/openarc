@@ -13,8 +13,8 @@ CSRCS = matmul.c
 #########################################
 # Set macros used for the input program #
 #########################################
-_N_ ?= 512
-BLOCK_SIZE ?= 8
+_N_ ?= 2048
+BLOCK_SIZE ?= 16
 DEFSET_CPU = -D_N_=$(_N_) -DBLOCK_SIZE=$(BLOCK_SIZE)
 DEFSET_ACC = -D_N_=$(_N_) -DBLOCK_SIZE=$(BLOCK_SIZE)
 

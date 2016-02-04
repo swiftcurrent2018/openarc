@@ -379,9 +379,9 @@ runTest( int argc, char** argv)
 		  L2Norm = sqrt(deltaL2Norm / nonAccL2Norm);
 			
 			if (L2Norm < 1e-9) {
-        		printf("Verification: Successful\n");
+        		printf("Verification: Successful ( L2Norm = %g )\n", L2Norm);
 		  } else {
-		      printf("Verification: Failed\n");		
+		      printf("Verification: Failed ( L2Norm = %g )\n", L2Norm);		
 			}
 			printf("L2Norm = %lf\n", L2Norm);
 

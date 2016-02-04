@@ -1,0 +1,92 @@
+#! /bin/bash
+MPI=0
+VERIFY=0
+BENCHMARK=0
+OMP=0
+while [ "$1" != "" ]; do
+    PARAM=`echo $1 | awk -F= '{print $1}'`
+    VALUE=`echo $1 | awk -F= '{print $2}'`
+    case $PARAM in
+        MPI)
+            MPI=1
+            echo "==> Enable MPI support"
+            ;;  
+        OMP)
+            OMP=1
+            echo "==> Enable OpenMP support"
+            ;;  
+        VERIFY)
+            VERIFY=1
+            echo "==> Enable a verification mode"
+            ;;  
+        BENCHMARK)
+            BENCHMARK=1
+            echo "==> Enable a benchmark mode"
+            ;;  
+        *)  
+            echo "ERROR: unknown parameter \"$PARAM\""
+            exit 1
+            ;;  
+    esac
+    shift
+done
+
+
+verLevel=0
+mpiinclude="/opt/cray/mpt/6.3.0/gni/mpich2-intel/130/include"
+openarcrt="../../../../openarcrt"
+openarclib="../../../../lib"
+
+sources=( "CalculateXS.c" "GridInit.c" "Main.c" "Materials.c" "XSutils.c" "io.c" )
+
+if [ ! -f "openarcConf.txt" ]; then
+    cp "openarcConf_NORMAL.txt" "openarcConf.txt"
+fi
+
+if [ "$mpiinclude" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__mpiinclude__|${mpiinclude}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$openarcrt" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__openarcrt__|${openarcrt}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$OPENARC_ARCH" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__openarc_arch__|${OPENARC_ARCH}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+else
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__openarc_arch__|0|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$MPI" == "1" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|^macro=|&MPI,|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$OMP" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__omp__|${OMP}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$VERIFY" == "1" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|^macro=|&VERIFICATION,|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$BENCHMARK" == "1" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|^macro=|&BENCHMARK,|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPUDriver -verbosity=${verLevel} -gpuConfFile=openarcConf.txt "${sources[@]}"

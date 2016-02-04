@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+//#include <malloc.h>
+#if OMP == 1
+#include <omp.h>
+#endif
 
 #ifndef _N_
 #define _N_ 8192
@@ -123,7 +127,8 @@ int main(int argc, char **argv)
 		printf("Starting with gpu run\n");
 		strt_time = my_timer ();
 		for (iter = 0; iter < num_iterations; iter++) {
-#pragma acc kernels loop copy(GPU_C[0:_N_*_N_]) copyin(A[0:_N_*_N_],B[0:_N_*_N_]) gang(_N_/BLOCK_SIZE)
+#pragma openarc opencl num_simd_work_items(2)
+#pragma acc kernels loop copyout(GPU_C[0:_N_*_N_]) copyin(A[0:_N_*_N_],B[0:_N_*_N_]) gang(_N_/BLOCK_SIZE)
 				for(by = 0; by < (_N_/BLOCK_SIZE); by++) {
 #pragma acc loop gang(_N_/BLOCK_SIZE)
 						for(bx = 0; bx < (_N_/BLOCK_SIZE); bx++) {
@@ -211,10 +216,13 @@ int main(int argc, char **argv)
 		printf("Done with gpu run\n");
 		printf ("Accelerator Elapsed time = %lf sec\n", done_time - strt_time);
 #if VERIFICATION == 1
+		printf("Starting with cpu run\n");
+		strt_time = my_timer ();
 		/* verification */
 		for (iter = 0; iter < num_iterations; iter++) {
 				int i;
 
+#pragma omp parallel for shared(A,B,CPU_C) private(i)
 				for (i = 0; i < _N_; i++) {
 						int j;
 
@@ -230,6 +238,9 @@ int main(int argc, char **argv)
 						}
 				}
 		}
+		done_time = my_timer ();
+		printf("Done with cpu run\n");
+		printf ("Reference CPU time = %lf sec\n", done_time - strt_time);
 
 
 

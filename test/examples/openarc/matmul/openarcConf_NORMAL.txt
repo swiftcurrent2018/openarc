@@ -354,7 +354,7 @@ shrdSclrCachingOnSM
 #cudaGlobalMemSize
 #cudaMaxGridDimSize
 #cudaSharedMemSize
-defaultNumWorkers=128
+defaultNumWorkers=32
 #maxNumGangs
 #CUDACompCapability
 ###########################
@@ -368,7 +368,7 @@ defaultNumWorkers=128
 #disableStatic2GlobalConversion
 #addErrorCheckingCode
 #addSafetyCheckingCode
-#forceSyncKernelCall
+#forceSyncKernelCall=1
 #doNotRemoveUnusedSymbols
 #debug_parser_input
 #debug_parser_output

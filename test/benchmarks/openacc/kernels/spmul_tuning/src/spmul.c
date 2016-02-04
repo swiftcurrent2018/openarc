@@ -12,6 +12,10 @@
 #define malloc(size) valloc(size)
 #endif
 
+#ifndef VERIFICATION
+#define VERIFICATION 0
+#endif
+
 extern double timer_();
 
 //////////////////////////
@@ -21,7 +25,8 @@ extern double timer_();
 #define DEBUG_ON2
 
 #ifndef SPMUL_INPUTDIR
-#define SPMUL_INPUTDIR        "/home/f6l/SPMULInput/"
+#define SPMUL_INPUTDIR        "_INPUTDIR_"
+//#define SPMUL_INPUTDIR        "/home/f6l/SPMULInput/"
 #endif
 #define ITER	1
 /*
@@ -170,6 +175,10 @@ int main() {
     float* values = (float*) malloc(NZR * sizeof(float));
     float* x = (float*) malloc(SIZE * sizeof(float));
     float* y = (float*) malloc(SIZE * sizeof(float));
+#if VERIFICATION >= 1
+    float* CPU_x = (float*) malloc(SIZE * sizeof(float));
+    float* CPU_y = (float*) malloc(SIZE * sizeof(float));
+#endif
 
     printf("**** SerialSpmul starts! ****\n");
 
@@ -253,6 +262,11 @@ LB99:
 		}
 		j += 1;
 	}
+#if VERIFICATION >= 1
+	for( i=0; i<SIZE2; i++ ) {
+		CPU_x[i] = x[i];
+	}
+#endif
 
 #ifdef DEBUG_ON1
 	x_sum = 0.0f;
@@ -333,6 +347,63 @@ LB99:
 		x_sum += x[i];
 	}
 	printf("%d: x_sum = %.12E\n",(k+1), x_sum);
+#endif
+
+#if VERIFICATION >= 1
+	for( k=0; k<ITER; k++ ) {
+        for( i=0; i<SIZE2; i++ ) { 
+            CPU_y[i] = 0.0f;
+            for( j=0; j<(rowptr[1+i]-rowptr[i]); j++ ) { 
+                CPU_y[i] = CPU_y[i] + values[rowptr[i]+j-1]*CPU_x[colind[rowptr[i]+j-1]-1];
+            }   
+        } 
+
+		for( i=0; i<SIZE2; i++ ) {
+			float tmp = CPU_y[i];
+			CPU_x[i] = tmp;
+			if( tmp != 0.0f ) {
+				exp0 = (int)(log10f(fabsf(tmp)));
+				if( exp0 >= 0 ) {
+					for( j=1; j<=(1+exp0); j++ ) {
+						CPU_x[i] = CPU_x[i]/10.0f;
+					}
+				} else if( exp0 <= -1 ) {
+					j = -1;
+					for( j=1; j<=(-exp0); j++ ) {
+						CPU_x[i] = 10.0f*CPU_x[i];
+					}
+				} 
+			}
+		} 
+	} //end of k-loop
+    {   
+        double cpu_sum = 0.0;
+        double gpu_sum = 0.0;
+        double rel_err = 0.0;
+
+        for (i = 0; i < SIZE2; i++)
+        {   
+            cpu_sum += CPU_x[i]*CPU_x[i];
+            gpu_sum += x[i]*x[i];
+        }   
+
+        cpu_sum = sqrt(cpu_sum);
+        gpu_sum = sqrt(gpu_sum);
+        if( cpu_sum > gpu_sum) {
+            rel_err = (cpu_sum-gpu_sum)/cpu_sum;
+        } else {
+            rel_err = (gpu_sum-cpu_sum)/cpu_sum;
+        }   
+
+        if(rel_err < 1e-6)
+        {   
+            printf("Verification Successful err = %e\n", rel_err);
+        }   
+        else
+        {   
+            printf("Verification Fail err = %e\n", rel_err);
+        }   
+    }   
 #endif
 
 /*

@@ -14,7 +14,7 @@ elif [ $# -eq 1 ]; then
 	verLevel=0
 else
 	runMode=1
-	inputSize=8192
+	inputSize=512
 	verLevel=0
 fi
 

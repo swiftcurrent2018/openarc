@@ -447,10 +447,10 @@ mainComp(J, iN, iS, jE, jW, dN, dS, dW, dE, c);
 	rel_err = diff_norm/cpu_norm;
 
 	if(rel_err < 1e-6)
-		printf("Verification Successfull CPU L2Norm = %e, Diff L2Norm = %e Err=%e\n", cpu_norm, diff_norm, rel_err);
+		printf("Verification Successfull CPU L2Norm = %e, Diff L2Norm = %e Err = %e\n", cpu_norm, diff_norm, rel_err);
 	else
 	{
-		printf("Verification Failed CPU L2Norm = %e, Diff L2Norm = %e Err=%e\n", cpu_norm, diff_norm, rel_err);
+		printf("Verification Failed CPU L2Norm = %e, Diff L2Norm = %e Err = %e\n", cpu_norm, diff_norm, rel_err);
 	}
 }
 #endif

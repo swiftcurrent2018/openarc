@@ -49,7 +49,8 @@ AOCL_BOARD ?= p385_hpc_d5
 #AOCL_BOARD ?= p385_hpc_a7
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
-AOCL_FLAGS ?= -v -c --report
+#AOCL_FLAGS ?= -v -c --report
+AOCL_FLAGS ?= -v --report
 #AOCL_FLAGS ?= --report
 
 #########################################################

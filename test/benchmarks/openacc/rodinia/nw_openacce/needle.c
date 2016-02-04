@@ -14,6 +14,13 @@
 #define VERIFICATION 1
 #endif
 
+#ifndef HOST_MEM_ALIGNMENT
+#define HOST_MEM_ALIGNMENT 1
+#endif
+
+#if HOST_MEM_ALIGNMENT == 1
+#define AOCL_ALIGNMENT 64
+#endif
 
 #ifndef _MAX_ROWS_
 #define _MAX_ROWS_	2049
@@ -350,6 +357,9 @@ runTest( int argc, char** argv)
 		FILE *fp;
 #endif
 
+#if HOST_MEM_ALIGNMENT == 1
+        void *p;
+#endif
 
 		// the lengths of the two sequences should be able to divided by 16.
 		// And at current stage  max_rows needs to equal max_cols
@@ -370,9 +380,18 @@ runTest( int argc, char** argv)
 
 		max_rows = max_rows + 1;
 		max_cols = max_cols + 1;
+#if HOST_MEM_ALIGNMENT == 1
+        posix_memalign(&p, AOCL_ALIGNMENT, max_rows*max_cols*sizeof(int));
+        referrence = (int *)p;
+        posix_memalign(&p, AOCL_ALIGNMENT, max_rows*max_cols*sizeof(int));
+        input_itemsets = (int *)p;
+        posix_memalign(&p, AOCL_ALIGNMENT, max_rows*max_cols*sizeof(int));
+        output_itemsets = (int *)p;
+#else
 		referrence = (int *)malloc( max_rows * max_cols * sizeof(int) );
 		input_itemsets = (int *)malloc( max_rows * max_cols * sizeof(int) );
 		output_itemsets = (int *)malloc( max_rows * max_cols * sizeof(int) );
+#endif
 
 
 		if (!input_itemsets)

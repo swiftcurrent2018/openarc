@@ -15,9 +15,9 @@ CSRCS = needle.c
 #########################################
 VERIFICATION ?= 1
 R_MODE ?= 0
-_MAX_ROWS_ ?= 2049
+#_MAX_ROWS_ ?= 2049
 #_MAX_ROWS_ ?= 4097
-#_MAX_ROWS_ ?= 8193
+_MAX_ROWS_ ?= 8193
 #_MAX_ROWS_ ?= 16385
 
 
@@ -56,7 +56,8 @@ AOCL_BOARD ?= p385_hpc_d5
 #AOCL_BOARD ?= p385_hpc_a7
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
-AOCL_FLAGS ?= -v -c --report
+#AOCL_FLAGS ?= -v -c --report
+AOCL_FLAGS ?= -v --report
 #AOCL_FLAGS ?= --report
 
 #########################################################

@@ -1,0 +1,137 @@
+#########################################################################
+# Sample GPU tuning configuration file                                  # 
+# 	- Lines starting with '#' will be ignored.                          #
+#	- Add "-genTuningConfFiles -defaultTuningConfFile=thisfilename" to  #
+#     the commandline input.                                            #
+#########################################################################
+# Available default tuning configurations                               #
+#########################################################################
+# defaultGOptionSet(list) 
+#     - where list is a comma-seperated list of program-level tuning 
+#     parameters, which will be always applied.
+#     - List of program-level tuning parameters
+#         assumeNonZeroTripLoops
+#         gpuMallocOptLevel     
+#         gpuMemTrOptLevel
+#         useMatrixTranspose
+#         useMallocPitch
+#         useLoopCollapse
+#         useParallelLoopSwap
+#         useUnrollingOnReduction
+#         shrdSclrCachingOnReg
+#         shrdArryElmtCachingOnReg
+#         shrdSclrCachingOnSM
+#         prvtArryCachingOnSM
+#         shrdArryCachingOnTM
+#         defaultNumWorkers
+#         maxNumGangs
+#         defaultNumComputeUnits
+#         defaultNumSIMDWorkItems
+#         AccPrivatization
+#         AccReduction
+#         UEPRemovalOptLevel
+#         forceSyncKernelCall
+#         doNotRemoveUnusedSymbols
+#         localRedVarConf //this will be set to 1
+#         MemTrOptOnLoops
+#         assumeNoAliasingAmongKernelArgs
+#         skipKernelLoopBoundChecking
+# excludedGOptionSet(list) 
+#     - where list is a comma-seperated list of program-level tuning 
+#     parameters, which will not be applied.
+#     - List of program-level tuning parameters
+#         assumeNonZeroTripLoops
+#         gpuMallocOptLevel     
+#         gpuMemTrOptLevel
+#         useMatrixTranspose
+#         useMallocPitch
+#         useLoopCollapse
+#         useParallelLoopSwap
+#         useUnrollingOnReduction
+#         shrdSclrCachingOnReg
+#         shrdArryElmtCachingOnReg
+#         shrdSclrCachingOnSM
+#         prvtArryCachingOnSM
+#         shrdArryCachingOnTM
+#         defaultNumWorkers
+#         maxNumGangs
+#         defaultNumComputeUnits
+#         defaultNumSIMDWorkItems
+#         localRedVarConf //this will be set to 0
+#         assumeNoAliasingAmongKernelArgs
+#         skipKernelLoopBoundChecking
+# gpuMemTrOptLevel=N
+# gpuMallocOptLevel=N
+# UEPRemovalOptLevel=N
+# defaultNumWorkersSet(list)
+#    - where list is the a comma-separated list of numbers.
+# maxNumGangsSet(list)
+#    - where list is the a comma-separated list of numbers.
+########################################################################
+#######################################################
+# Safe, always-beneficial as long as resources allows #
+#######################################################
+# useMallocPitch                                      #
+# useMatrixTranspose                                  #
+#######################################################
+#defaultGOptionSet(useMatrixTranspose, useMallocPitch)
+defaultGOptionSet(useMallocPitch)
+############################################################
+# Safe, always-beneficial, but user's approval is required #
+############################################################
+# assumeNonZeroTripLoops                                   #
+# assumeNoAliasingAmongKernelArgs                          #
+# skipKernelLoopBoundChecking                              #
+############################################################
+#defaultGOptionSet(assumeNonZeroTripLoops)
+defaultGOptionSet(assumeNonZeroTripLoops, assumeNoAliasingAmongKernelArgs, skipKernelLoopBoundChecking)
+#gpuMemTrOptLevel=3
+#gpuMallocOptLevel=1
+##########################
+# May-beneficial options #
+##########################
+# defaultNumWorkers        #
+# maxNumGangs              #
+# localRedVarConf          #
+# useLoopCollapse          #
+# useParallelLoopSwap      #
+# useUnrollingOnReduction  #
+# shrdSclrCachingOnReg     #
+# shrdSclrCachingOnSM      #
+# shrdArryElmtCachingOnReg #
+# shrdArryCachingOnTM      #
+# prvtArryCashingOnSM      #
+# shrdSclrCachingOnConst   #
+# shrdArryCachingOnConst   #
+############################
+defaultGOptionSet(defaultNumWorkers,localRedVarConf,useUnrollingOnReduction)
+defaultNumWorkersSet(32,128)
+#defaultGOptionSet(maxNumGangs)
+#maxNumGangsSet(16)
+defaultNumComputeUnits(1,2,4,8,16)
+defaultNumSIMDWorkItems(1,2,4,8,16)
+defaultGOptionSet(localRedVarConf)
+#excludedGOptionSet(useLoopCollapse, useParallelLoopSwap, useUnrollingOnReduction)
+#excludedGOptionSet(shrdSclrCachingOnSM, shrdArryCachingOnTM, shrdSclrCachingOnConst)
+defaultGOptionSet(shrdSclrCachingOnReg, shrdSclrCachingOnSM, shrdArryElmtCachingOnReg, shrdArryCachingOnTM, shrdSclrCachingOnConst, shrdArryCachingOnConst)
+#excludedGOptionSet()
+#######################################################################
+# Non-tunable options, but user may add these for correctness purpose #
+# or for applying unsafe, user-assisted optimizations.                #
+# If these options are not in defaultGOptionSet, they are excluded by #
+# default.                                                            #
+#######################################################################
+# UEPRemovalOptLevel                                                  #
+# forceSyncKernelCall                                                 #
+# doNotRemoveUnusedSymbols                                            #
+# MemTrOptOnLoops                                                     #
+# AccPrivatization                                                    #
+# AccReduction                                                        #
+#######################################################################
+#defaultGOptionSet(UEPRemovalOptLevel)
+#defaultGOptionSet(forceSyncKernelCall, doNotRemoveUnusedSymbols)
+#defaultGOptionSet(AccPrivatization, AccReduction)
+#defaultGOptionSet(MemTrOptOnLoops)
+#UEPRemovalOptLevel=3
+#AccPrivatization=2
+#AccReduction=2

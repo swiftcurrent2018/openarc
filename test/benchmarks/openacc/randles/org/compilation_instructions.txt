@@ -1,0 +1,13 @@
+Compilation instructions with gcc:
+
+dev.shear.nocells.c
+>> gcc dev.shear.nocells.c
+
+dev.shear.cells.c
+>> gcc dev.shear.cells.c
+
+dev.poise.nocells.c
+>> gcc dev.poise.nocells.c
+
+
+Note: to lower the number of time steps, i.e. overall runtime, reduce n_steps_max.

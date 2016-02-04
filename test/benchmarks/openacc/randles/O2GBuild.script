@@ -1,0 +1,53 @@
+#! /bin/bash
+if [ $# -ge 2 ]; then
+	inputSize=$1
+	reorder=$2
+elif [ $# -eq 1 ]; then
+	inputSize=$1
+	reorder=0
+else
+	inputSize=100
+	reorder=0
+fi
+
+verLevel=0
+
+openarcrt="../../../../openarcrt"
+openarclib="../../../../lib"
+
+if [ ! -f "openarcConf.txt" ]; then
+    cp "openarcConf_NORMAL.txt" "openarcConf.txt"
+fi
+
+if [ "$inputSize" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__inputSize__|${inputSize}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$reorder" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__reorder__|${reorder}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+if [ "$openarcrt" != "" ]; then
+    mv "openarcConf.txt" "openarcConf.txt_tmp"
+    cat "openarcConf.txt_tmp" | sed "s|__openarcrt__|${openarcrt}|g" > "openarcConf.txt"
+    rm "openarcConf.txt_tmp"
+fi
+
+java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPUDriver -verbosity=${verLevel} -gpuConfFile=openarcConf.txt *.c
+if [ ! -d ./bin ]; then
+	mkdir bin
+fi
+if [ ! -f ./bin/states19.i ]; then
+	cp ./org/states19.i ./bin
+fi
+echo ""
+echo "====> To compile the translated output file:"
+echo "\$ make"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; randlesminibench_ACC"
+echo ""

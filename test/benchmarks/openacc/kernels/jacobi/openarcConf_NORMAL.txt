@@ -319,7 +319,7 @@
 #############################
 #acc2gpu=1
 #targetArch=0
-#AccAnalysisOnly=1
+#AccAnalysisOnly=3
 #SkipGPUTranslation
 showInternalAnnotations=0
 ##########################
@@ -390,7 +390,7 @@ defaultNumWorkers=128
 ###############################
 #outdir=cetus_output
 #macro=SAVE_OUTPUT=1,I_SIZE=6553601
-macro=DUMMY=1,VERIFICATION=1,SIZE=__inputSize__
+macro=DUMMY=1,VERIFICATION=2,SIZE=__inputSize__,OMP=0
 #dump-options
 #dump-system-options
 #induction
@@ -412,8 +412,8 @@ addIncludePath=__openarcrt__
 #SkipGPUTranslation=N
 #ASPENModelGen=mode=N
 assumeNoAliasingAmongKernelArgs
-#skipKernelLoopBoundChecking
-#defaultNumComputeUnits=N
-#defaultNumSIMDWorkItems=N
+skipKernelLoopBoundChecking
+defaultNumComputeUnits=1
+defaultNumSIMDWorkItems=1
 #disableDefaultCachingOpts
 #NOPTION#
