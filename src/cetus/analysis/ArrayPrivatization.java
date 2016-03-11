@@ -174,7 +174,7 @@ public class ArrayPrivatization extends AnalysisPass {
             Procedure p = iter.next();
             if (alias_result != 0) {
                 PrintTools.printlnStatus(-2, tag,
-                    "[WARNING] Automatic privatization fails due to all-to-all alias; user should \"explicitly\" specify which variables are private!");
+                    "[WARNING] Automatic privatization fails due to all-to-all alias; user should \"explicitly\" specify which variables are private! (automatic parallelization will fails too, and thus worksharing clauses (gang, worker, etc.) should be explicitly specified too!)");
                 break;
             }
             analyzeProcedure(p);

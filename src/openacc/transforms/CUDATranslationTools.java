@@ -4031,6 +4031,17 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 			//Put any implicit local gang-private variables not included in any OpenACC private clause
 			//in CUDA shared memory; the only exception is when the local symbol is an index variable of gang loop.
 			//[DEBUG] this may not work if the local variable is too big.
+			///////////////////////////////////////////////////////////////////////////////////
+			//A gang private variable is declared either in the enclosing compound statement //
+			//or in the innermost gang loop body if region is a loop.                        //
+			///////////////////////////////////////////////////////////////////////////////////
+			if( region instanceof ForLoop ) {
+				ACCAnnotation tAnnot = AnalysisTools.findInnermostPragma(region, ACCAnnotation.class, "gang");
+				ForLoop gLoop = (ForLoop)tAnnot.getAnnotatable();
+				scope = (CompoundStatement)(gLoop).getBody();
+			} else if( region instanceof CompoundStatement ) {
+				scope = (CompoundStatement)region;
+			}
 			for( Symbol lgSym : localGangPrivateSymbols ) {
 				if( loopIndexSymbols.contains(lgSym) ) {
 					continue;
@@ -4443,8 +4454,8 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 				
 				// identify the loop index variable 
 				Expression ivar = LoopTools.getIndexVariable(ploop);
-				Expression lb = LoopTools.getLowerBoundExpression(ploop);
-				Expression ub = LoopTools.getUpperBoundExpression(ploop);
+				Expression lb = LoopTools.getLowerBoundExpressionNS(ploop);
+				Expression ub = LoopTools.getUpperBoundExpressionNS(ploop);
 				Expression incr = LoopTools.getIncrementExpression(ploop);
 				boolean increasingOrder = true;
 				if( incr instanceof IntegerLiteral ) {

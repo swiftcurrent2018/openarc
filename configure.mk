@@ -27,6 +27,7 @@ $(BUILD_CFG): $(COMMON_DEPS)
 	echo 'spec_cpu2006 = $(SPEC_CPU2006)' >> $@
 	echo 'spec_cfg = $(SPEC_CFG)' >> $@
 	echo 'pmem_libdir = $(PMEM_LIBDIR)' >> $@
+	echo 'nvm_testdir = $(NVM_TESTDIR)' >> $@
 
 $(OPENARC_CC): $(OPENARC_CC_IN) $(COMMON_DEPS)
 	mkdir -p $(OPENARC_CC_DIR)

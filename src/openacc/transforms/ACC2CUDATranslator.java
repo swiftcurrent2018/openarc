@@ -4823,7 +4823,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		CUDATranslationTools.privateTransformation(cProc, region, cRegionKind, ifCond, asyncID, confRefStmt, prefixStmts, 
 				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
 				opt_addSafetyCheckingCode, arrayElmtCacheSymbols, isSingleTask);
-		if( SkipGPUTranslation == 2 ) {
+		if( SkipGPUTranslation == 3 ) {
 			return;
 		}
 		
@@ -4834,7 +4834,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
 				opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
 				memtrVerification, marginOfError, warpSize, minCheckValue, localRedVarConf, isSingleTask);
-		if( SkipGPUTranslation == 3 ) {
+		if( SkipGPUTranslation == 4 ) {
 			return;
 		}
 		
@@ -4880,39 +4880,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		for( Symbol sharedSym : sortedSet ) {
 			SubArray sArray = accSharedMap.get(sharedSym);
 			Expression hostVar = sArray.getArrayName();
-			Boolean isArray = SymbolTools.isArray(sharedSym);
-			Boolean isPointer = SymbolTools.isPointer(sharedSym);
-			if( sharedSym instanceof NestedDeclarator ) {
-				isPointer = true;
-			}
-			Boolean isScalar = !isArray && !isPointer;
-			
-			List<Expression> startList = new LinkedList<Expression>();
-			List<Expression> lengthList = new LinkedList<Expression>();
-			boolean foundDimensions = AnalysisTools.extractDimensionInfo(sArray, startList, lengthList, IRSymbolOnly, region);
-			int dimension = lengthList.size();
-			if( (!foundDimensions) && (dimension>1) ) {
-				//It's OK to miss the left-most dimension.
-				boolean missingDimFound = false;
-				for(int m=1; m<dimension; m++) {
-					if( lengthList.get(m) == null ) {
-						missingDimFound = true;
-						break;
-					}
-				}
-				if( missingDimFound ) {
-					Tools.exit("[ERROR in ACC2CUDATranslator.extractComputeRegion()] Dimension information of the following variable is" +
-							"unknown: " + sArray.getArrayName() + "\nOpenACC directive: " + cAnnot +
-					"\nThe ACC2GPU translation failed!");
-				}
-			}
-			//PrintTools.println("sArray: " + sArray + ", dimension: " + lengthList.size() + ", sArray.getArrayDimension(): " + sArray.getArrayDimension() + "\n" , 0);
-			
+
 			List<Specifier> removeSpecs = new ArrayList<Specifier>();
 			removeSpecs.add(Specifier.STATIC);
 			removeSpecs.add(Specifier.CONST);
 			removeSpecs.add(Specifier.EXTERN);
-
 			List<Specifier> typeSpecs = new ArrayList<Specifier>();
 			Boolean isStruct = false;
 			Symbol IRSym = sharedSym;
@@ -4936,6 +4908,64 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 /*			if( typeSpecs.remove(Specifier.RESTRICT) ) {
 				typeSpecs.add(CUDASpecifier.RESTRICT);
 			}*/
+
+			Boolean isArray = SymbolTools.isArray(sharedSym);
+			Boolean isPointer = SymbolTools.isPointer(sharedSym);
+			if( sharedSym instanceof NestedDeclarator ) {
+				isPointer = true;
+			}
+			for( Object tObj : typeSpecs ) {
+				if( tObj instanceof UserSpecifier ) {
+					IDExpression tExp = ((UserSpecifier)tObj).getIDExpression();
+					String tExpStr = tExp.getName();
+					if( !tExpStr.startsWith("struct") && !tExpStr.startsWith("enum") ) {
+						Declaration tDecl = SymbolTools.findSymbol(global_table, tExp);
+						if( tDecl != null ) {
+							if( tDecl instanceof VariableDeclaration ) {
+								if( ((VariableDeclaration)tDecl).getSpecifiers().contains(Specifier.TYPEDEF) ) {
+									Declarator tDeclr = ((VariableDeclaration)tDecl).getDeclarator(0);
+									if( tDeclr instanceof NestedDeclarator ) {
+										isPointer =  true;
+										break;
+									} else if( tDeclr instanceof VariableDeclarator ) {
+										if( SymbolTools.isArray((VariableDeclarator)tDeclr) ) {
+											isArray= true;
+											break;
+										} else if( SymbolTools.isPointer((VariableDeclarator)tDeclr) ) {
+											isPointer= true;
+											break;
+										}
+									}
+								}
+							}
+						}
+					}
+					break;
+				}
+			}
+
+			Boolean isScalar = !isArray && !isPointer;
+			
+			List<Expression> startList = new LinkedList<Expression>();
+			List<Expression> lengthList = new LinkedList<Expression>();
+			boolean foundDimensions = AnalysisTools.extractDimensionInfo(sArray, startList, lengthList, IRSymbolOnly, region);
+			int dimension = lengthList.size();
+			if( (!foundDimensions) && (dimension>1) ) {
+				//It's OK to miss the left-most dimension.
+				boolean missingDimFound = false;
+				for(int m=1; m<dimension; m++) {
+					if( lengthList.get(m) == null ) {
+						missingDimFound = true;
+						break;
+					}
+				}
+				if( missingDimFound ) {
+					Tools.exit("[ERROR in ACC2CUDATranslator.extractComputeRegion()] Dimension information of the following variable is" +
+							"unknown: " + sArray.getArrayName() + "\nOpenACC directive: " + cAnnot +
+					"\nThe ACC2GPU translation failed!");
+				}
+			}
+			//PrintTools.println("sArray: " + sArray + ", dimension: " + lengthList.size() + ", sArray.getArrayDimension(): " + sArray.getArrayDimension() + "\n" , 0);
 			
 			Symbol gpuSym = null;
 			Identifier gpuVar = null;
@@ -5638,6 +5668,14 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		//be added to the kernelsTranslationUnit.
 		Set<Symbol> usedSymbols = SymbolTools.getSymbols(new_proc);
 		usedSymbols.addAll(SymbolTools.getLocalSymbols(new_proc.getBody()));
+		//Add enum symbols.
+		Set<Symbol> tAccessedSymbols = SymbolTools.getAccessedSymbols(new_proc.getBody());
+		for( Symbol tASym : tAccessedSymbols ) {
+			Declaration tADecl = tASym.getDeclaration();
+			if( tADecl instanceof Enumeration ) {
+				usedSymbols.add(tASym);
+			}
+		}
 		copyUserSpecifierDeclarations(kernelsTranslationUnit, kernelCall_stmt, usedSymbols, accHeaderDecl);
 
 		/* put new_proc before the calling proc (avoids prototypes) */

@@ -199,6 +199,7 @@ public class KernelCallingProcCloning extends TransformPass {
 						while (Fiter.hasNext())
 						{
 							TranslationUnit cTu = (TranslationUnit)Fiter.next();
+							Declaration firstDecl = cTu.getFirstDeclaration();
 							DFIterator<ProcedureDeclarator> iter = new DFIterator<ProcedureDeclarator>(cTu, ProcedureDeclarator.class);
 							iter.pruneOn(ProcedureDeclarator.class);
 							iter.pruneOn(Procedure.class);
@@ -221,7 +222,15 @@ public class KernelCallingProcCloning extends TransformPass {
 										VariableDeclaration newProcDecl = 
 											new VariableDeclaration(procDecl.getSpecifiers(), new_proc.getDeclarator().clone());
 										//Insert the new function declaration.
-										cTu.addDeclarationAfter(procDecl, newProcDecl);
+										if( AnalysisTools.isInHeaderFile(procDecl, cTu) ) {
+											if( firstDecl != null ) {
+												cTu.addDeclarationBefore(firstDecl, newProcDecl);
+											} else {
+												cTu.addDeclaration(newProcDecl);
+											}
+										} else {
+											cTu.addDeclarationAfter(procDecl, newProcDecl);
+										}
 										////////////////////////////////////////////////////////////////////////////////////
 										//If the current procedure declaration has annotations, copy them to the new one. //
 										////////////////////////////////////////////////////////////////////////////////////

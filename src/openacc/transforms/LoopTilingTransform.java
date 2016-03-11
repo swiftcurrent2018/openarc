@@ -412,8 +412,8 @@ public class LoopTilingTransform extends TransformPass
 				for(int i = 0; i < exprList.size(); i++){
 					ForLoop currentLoop = indexedLoops.get(i);
 					long tileSize = ((IntegerLiteral)exprList.get(exprList.size()-1-i)).getValue();
-					Expression lowerbound = LoopTools.getLowerBoundExpression(currentLoop);
-					Expression upperbound = LoopTools.getUpperBoundExpression(currentLoop);
+					Expression lowerbound = LoopTools.getLowerBoundExpressionNS(currentLoop);
+					Expression upperbound = LoopTools.getUpperBoundExpressionNS(currentLoop);
 
 					Expression newLowerbound = new IntegerLiteral(0);
 					//Expression newUpperbound = Symbolic.add(Symbolic.subtract(upperbound, lowerbound), new IntegerLiteral(1));
@@ -505,14 +505,14 @@ public class LoopTilingTransform extends TransformPass
 					}
 					IRTools.replaceAll(newTiledLoop.getBody(), indexVar, newIndex.clone());
 					if( (i == exprList.size()-1) ){
-						CollapseTransformation.collapseLoop(tiledLoop);
+						CollapseTransformation.collapseLoop(tiledLoop, false);
 						ACCAnnotation newPragma = tiledLoop.getAnnotation(ACCAnnotation.class, "collapse");
 						newPragma.remove("collapse");
 					}
 				}
 				ArrayList<ForLoop> newIndexedLoops = new ArrayList<ForLoop>();
 				newIndexedLoops.add(accLoop);
-				CollapseTransformation.collapseLoop(newIndexedLoops.get(0));
+				CollapseTransformation.collapseLoop(newIndexedLoops.get(0), false);
 				tileAnnot.remove("collapse");
 				LoopNormalization.normalizeLoop(newIndexedLoops.get(0));
 				if( ompAnnot != null ) {

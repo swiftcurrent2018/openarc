@@ -404,17 +404,26 @@ void HostConf::HI_init(int devNum) {
     D2HMemTrCnt = 0;
     D2DMemTrCnt = 0;
     HMallocCnt = 0;
+    IHMallocCnt = 0;
     DMallocCnt = 0;
+    IDMallocCnt = 0;
     HFreeCnt = 0;
+    IHFreeCnt = 0;
     DFreeCnt = 0;
+    IDFreeCnt = 0;
 	KernelSyncCnt = 0;
 	PresentTableCnt = 0;
+	IPresentTableCnt = 0;
 	WaitCnt = 0;
 	RegKernelArgCnt = 0;
     H2DMemTrSize = 0;
     H2HMemTrSize = 0;
     D2HMemTrSize = 0;
     D2DMemTrSize = 0;
+    HMallocSize = 0;
+    IHMallocSize = 0;
+    DMallocSize = 0;
+    IDMallocSize = 0;
     totalWaitTime = 0.0;
     totalResultCompTime = 0.0;
     totalMemTrTime = 0.0;
@@ -591,18 +600,30 @@ void HostConf::HI_reset() {
     printf("Number of Device-to-Host Memory Transfer Calls: %ld\n", D2HMemTrCnt);
     printf("Number of Host-to-Host Memory Transfer Calls: %ld\n", H2HMemTrCnt);
     printf("Number of Device-to-Device Memory Transfer Calls: %ld\n", D2DMemTrCnt);
-    printf("Number of Device Memory Allocation Calls: %ld\n", DMallocCnt);
-    printf("Number of Host Memory Allocation Calls by OpenARC runtime: %ld\n", HMallocCnt);
-    printf("Number of Device Memory Free Calls: %ld\n", DFreeCnt);
-    printf("Number of Host Memory Free Calls by OpenARC runtime: %ld\n", HFreeCnt);
+    printf("Number of External Device Memory Allocation Calls: %ld\n", DMallocCnt);
+    printf("Number of Internal Device Memory Allocation Calls: %ld\n", IDMallocCnt);
+    printf("Number of External Host Memory Allocation Calls by OpenARC runtime: %ld\n", HMallocCnt);
+    printf("Number of Internal Host Memory Allocation Calls by OpenARC runtime: %ld\n", HMallocCnt);
+    printf("Number of External Device Memory Free Calls by OpenARC runtime: %ld\n", DFreeCnt);
+    printf("Number of Internal Device Memory Free Calls by OpenARC runtime: %ld\n", IDFreeCnt);
+    printf("Number of External Host Memory Free Calls by OpenARC runtime: %ld\n", HFreeCnt);
+    printf("Number of Internal Host Memory Free Calls by OpenARC runtime: %ld\n", IHFreeCnt);
     printf("Number of Host-Kernel Synchronization Calls by OpenARC runtime: %ld\n", KernelSyncCnt);
-    printf("Number of Internal Present Table Calls by OpenARC runtime: %ld\n", PresentTableCnt);
+    printf("Number of External Present Table Lookup by OpenARC runtime: %ld\n", PresentTableCnt);
+	if( HI_openarcrt_verbosity > 3 ) {
+		IPresentTableCnt = (device->presentTableCntMap.find(thread_id))->second;
+    	printf("Number of Internal Present Table Lookups by OpenARC runtime: %ld\n", IPresentTableCnt);
+	}
     printf("Number of Wait Calls: %ld\n", WaitCnt);
     printf("Number of Kernel Argument Register Calls: %ld\n", RegKernelArgCnt);
     printf("Size of Data Transferred From Host to Device: %lu\n", H2DMemTrSize);
     printf("Size of Data Transferred From Host to Host: %lu\n", H2HMemTrSize);
     printf("Size of Data Transferred From Device to Host: %lu\n", D2HMemTrSize);
     printf("Size of Data Transferred From Device to Device: %lu\n", D2DMemTrSize);
+    printf("Size of Device Memory Externally Requested by OpenARC runtime : %lu\n", DMallocSize);
+    printf("Size of Device Memory Internally Requested by OpenARC runtime : %lu\n", IDMallocSize);
+    printf("Size of Host Memory Externally Requested by OpenARC runtime : %lu\n", HMallocSize);
+    printf("Size of Host Memory Internally Requested by OpenARC runtime : %lu\n", IHMallocSize);
     printf("Total Memory Transfer Time: %lf sec\n", totalMemTrTime);
     printf("Total Memory Allocation Time: %lf sec\n", totalMallocTime);
     printf("Total Memory Free Time: %lf sec\n", totalFreeTime);
@@ -619,7 +640,7 @@ void HostConf::HI_reset() {
 	} else {
 		tAvgTime = totalPresentTableTime;
 	}
-    printf("Total Internal Present Table Access Time: %lf sec (%lf sec per call)\n", totalPresentTableTime, tAvgTime);
+    printf("Total External Present Table Lookup Time: %lf sec (%lf sec per call)\n", totalPresentTableTime, tAvgTime);
 	if( WaitCnt > 0 ) {
 		tAvgTime = totalWaitTime/((double)WaitCnt);
 	} else {
@@ -660,16 +681,25 @@ void HostConf::HI_reset() {
     D2HMemTrCnt = 0;
     D2DMemTrCnt = 0;
     HMallocCnt = 0;
+    IHMallocCnt = 0;
     DMallocCnt = 0;
+    IDMallocCnt = 0;
     HFreeCnt = 0;
+    IHFreeCnt = 0;
     DFreeCnt = 0;
+    IDFreeCnt = 0;
 	KernelSyncCnt = 0;
 	PresentTableCnt = 0;
+	IPresentTableCnt = 0;
 	WaitCnt = 0;
     H2DMemTrSize = 0;
     H2HMemTrSize = 0;
     D2HMemTrSize = 0;
     D2DMemTrSize = 0;
+	HMallocSize = 0;
+	IHMallocSize = 0;
+	DMallocSize = 0;
+	IDMallocSize = 0;
     totalWaitTime = 0.0;
     totalResultCompTime = 0.0;
     totalMemTrTime = 0.0;
@@ -808,6 +838,8 @@ HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int as
     }    
     return_status = tconf->device->HI_malloc1D(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
+	tconf->DMallocCnt++;
+	tconf->DMallocSize += count;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc1D(%d)\n", asyncID);
 	}
@@ -833,6 +865,8 @@ HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count
     }    
     return_status = tconf->device->HI_malloc1D_unified(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
+	tconf->DMallocCnt++;
+	tconf->DMallocSize += count;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc1D_unified(%d)\n", asyncID);
 	}
@@ -862,6 +896,8 @@ HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_
     }    
     return_status = tconf->device->HI_malloc2D( hostPtr, devPtr,pitch, widthInBytes, height, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
+	tconf->DMallocCnt++;
+	tconf->DMallocSize += widthInBytes*height;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc2D(%d)\n", asyncID);
 	}
@@ -891,6 +927,8 @@ HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_
     }    
     return_status = tconf->device->HI_malloc3D( hostPtr, devPtr, pitch, widthInBytes, height, depth, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
+	tconf->DMallocCnt++;
+	tconf->DMallocSize += widthInBytes*height*depth;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc3D(%d)\n", asyncID);
 	}
@@ -912,6 +950,7 @@ HI_error_t HI_free( const void *hostPtr, int asyncID) {
     HostConf_t * tconf = getHostConf();
     return_status = tconf->device->HI_free(hostPtr, asyncID+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
+	tconf->DFreeCnt++;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free(%d)\n", asyncID);
 	}
@@ -933,6 +972,7 @@ HI_error_t HI_free_unified( const void *hostPtr, int asyncID) {
     HostConf_t * tconf = getHostConf();
     return_status = tconf->device->HI_free_unified(hostPtr, asyncID+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
+	tconf->DFreeCnt++;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free_unified(%d)\n", asyncID);
 	}
@@ -957,6 +997,7 @@ HI_error_t HI_free_async( const void *hostPtr, int asyncID ) {
     HostConf_t * tconf = getHostConf();
     return_status = tconf->device->HI_free_async(hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
+	tconf->DFreeCnt++;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free_async(%d)\n", asyncID);
 	}
@@ -980,6 +1021,8 @@ void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_Mal
     HostConf_t * tconf = getHostConf();
     tconf->device->HI_tempMalloc1D( tempPtr, count, devType, flags);
 #ifdef _OPENARC_PROFILE_
+	tconf->DMallocCnt++;
+	tconf->DMallocSize += count;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempMalloc1D()\n");
 	}
@@ -996,6 +1039,7 @@ void HI_tempFree( void** tempPtr, acc_device_t devType) {
     HostConf_t * tconf = getHostConf();
     tconf->device->HI_tempFree( tempPtr, devType);
 #ifdef _OPENARC_PROFILE_
+	tconf->DFreeCnt++;
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempFree()\n");
 	}

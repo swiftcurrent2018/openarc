@@ -157,11 +157,15 @@ sub main {
       # passes regardless of the order in which we specify them on the
       # command line, so we have to call opt twice.
       my $optPhase1File = "$CETUS_OUTDIR/opt-phase1/$fileBase.bc";
+      # -mem2reg -adce is not required, but running it before
+      # -nvl-add-ref-counting helps the latter to avoid inserting
+      # unnecessary V-to-NV inc/dec calls.
       $cmd = shesc($LLVM_OPT)
              ." -fitl"
              .($nvlAddTxsPass ? " -nvl-add-txs" : "")
              .($nvlAddSafetyPass ? " -nvl-add-safety" : "")
-             .($nvlAddRefCountingPass ? " -nvl-add-ref-counting" : "")
+             .($nvlAddRefCountingPass
+               ? " -mem2reg -adce -nvl-add-ref-counting" : "")
              .($nvlAddPersistsPass ? " -nvl-add-persists" : "")
              ." -nvl-lower-pointers"
              ." ".shesc($file)." -o ".shesc($optPhase1File);

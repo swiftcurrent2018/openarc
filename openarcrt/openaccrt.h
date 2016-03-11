@@ -101,6 +101,9 @@ typedef std::map<const void *, size_t> sizemap_t;
 typedef std::map<int, addressmap_t *> asyncphostmap_t;
 typedef std::map<int, sizemap_t *> asynchostsizemap_t;
 typedef std::map<const void *, HI_memstatus_t> memstatusmap_t;
+#ifdef _OPENARC_PROFILE_
+typedef std::map<int, long> presenttablecnt_t;
+#endif
 
 extern int HI_openarcrt_verbosity;
 extern int HI_hostinit_done;
@@ -122,6 +125,7 @@ public:
     int maxGridX, maxGridY, maxGridZ;
     int maxBlockX, maxBlockY, maxBlockZ;
     int maxNumThreadsPerBlock;
+	int max1DTexRefWidth4LM;
 
     //Host-device address mapping table, augmented with stream id
     //addresstable_t masterAddressTable;
@@ -149,6 +153,9 @@ public:
 	asyncfreetablemap_t postponedFreeTableMap;
 	//memPool_t memPool;
 	memPoolmap_t memPoolMap;
+#ifdef _OPENARC_PROFILE_
+	presenttablecnt_t presentTableCntMap;
+#endif
 	
 
 	virtual ~Accelerator() {};
@@ -251,6 +258,15 @@ public:
 		//Check whether hostPtr exists as an entry to addressTable (it->second), 
 		//which will be true if hostPtr is a base address of the pointed memory.
         addressmap_t::iterator it2 =	tAddressMap->find(hostPtr);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         if(it2 != tAddressMap->end() ) {
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             *devPtrBase = aet->basePtr;
@@ -269,6 +285,11 @@ public:
 				} else {
 					tAddressMap = it->second;
             		it2 =	tAddressMap->find(hostPtr);
+#ifdef _OPENARC_PROFILE_
+    				if( HI_openarcrt_verbosity > 3 ) {
+						ptit->second++;
+    				}    
+#endif
             		if(it2 != tAddressMap->end() ) {
             			addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             			*devPtrBase = aet->basePtr;
@@ -295,6 +316,11 @@ public:
 		tAddressMap = it->second;
 		for (addressmap_t::iterator it2 = tAddressMap->begin(); it2 != tAddressMap->end(); ++it2) {
             const void* aet_host = it2->first;
+#ifdef _OPENARC_PROFILE_
+    		if( HI_openarcrt_verbosity > 3 ) {
+				ptit->second++;
+    		}    
+#endif
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             if (hostPtr >= aet_host && (size_t) hostPtr < (size_t) aet_host + aet->size) {
                 *devPtrBase = aet->basePtr;
@@ -310,6 +336,11 @@ public:
 			tAddressMap = it->second;
         	for (addressmap_t::iterator it2 = tAddressMap->begin(); it2 != tAddressMap->end(); ++it2) {
             	const void* aet_host = it2->first;
+#ifdef _OPENARC_PROFILE_
+    			if( HI_openarcrt_verbosity > 3 ) {
+					ptit->second++;
+    			}    
+#endif
             	addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             	if (hostPtr >= aet_host && (size_t) hostPtr < (size_t) aet_host + aet->size) {
                 	*devPtrBase = aet->basePtr;
@@ -323,6 +354,15 @@ public:
 		//Check whether hostPtr exists as an entry to addressTable (it->second), 
 		//which will be true if hostPtr is a base address of the pointed memory.
         addressmap_t::iterator it2 =	tAddressMap->lower_bound(hostPtr);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         if(it2 != tAddressMap->end() ) {
 			if( it2->first == hostPtr ) {
 				//found the entry matching the key, hostPtr.
@@ -371,6 +411,11 @@ public:
 			}
 			tAddressMap = it->second;
         	addressmap_t::iterator it2 =	tAddressMap->lower_bound(hostPtr);
+#ifdef _OPENARC_PROFILE_
+    		if( HI_openarcrt_verbosity > 3 ) {
+				ptit->second++;
+    		}    
+#endif
         	if(it2 != tAddressMap->end() ) {
 				if( it2->first == hostPtr ) {
 					//found the entry matching the key, hostPtr.
@@ -435,6 +480,15 @@ public:
         	addresstable_entity_t *aet = new addresstable_entity_t(devPtr, size);
         	(*(it->second))[hostPtr] = (void*) aet;
 		}
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         return  HI_success;
     }
 
@@ -443,6 +497,15 @@ public:
         addresstable_t::iterator it = masterAddressTable->find(asyncID);
         addressmap_t::iterator it2 =	(it->second)->find(hostPtr);
 
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         if(it2 != (it->second)->end() ) {
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             delete aet;
@@ -511,9 +574,22 @@ public:
     	addresstable_t *masterAddressTable = masterAddressTableMap[tid];
         int defaultAsyncID = DEFAULT_QUEUE+tid*MAX_NUM_QUEUES_PER_THREAD;
         addresstable_t::iterator it = masterAddressTable->find(asyncID);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+    	}    
+#endif
         if(it != masterAddressTable->end() ) {
 			addressmap_t *tAddressMap = it->second;
 			for( addressmap_t::iterator it3 = tAddressMap->begin(); it3 != tAddressMap->end(); ++it3 ) {
+#ifdef _OPENARC_PROFILE_
+    			if( HI_openarcrt_verbosity > 3 ) {
+					ptit->second++;
+    			}    
+#endif
             	addresstable_entity_t *aet = (addresstable_entity_t*) it3->second;
 				if( aet->basePtr == devPtr ) {
 					*hostPtr = (void *)it3->first;
@@ -531,6 +607,11 @@ public:
         	if(it != masterAddressTable->end() ) {
 				addressmap_t *tAddressMap = it->second;
 				for( addressmap_t::iterator it3 = tAddressMap->begin(); it3 != tAddressMap->end(); ++it3 ) {
+#ifdef _OPENARC_PROFILE_
+    				if( HI_openarcrt_verbosity > 3 ) {
+						ptit->second++;
+    				}    
+#endif
             		addresstable_entity_t *aet = (addresstable_entity_t*) it3->second;
 					if( aet->basePtr == devPtr ) {
 						*hostPtr = (void *)it3->first;
@@ -562,6 +643,14 @@ public:
 		//Check whether hostPtr exists as an entry to addressTable (it->second), 
 		//which will be true if hostPtr is a base address of the pointed memory.
         addressmap_t::iterator it2 =	tAddressMap->find(hostPtr);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+    	}    
+#endif
         if(it2 != tAddressMap->end() ) {
             return  hostPtr;
         } else {
@@ -574,6 +663,11 @@ public:
 			}
 			tAddressMap = it->second;
             it2 =	tAddressMap->find(hostPtr);
+#ifdef _OPENARC_PROFILE_
+    		if( HI_openarcrt_verbosity > 3 ) {
+				ptit->second++;
+    		}    
+#endif
             if(it2 != tAddressMap->end() ) {
             	return  hostPtr;
             }
@@ -582,6 +676,11 @@ public:
 		//Check whether hostPtr is within the range of an allocated memory region 
 		//in the addressTable.
 		for (addressmap_t::iterator it2 = tAddressMap->begin(); it2 != tAddressMap->end(); ++it2) {
+#ifdef _OPENARC_PROFILE_
+    		if( HI_openarcrt_verbosity > 3 ) {
+				ptit->second++;
+    		}    
+#endif
             const void* aet_host = it2->first;
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             if (hostPtr >= aet_host && (size_t) hostPtr < (size_t) aet_host + aet->size) {
@@ -594,6 +693,11 @@ public:
         	it = masterAddressTable->find(defaultAsyncID);
 			tAddressMap = it->second;
         	for (addressmap_t::iterator it2 = tAddressMap->begin(); it2 != tAddressMap->end(); ++it2) {
+#ifdef _OPENARC_PROFILE_
+    			if( HI_openarcrt_verbosity > 3 ) {
+					ptit->second++;
+    			}    
+#endif
             	const void* aet_host = it2->first;
             	addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             	if (hostPtr >= aet_host && (size_t) hostPtr < (size_t) aet_host + aet->size) {
@@ -605,6 +709,15 @@ public:
 		//Check whether hostPtr exists as an entry to addressTable (it->second), 
 		//which will be true if hostPtr is a base address of the pointed memory.
         addressmap_t::iterator it2 =	tAddressMap->lower_bound(hostPtr);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         if(it2 != tAddressMap->end() ) {
 			if( it2->first == hostPtr ) {
 				//found the entry matching the key, hostPtr.
@@ -643,6 +756,11 @@ public:
 			}
 			tAddressMap = it->second;
         	addressmap_t::iterator it2 =	tAddressMap->lower_bound(hostPtr);
+#ifdef _OPENARC_PROFILE_
+    		if( HI_openarcrt_verbosity > 3 ) {
+				ptit->second++;
+    		}    
+#endif
         	if(it2 != tAddressMap->end() ) {
 				if( it2->first == hostPtr ) {
 					//found the entry matching the key, hostPtr.
@@ -681,6 +799,15 @@ public:
 		//Check whether hostPtr exists as an entry to addressTable (it->second), 
 		//which will be true if hostPtr is a base address of the pointed memory.
         addressmap_t::iterator it2 =	(it->second)->find(hostPtr);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         if(it2 != (it->second)->end() ) {
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             *devPtrBase = aet->basePtr;
@@ -766,6 +893,15 @@ public:
 		//Check whether devPtr exists as an entry to myHandleMap, 
 		//which will be true if devPtr is a base address of the pointed memory.
         addressmap_t::iterator it2 =	myHandleMap->find(devPtr);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         if(it2 != myHandleMap->end() ) {
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             memHandle->basePtr = aet->basePtr;
@@ -778,6 +914,11 @@ public:
 		for (addressmap_t::iterator it2 = myHandleMap->begin(); it2 != myHandleMap->end(); ++it2) {
             const void* aet_devPtr = it2->first;
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
+#ifdef _OPENARC_PROFILE_
+    		if( HI_openarcrt_verbosity > 3 ) {
+				ptit->second++;
+    		}    
+#endif
             if (devPtr >= aet_devPtr && (size_t) devPtr < (size_t) aet_devPtr + aet->size) {
                 memHandle->basePtr = aet->basePtr;
                 memHandle->offset = (size_t) devPtr - (size_t) aet_devPtr;
@@ -788,6 +929,15 @@ public:
 		//Check whether devPtr exists as an entry to myHandleMap, 
 		//which will be true if devPtr is a base address of the pointed memory.
         addressmap_t::iterator it2 =	myHandleMap->lower_bound(devPtr);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         if(it2 != myHandleMap->end() ) {
 			if( it2->first == devPtr ) {
 				//found the entry matching the key, devPtr.
@@ -837,12 +987,30 @@ public:
         //fprintf(stderr, "[in set_device_mem_handle()] Setting address\n");
         addresstable_entity_t *aet = new addresstable_entity_t(handle, size);
         (*myHandleMap)[devPtr] = (void*) aet;
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         return  HI_success;
     }
 
     HI_error_t HI_remove_device_mem_handle(const void *devPtr, int tid) {
     	addressmap_t *myHandleMap = masterHandleTable[tid];
         addressmap_t::iterator it2 = myHandleMap->find(devPtr);
+#ifdef _OPENARC_PROFILE_
+		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
+    	if( HI_openarcrt_verbosity > 3 ) {
+			if(ptit == presentTableCntMap.end()) {
+				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
+			}
+			ptit->second++;
+    	}    
+#endif
         if(it2 != myHandleMap->end() ) {
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             delete aet;

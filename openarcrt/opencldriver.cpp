@@ -588,6 +588,10 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
             HI_set_device_address(hostPtr, *devPtr, count, asyncID, tconf->threadID);
 		} else {
         	memHandle = (void*) clCreateBuffer(clContext, mem_flags, count, NULL, &err);
+#ifdef _OPENARC_PROFILE_
+			tconf->IDMallocCnt++;
+			tconf->IDMallocSize += count;
+#endif
         	if(err != CL_SUCCESS) {
             	//fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : Malloc failed\n");
 #ifdef _OPENARC_PROFILE_
@@ -601,6 +605,9 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 					tDevPtr = it->second;
 					if( HI_get_device_mem_handle(tDevPtr, &tHandle, tconf->threadID) == HI_success ) { 
         				err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+#ifdef _OPENARC_PROFILE_
+						tconf->IDFreeCnt++;
+#endif
         				if(err != CL_SUCCESS) {
             				fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : failed to free on OpenCL\n");
 						}
@@ -626,9 +633,6 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 			}
 		}
         if(err == CL_SUCCESS) {
-#ifdef _OPENARC_PROFILE_
-            tconf->DMallocCnt++;
-#endif
             result = HI_success;
         } else {
             fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] : Malloc failed\n");
@@ -699,10 +703,11 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
 				}
             	HI_set_device_address(*devPtr, *devPtr, count, asyncID, tconf->threadID);
             	HI_set_device_mem_handle(*devPtr, memHandle, count, tconf->threadID);
-#ifdef _OPENARC_PROFILE_
-            	tconf->DMallocCnt++;
-#endif
             	result = HI_success;
+#ifdef _OPENARC_PROFILE_
+				tconf->IDMallocCnt++;
+				tconf->IDMallocSize += count;
+#endif
         	} else {
             	fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D_unified()] : Malloc failed\n");
 				exit(1);
@@ -821,9 +826,6 @@ HI_error_t OpenCLDriver::HI_free( const void *hostPtr, int asyncID) {
         		}
 			}
 */
-#ifdef _OPENARC_PROFILE_
-			tconf->DFreeCnt++;
-#endif
 		}
     }
 
@@ -870,6 +872,9 @@ HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
             		HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
 					free(devPtr);
 					HI_remove_device_mem_handle(devPtr, tconf->threadID);
+#ifdef _OPENARC_PROFILE_
+					tconf->IDFreeCnt++;
+#endif
         		} else {
             		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free_unified()] OpenCL memory free failed with error %d\n", err);
 					exit(1);
@@ -880,7 +885,6 @@ HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
     }
 
 #ifdef _OPENARC_PROFILE_
-	tconf->DFreeCnt++;
     tconf->totalFreeTime += HI_get_localtime() - ltime;
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -921,7 +925,7 @@ void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t d
         		} 
 			}
 #ifdef _OPENARC_PROFILE_
-            tconf->DFreeCnt++;
+            tconf->IDFreeCnt++;
 #endif
         }
         cl_int err;
@@ -939,14 +943,15 @@ void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t d
 			exit(1);
         }
 #ifdef _OPENARC_PROFILE_
-        tconf->DMallocCnt++;
+        tconf->IDMallocCnt++;
+        tconf->IDMallocSize += count;
 #endif
     } else {
 		if( tempMallocSet.count(*tempPtr) > 0 ) {
 			tempMallocSet.erase(*tempPtr);
             free(*tempPtr);
 #ifdef _OPENARC_PROFILE_
-            tconf->HFreeCnt++;
+            tconf->IHFreeCnt++;
 #endif
         }
 #if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
@@ -956,7 +961,8 @@ void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t d
 #endif
 		tempMallocSet.insert(*tempPtr);
 #ifdef _OPENARC_PROFILE_
-        tconf->HMallocCnt++;
+        tconf->IHMallocCnt++;
+        tconf->IHMallocSize += count;
 #endif
     }
 #ifdef _OPENARC_PROFILE_
@@ -995,7 +1001,7 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
         		} 
 			}
 #ifdef _OPENARC_PROFILE_
-            tconf->DFreeCnt++;
+            tconf->IDFreeCnt++;
 #endif
         }
     } else {
@@ -1003,7 +1009,7 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 			tempMallocSet.erase(*tempPtr);
             free(*tempPtr);
 #ifdef _OPENARC_PROFILE_
-            tconf->HFreeCnt++;
+            tconf->IHFreeCnt++;
 #endif
         }
     }
@@ -2099,6 +2105,10 @@ void OpenCLDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) 
 	void * memHandle;
 	cl_mem_flags mem_flags = convert2CLMemFlags(flags);
     memHandle = (void*) clCreateBuffer(clContext, mem_flags, size, NULL, &err);
+#ifdef _OPENARC_PROFILE_
+	tconf->IDMallocCnt++;
+	tconf->IDMallocSize += size;
+#endif
     if( err != CL_SUCCESS ) {
         fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc()] :failed to malloc on OpenCL with clCreateBuffer error %d\n", err);
 		exit(1);
@@ -2143,6 +2153,9 @@ void OpenCLDriver::HI_free(void *devPtr) {
 		HI_device_mem_handle_t tHandle;
 		if( HI_get_device_mem_handle(devPtr, &tHandle, tconf->threadID) == HI_success ) { 
        		err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+#ifdef _OPENARC_PROFILE_
+			tconf->IDFreeCnt++;
+#endif
         	if(err != CL_SUCCESS) {
         		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] :failed to free on OpenCL with error %d\n", err);
 				exit(1);

@@ -21,13 +21,14 @@ import openacc.analysis.SubArray;
  *         Future Technologies Group, Oak Ridge National Laboratory
  */
 public class CollapseTransformation extends TransformPass {
-
+	private boolean simplifyExp = true;
 	/**
 	 * @param program
 	 */
-	public CollapseTransformation(Program program) {
+	public CollapseTransformation(Program program, boolean simplify) {
 		super(program);
 		verbosity = 1;
+		simplifyExp = simplify;
 	}
 
 	/* (non-Javadoc)
@@ -67,13 +68,13 @@ public class CollapseTransformation extends TransformPass {
 			PrintTools.println("[INFO] Found OpenACC-collapse clauses that associate more than one loop.",1);
 			int collapsedLoops = 0;
 			for( ForLoop accLoop : outer_loops ) {
-				collapsedLoops +=collapseLoop(accLoop);
+				collapsedLoops +=collapseLoop(accLoop, simplifyExp);
 			}
 			PrintTools.println("[INFO] Number of collapsed OpenACC loops: " + collapsedLoops, 0);
 		}
 	}
 	
-	public static int collapseLoop(ForLoop accLoop) {
+	public static int collapseLoop(ForLoop accLoop, boolean simplifyE) {
 		int collapsedLoops = 0;
 		Traversable t = (Traversable)accLoop;
 		while(t != null) {
@@ -165,17 +166,33 @@ public class CollapseTransformation extends TransformPass {
 		ArrayList<Expression> iterspaceList = new ArrayList<Expression>();
 		ArrayList<Expression> lbList = new ArrayList<Expression>();
 		Expression collapsedIterSpace = null;
-		for( int i=0; i<collapseLevel; i++ ) {
-			ForLoop loop = indexedLoops.get(i);
-			Expression lb = LoopTools.getLowerBoundExpression(loop);
-			lbList.add(i, lb);
-			Expression ub = LoopTools.getUpperBoundExpression(loop);
-			Expression itrSpace = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
-			iterspaceList.add(i, itrSpace);
-			if( i==0 ) {
-				collapsedIterSpace = itrSpace;
-			} else {
-				collapsedIterSpace = Symbolic.multiply(collapsedIterSpace, itrSpace);
+		if( simplifyE ) {
+			for( int i=0; i<collapseLevel; i++ ) {
+				ForLoop loop = indexedLoops.get(i);
+				Expression lb = LoopTools.getLowerBoundExpression(loop);
+				lbList.add(i, lb);
+				Expression ub = LoopTools.getUpperBoundExpression(loop);
+				Expression itrSpace = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+				iterspaceList.add(i, itrSpace);
+				if( i==0 ) {
+					collapsedIterSpace = itrSpace;
+				} else {
+					collapsedIterSpace = Symbolic.multiply(collapsedIterSpace, itrSpace);
+				}
+			}
+		} else {
+			for( int i=0; i<collapseLevel; i++ ) {
+				ForLoop loop = indexedLoops.get(i);
+				Expression lb = LoopTools.getLowerBoundExpressionNS(loop);
+				lbList.add(i, lb);
+				Expression ub = LoopTools.getUpperBoundExpressionNS(loop);
+				Expression itrSpace = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+				iterspaceList.add(i, itrSpace);
+				if( i==0 ) {
+					collapsedIterSpace = itrSpace;
+				} else {
+					collapsedIterSpace = Symbolic.multiply(collapsedIterSpace, itrSpace);
+				}
 			}
 		}
 		//Create a new index variable for the newly collapsed loop.

@@ -78,6 +78,7 @@ HI_error_t CudaDriver::init() {
 		maxBlockX = 512; maxBlockY = 512; maxBlockZ = 64;
 		maxNumThreadsPerBlock = 512;
 	}
+	max1DTexRefWidth4LM = 134217728;
 	if( tconf->use_unifiedmemory > 0 ) {
 #if CUDA_VERSION >= 6000
 		cuDeviceGetAttribute(&unifiedMemSupported, CU_DEVICE_ATTRIBUTE_MANAGED_MEMORY, cuDevice);
@@ -482,6 +483,7 @@ void CudaDriver::unpin_host_memory_all(int asyncID)
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::unpin_host_memory_all(%d)\n", asyncID);
 	}
+    HostConf_t * tconf = getHostConf();
 #endif
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
@@ -506,6 +508,10 @@ void CudaDriver::unpin_host_memory_all(int asyncID)
 						//Free corresponding device memory.
 						addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
 						cuMemFree((CUdeviceptr)aet->basePtr);
+#ifdef _OPENARC_PROFILE_
+						tconf->IDFreeCnt++;
+#endif
+				
             		}
         		}
 			}
@@ -529,6 +535,7 @@ void CudaDriver::unpin_host_memory_all()
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::unpin_host_memory_all()\n");
 	}
+    HostConf_t * tconf = getHostConf();
 #endif
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
@@ -552,6 +559,9 @@ void CudaDriver::unpin_host_memory_all()
 						//Free corresponding device memory.
 						addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
 						cuMemFree((CUdeviceptr)aet->basePtr);
+#ifdef _OPENARC_PROFILE_
+						tconf->IDFreeCnt++;
+#endif
             		}
         		}
 			}
@@ -574,6 +584,7 @@ void CudaDriver::release_freed_device_memory(int asyncID)
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::release_freed_device_memory(%d)\n", asyncID);
 	}
+    HostConf_t * tconf = getHostConf();
 #endif
     {
 		addresstable_t::iterator it = CudaDriver::auxAddressTable.find(asyncID);
@@ -582,6 +593,9 @@ void CudaDriver::release_freed_device_memory(int asyncID)
 				//Free corresponding device memory.
 				addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
 				cuMemFree((CUdeviceptr)aet->basePtr);
+#ifdef _OPENARC_PROFILE_
+				tconf->IDFreeCnt++;
+#endif
 			}
 		}
     }
@@ -598,6 +612,7 @@ void CudaDriver::release_freed_device_memory()
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::release_freed_device_memory()\n");
 	}
+    HostConf_t * tconf = getHostConf();
 #endif
     {
 		for( addresstable_t::iterator it = CudaDriver::auxAddressTable.begin(); it != CudaDriver::auxAddressTable.end(); ++it ) {
@@ -605,6 +620,9 @@ void CudaDriver::release_freed_device_memory()
 				//Free corresponding device memory.
 				addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
 				cuMemFree((CUdeviceptr)aet->basePtr);
+#ifdef _OPENARC_PROFILE_
+				tconf->IDFreeCnt++;
+#endif
 			}
 		}
     }
@@ -658,10 +676,13 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 			}
 #endif
 			*devPtr = it->second;
-            *devPtr = it->second;
             memPool->erase(it);
         } else {
             cuResult = cuMemAlloc((CUdeviceptr*)devPtr, count);
+#ifdef _OPENARC_PROFILE_
+            tconf->IDMallocCnt++;
+            tconf->IDMallocSize += count;
+#endif
             if (cuResult != CUDA_SUCCESS) {
 #ifdef _OPENARC_PROFILE_
 				if( HI_openarcrt_verbosity > 2 ) {
@@ -671,6 +692,9 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
                 for (it = memPool->begin(); it != memPool->end(); ++it) {
             		*devPtr = it->second;
 					cuResult = cuMemFree((CUdeviceptr)(*devPtr));
+#ifdef _OPENARC_PROFILE_
+            		tconf->IDFreeCnt++;
+#endif
                     if(cuResult != CUDA_SUCCESS) {
                         fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] failed to free on CUDA with error %d (NVIDIA CUDA GPU)\n", cuResult);
                     }
@@ -693,9 +717,6 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 				}
 			}
             HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID, tconf->threadID);
-#ifdef _OPENARC_PROFILE_
-            tconf->DMallocCnt++;
-#endif
             result = HI_success;
         } else {
 			//[DEBUG] CUresult and cudaError_t do not match.
@@ -714,6 +735,10 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 			}
 			HI_remove_device_address_from_victim_cache(hostPtr, asyncID, tconf->threadID);
         } else {
+#ifdef _OPENARC_PROFILE_
+            tconf->IDMallocCnt++;
+            tconf->IDMallocSize += count;
+#endif
             cuResult = cuMemAlloc((CUdeviceptr*)devPtr, (size_t) count);
             if (cuResult != CUDA_SUCCESS) {
             	if( tconf->prepin_host_memory == 1 ) {
@@ -761,9 +786,6 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 		}
         if( cuResult == CUDA_SUCCESS ) {
             HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID, tconf->threadID);
-#ifdef _OPENARC_PROFILE_
-            tconf->DMallocCnt++;
-#endif
             result = HI_success;
         } else {
             fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] CUDA memory alloc failed with error %d\n", cuResult);
@@ -822,16 +844,21 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
 			} else {
 				*devPtr = (void *)hostPtr;
 			}
+#ifdef _OPENARC_PROFILE_
+            tconf->IDMallocCnt++;
+            tconf->IDMallocSize += count;
+#endif
 		} else {
 			//CU_MEM_ATTACH_GLOBAL: this memory is accessible from any stream on any device.
 			//CU_MEM_ATTACH_HOST: the allocation is created within initial visibility restricted to host access
 			//only; an explicit call to cuStreamAttachMemAsync will be required to enable access on the device.
         	CUresult cuResult = cuMemAllocManaged((CUdeviceptr*)devPtr, count, CU_MEM_ATTACH_GLOBAL);
+#ifdef _OPENARC_PROFILE_
+            tconf->IDMallocCnt++;
+            tconf->IDMallocSize += count;
+#endif
         	if( cuResult == CUDA_SUCCESS ) {
             	HI_set_device_address(*devPtr, *devPtr, count, asyncID, tconf->threadID);
-#ifdef _OPENARC_PROFILE_
-            	tconf->DMallocCnt++;
-#endif
             	result = HI_success;
         	} else {
 				//[DEBUG] CUresult and cudaError_t do not match.
@@ -886,6 +913,10 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
 			exit(1);
 		}
     } else {
+#ifdef _OPENARC_PROFILE_
+		tconf->IDMallocCnt++;
+		tconf->IDMallocSize += widthInBytes*height;
+#endif
         CUresult cuResult = cuMemAllocPitch((CUdeviceptr*)devPtr, pitch, widthInBytes, height, 16);
         if( cuResult == CUDA_SUCCESS ) {
             //Pin host memory
@@ -902,9 +933,6 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
 			}
 
             HI_set_device_address(hostPtr, *devPtr, (size_t) widthInBytes*height, asyncID, tconf->threadID);
-#ifdef _OPENARC_PROFILE_
-            tconf->DMallocCnt++;
-#endif
             result = HI_success;
         } else {
 			//[DEBUG] CUresult and cudaError_t do not match.
@@ -941,7 +969,8 @@ HI_error_t CudaDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* 
     HI_error_t result;
     result = HI_error;
 #ifdef _OPENARC_PROFILE_
-    tconf->DMallocCnt++;
+    tconf->IDMallocCnt++;
+    tconf->IDMallocSize += widthInBytes*height*depth;
     tconf->totalMallocTime += HI_get_localtime() - ltime;
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -1012,9 +1041,6 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
             	result = HI_error;
         	}
 */
-#ifdef _OPENARC_PROFILE_
-            tconf->DFreeCnt++;
-#endif
 		}
     }
 #ifdef _OPENARC_PROFILE_
@@ -1046,13 +1072,16 @@ HI_error_t CudaDriver::HI_free_unified( const void *hostPtr, int asyncID) {
     if( HI_get_device_address(hostPtr, &devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success) {
 		if( unifiedMemSupported == 0 ) {
 			free(devPtr);
+#ifdef _OPENARC_PROFILE_
+            	tconf->IDFreeCnt++;
+#endif
 		} else {
         	CUresult cuResult = cuMemFree((CUdeviceptr)(devPtr));
         	if( cuResult == CUDA_SUCCESS ) {
             	HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
 
 #ifdef _OPENARC_PROFILE_
-            	tconf->DFreeCnt++;
+            	tconf->IDFreeCnt++;
 #endif
         	} else {
 				//[DEBUG] CUresult and cudaError_t do not match.
@@ -1101,7 +1130,7 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
 				exit(1);
     		}
 #ifdef _OPENARC_PROFILE_
-            tconf->DFreeCnt++;
+            tconf->IDFreeCnt++;
 #endif
 		}
     	CUresult cuResult = cuMemAlloc((CUdeviceptr*)tempPtr, (size_t) count);
@@ -1111,20 +1140,22 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
     	}
 		tempMallocSet.insert(*tempPtr);	
 #ifdef _OPENARC_PROFILE_
-        tconf->DMallocCnt++;
+        tconf->IDMallocCnt++;
+        tconf->IDMallocSize += count;
 #endif
     } else {
 		if( tempMallocSet.count(*tempPtr) > 0 ) {
 			tempMallocSet.erase(*tempPtr);	
             free(*tempPtr);
 #ifdef _OPENARC_PROFILE_
-            tconf->HFreeCnt++;
+            tconf->IHFreeCnt++;
 #endif
         }
         *tempPtr = malloc(count);
 		tempMallocSet.insert(*tempPtr);	
 #ifdef _OPENARC_PROFILE_
-        tconf->HMallocCnt++;
+        tconf->IHMallocCnt++;
+        tconf->IHMallocSize += count;
 #endif
     }
 #ifdef _OPENARC_PROFILE_
@@ -1160,7 +1191,7 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 				exit(1);
     		}
 #ifdef _OPENARC_PROFILE_
-            tconf->DFreeCnt++;
+            tconf->IDFreeCnt++;
 #endif
         }
     } else {
@@ -1172,7 +1203,7 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
     			HI_unpin_host_memory(*tempPtr);
 			}
 #ifdef _OPENARC_PROFILE_
-            tconf->HFreeCnt++;
+            tconf->IHFreeCnt++;
 #endif
         }
     }
@@ -2035,6 +2066,10 @@ HI_error_t CudaDriver::HI_bind_tex(std::string texName,  HI_datatype_t type, con
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_bind_tex()\n");
 	}
 #endif
+	if( size > max1DTexRefWidth4LM ) {
+        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] Texture binding for %s failed due to too large size (%ld); exit!\n",texName.c_str(), size);
+		exit(1);
+	}
 
     CUresult err;
     CUtexref cuTexref;
@@ -2491,6 +2526,8 @@ void CudaDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {
 		exit(1);
     }
 #ifdef _OPENARC_PROFILE_
+	tconf->IDMallocCnt++;
+	tconf->IDMallocSize += size;
     tconf->totalMallocTime += HI_get_localtime() - ltime;
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -2518,6 +2555,9 @@ void CudaDriver::HI_free(void *devPtr) {
 		(devPtr != devPtr2) ) {
 		//Free device memory if it is not on unified memory.
     	cuResult = cuMemFree((CUdeviceptr)devPtr);
+#ifdef _OPENARC_PROFILE_
+		tconf->IDFreeCnt++;
+#endif
 	}
 
     if(cuResult != CUDA_SUCCESS) {

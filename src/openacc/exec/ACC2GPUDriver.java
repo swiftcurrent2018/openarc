@@ -128,14 +128,16 @@ public class ACC2GPUDriver extends Driver
 		"        =1 OpenACC Annotation parsing\n" +
 		"        =2 OpenACC Annotation parsing + initial code restructuring\n" + 
 		"        =3 OpenACC parsing + code restructuring + OpenACC loop directive preprocessing\n" +
-		"        =4 option3 + OpenACC annotation analysis");
+		"        =4 option3 + OpenACC annotation analysis\n" + 
+		"        =5 option4 + privatization/reduction analyses");
 		optionsWithIntArgument.add("AccAnalysisOnly");
 		
 		options.add(options.ANALYSIS, "SkipGPUTranslation", "N",
 		"Skip the final GPU translation\n" +
-		"        =1 exit before the final GPU translation (default)\n" + 
-		"        =2 exit after private variable transformaion\n" +
-		"        =3 exit after reduction variable transformation");
+		"        =1 exit after all analyses are done (default)\n" + 
+		"        =2 exit before the final GPU translation\n" + 
+		"        =3 exit after private variable transformaion\n" +
+		"        =4 exit after reduction variable transformation");
 		optionsWithIntArgument.add("SkipGPUTranslation");
 
 		options.add(options.ANALYSIS, "AccPrivatization", "N",
@@ -784,6 +786,12 @@ public class ACC2GPUDriver extends Driver
 		if (getOptionValue("debug_parser_output") != null)
 		{
 			System.err.println("print parsed output and exit without doing any analysis/transformation!");
+			try {
+				program.print();
+			} catch (IOException e) {
+				System.err.println("could not write output files: " + e);
+				System.exit(1);
+			}
 			System.exit(0);
 		}
 

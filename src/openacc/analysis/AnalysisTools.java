@@ -1686,8 +1686,10 @@ public abstract class AnalysisTools {
 					}
 				}
 				else {
-					pnest = false;
-					break;
+					if( (!skip) || (currLoop == null) ) {
+						pnest = false;
+						break;
+					}
 				}
 			}
 			if( (!pnest) || (currLoop == null) ) {

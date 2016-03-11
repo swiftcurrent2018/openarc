@@ -342,8 +342,47 @@ public abstract class ACC2GPUTranslationTools {
 										indexSym = tIndexVar.getSymbol();
 									}
 									if( IRTools.containsSymbol(tAccess, indexSym) ) {
-										targetLoops.add((ForLoop)t);
-										foundLoop = true;
+										if( !foundLoop ) {
+											foundLoop = true;
+											ForLoop cLoop = (ForLoop)t;
+											if( !targetLoops.contains(cLoop) ) {
+												boolean addLoop = true;
+												//Check whether cLoop is a parent of one of targetLoops.
+												for(ForLoop ttL : targetLoops ) {
+													Traversable ttt = ttL.getParent();
+													while( ttt != null ) {
+														if( ttt == t ) {
+															//cLoop is parent of ttL.
+															addLoop = false;
+															break;
+														}
+														ttt = ttt.getParent();
+													}
+													if( !addLoop ) {
+														break;
+													}
+												}
+												if(addLoop) {
+													//Check whether cLoop is a child of one of targetLoops.
+													Set<ForLoop> removeSet = new HashSet<ForLoop>();
+													for(ForLoop ttL : targetLoops ) {
+														Traversable ttt = cLoop.getParent();
+														while( ttt != null ) {
+															if( ttt == ttL ) {
+																//cLoop is a child of ttL.
+																removeSet.add(ttL);
+																break;
+															}
+															ttt = ttt.getParent();
+														}
+													}
+													if( !removeSet.isEmpty() ) {
+														targetLoops.removeAll(removeSet);
+													}
+													targetLoops.add(cLoop);
+												}
+											}
+										}
 										break;
 									} else {
 										if( t == targetStmt2 ) {
@@ -374,6 +413,9 @@ public abstract class ACC2GPUTranslationTools {
 							}*/
 						}
 					}
+/*					if( targetLoops.size() > 1 ) {
+						PrintTools.println("[WARNING in ACC2GPUTranslationToos.arrayCachingOnRegister()] Multiple target loops are found for array " + aAccess + AnalysisTools.getEnclosingContext(aAccess), 0);
+					}*/
 					for( ForLoop fLoop : targetLoops ) {
 						//PrintTools.println("fLoop check point1 ", 0);
 						///////////////////////////////////////////////////
@@ -793,7 +835,7 @@ public abstract class ACC2GPUTranslationTools {
 										", is independent of any enclosing loops, but not constant. " +
 										"Current implementation fails to detect the possible dependency problem of this " +
 										"index expression, and thus it will not be cached conservatively, " +
-										"even though it may have locality. (Error code = " + errorCode + ")" +
+										"even though it may have locality. (Internal code = " + errorCode + ")" +
 										AnalysisTools.getEnclosingContext(region), 0);
 								checkedArrayAccessSet.add(aAccessString);
 							}

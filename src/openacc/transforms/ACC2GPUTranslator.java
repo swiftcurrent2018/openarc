@@ -1093,6 +1093,7 @@ public abstract class ACC2GPUTranslator {
 			prevDecl = lastUserDeclMap.get(tUnit);
 		}
 		//Procedure tProc = AnalysisTools.findFirstProcedure(tUnit);
+		PrintTools.println("[INFO from copyUserSpecifierDeclarations()] User symbols accessed in the kernel: " + accessedSymbols, 2);
 		for( Symbol tSym : accessedSymbols ) {
 			Stack<Declaration> declStack = new Stack<Declaration>();
 			List typeList = tSym.getTypeSpecifiers();
@@ -1129,9 +1130,19 @@ public abstract class ACC2GPUTranslator {
 										declStack.push(tDecl.clone());
 									}
 								} else {
-									PrintTools.println("[ERROR in ACC2GPUTranslator.copyUserSpecifierDeclarations()] " +
-											"can not find definition of derived type(" + tExp + ") used in an OpenACC kernel; user has to manually " +
-											"include necessary header file or declaration to the generated openarc_kernel.cu/cl file.\n", 0);
+									//[DEBUG] While ClassDeclaration.getDeclaredIDs() returns class itself ("struct foo"), 
+									//Enumeration.getDeclaredIDs() returns its enumerated types, but not the enumeration itself.
+									//Therefore, the enumeration definition can not be found by SymbolTools.findSymbol().
+									tDecl = tSym.getDeclaration();
+									if( tDecl instanceof Enumeration ) {
+										if( SymbolTools.findSymbol(tUnit, tSym.getSymbolName()) == null ) {
+											declStack.push(tDecl.clone());
+										}
+									} else {
+										PrintTools.println("[ERROR in ACC2GPUTranslator.copyUserSpecifierDeclarations()] " +
+												"can not find definition of derived type(" + tExp + ") used in an OpenACC kernel; user has to manually " +
+												"include necessary header file or declaration to the generated openarc_kernel.cu/cl file.\n", 0);
+									}
 								}
 							}
 						}

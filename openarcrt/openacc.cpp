@@ -673,6 +673,8 @@ d_void* acc_malloc(size_t size) {
         exit(1);
     }
 #ifdef _OPENARC_PROFILE_
+	tconf->DMallocCnt++;
+	tconf->DMallocSize += size;
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_malloc()\n");
 	}
@@ -694,6 +696,7 @@ void acc_free(void* devPtr) {
         exit(1);
     }
 #ifdef _OPENARC_PROFILE_
+	tconf->DFreeCnt++;
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_free()\n");
 	}

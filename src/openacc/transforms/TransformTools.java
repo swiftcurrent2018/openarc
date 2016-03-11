@@ -978,7 +978,9 @@ public abstract class TransformTools {
 				for (int i = 0; i < specs.size(); i++) {
 					Object spec = specs.get(i);
 					if (spec instanceof PointerSpecifier) {
-						declarator_specs.add(spec);
+						//[DEBUG] Because this pass generates output array from SubArray, the output array 
+						//should not contain pointers since SubArray will provide all the dimensions.
+						//declarator_specs.add(spec);
 					} else {
 						declaration_specs.add(spec);
 					}

@@ -33,7 +33,7 @@ INSTALLATION
 -------------------------------------------------------------------------------
 * Obtain OpenARC distribution
     - The latest version of OpenARC can be obtained at:
-    https://code.ornl.gov/f6l/OpenARC
+    https://code.ornl.gov/f6l/OpenARC.git
 
 
 * Build

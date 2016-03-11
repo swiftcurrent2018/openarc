@@ -413,6 +413,11 @@ public class acc2gpu extends CodeGenPass
 			ASPENModelGen.ASPENPostProcessing(program);
 			ASPENModelGen.cleanASPENAnnotations(program);
 		}
+
+		if( AccAnalysisOnly == 4 ) {
+			cleanAnnotations();
+			return;
+		}
 		
 		//[FIXME] This may no be the right position to call this pass; we have to
 		//check the interaction of this pass with other passes.
@@ -427,7 +432,7 @@ public class acc2gpu extends CodeGenPass
 		}
 		
 		
-		if( AccAnalysisOnly == 4 ) {
+		if( AccAnalysisOnly == 5 ) {
 			cleanAnnotations();
 			return;
 		}
@@ -615,7 +620,7 @@ public class acc2gpu extends CodeGenPass
 		/////////////////////////////////////////////
 		//Collapse loops with collapse(n) clauses. //
 		/////////////////////////////////////////////
-		TransformPass.run(new CollapseTransformation(program));
+		TransformPass.run(new CollapseTransformation(program, false));
 
 
 		/////////////////////////////////////////////////////////
@@ -627,7 +632,10 @@ public class acc2gpu extends CodeGenPass
 			TransformPass.run(new LoopUnrollTransformation(program, unrollFactor));
 		}
 
-
+		if( SkipGPUTranslation == 2 ) {
+			cleanAnnotations();
+			return;
+		}
 		///////////////////////////////////////////////////////
 		// Do the actual OpenACC-to-Accelerator translation. //
 		///////////////////////////////////////////////////////

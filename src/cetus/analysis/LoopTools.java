@@ -133,6 +133,27 @@ public class LoopTools {
     }
 
     /**
+     * [Added by Seyong Lee]
+     * Returns a lower bound expression for the loop, without forward substitution 
+     */
+    public static Expression getLowerBoundExpressionNS(Loop loop) {
+        Expression lb = null;
+        if (loop instanceof ForLoop) {
+            ForLoop for_loop = (ForLoop)loop;
+            // determine lower bound for index variable of this loop
+            Statement stmt = for_loop.getInitialStatement();
+            if (stmt instanceof ExpressionStatement) {
+                Expression rhs = ((AssignmentExpression)
+                                 ((ExpressionStatement)stmt).
+                                 getExpression()).getRHS();
+                lb = Symbolic.simplify(rhs);
+            } else if (stmt instanceof DeclarationStatement) {  // Error
+            }
+        }
+        return lb;
+    }
+
+    /**
      * Check if the lower bound expression is an integer constant
      * @param loop
      * @return true if it is, false otherwise.
@@ -173,6 +194,34 @@ public class LoopTools {
         if (!(ub instanceof IntegerLiteral)) {
             RangeDomain rd = RangeAnalysis.query((Statement)loop);
             ub = rd.substituteForward(ub);
+        }
+        return ub;
+    }
+
+    /**
+     * [Added by Seyong Lee]
+     * Returns a upper bound expression for the loop without forward substitution
+     * @param loop
+     * @return the upper bound of the loop.
+     */
+    public static Expression getUpperBoundExpressionNS(Loop loop) {
+        Expression ub = null;
+        if (loop instanceof ForLoop) {
+            ForLoop for_loop = (ForLoop)loop;
+            // determine upper bound for index variable of this loop
+            BinaryExpression cond_expr =
+                    (BinaryExpression)for_loop.getCondition();
+            Expression rhs = cond_expr.getRHS();
+            Expression step_size = getIncrementExpression(loop);
+            BinaryOperator cond_op = cond_expr.getOperator();
+            if (cond_op.equals(BinaryOperator.COMPARE_LT)) {
+                ub = Symbolic.subtract(rhs, step_size);
+            } else if ((cond_op.equals(BinaryOperator.COMPARE_LE)) ||
+                       (cond_op.equals(BinaryOperator.COMPARE_GE))) {
+                ub = Symbolic.simplify(rhs);
+            } else if (cond_op.equals(BinaryOperator.COMPARE_GT)) {
+                ub = Symbolic.add(rhs, step_size);
+            }
         }
         return ub;
     }
