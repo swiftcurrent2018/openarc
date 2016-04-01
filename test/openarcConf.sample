@@ -113,7 +113,7 @@
 #Extract tuning parameters; output will be stored in the specified file. (Default is TuningOptions.txt)The generated file contains information on tuning parameters applicable to current input program.
 #Option: forceSyncKernelCall
 #forceSyncKernelCall
-#If enabled, cudaThreadSynchronize() call is inserted right after each kernel call to force explicit synchronization; useful for debugging
+#If enabled, HI_synchronize(1) call is inserted right after each kernel call in the default queue to force explicit synchronization; useful for debugging or timing the kernel execution
 #Option: genTuningConfFiles
 #genTuningConfFiles=tuningdir
 #Generate tuning configuration files and/or userdirective files; output will be stored in the specified directory. (Default is tuning_conf)

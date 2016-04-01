@@ -4281,7 +4281,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				//Create a kernel parameter for the shared array variable.
 				//Add __global or __constant specifier for device memory
 				ArrayList addSpecs;
-				if( cudaConstantSet.contains(sharedSym)  && !accPresentSet.contains(sharedSym)) {
+				//[CAUTION] Temporarily remove accPresentSet checking part (Mar. 31, 2016 Seyong Lee).
+				//if( cudaConstantSet.contains(sharedSym)  && !accPresentSet.contains(sharedSym)) {
+				if( cudaConstantSet.contains(sharedSym) ) {
 					addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_CONSTANT));
 				} else {
 					addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));

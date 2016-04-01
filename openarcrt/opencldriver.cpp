@@ -232,7 +232,7 @@ HI_error_t OpenCLDriver::init() {
 			exit(1);
         }
 
-        err = clBuildProgram(clProgram, 0, NULL, NULL, NULL, NULL);
+        err = clBuildProgram(clProgram, 1, &clDevice, NULL, NULL, NULL);
         if(err != CL_SUCCESS)
         {
             printf("[ERROR in OpenCLDriver::init()] Error in clBuildProgram, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
@@ -1058,6 +1058,7 @@ HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI
 			HI_device_mem_handle_t tHandle;
 			if( HI_get_device_mem_handle(dst, &tHandle, tconf->threadID) == HI_success ) {
 #if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+/*
 				size_t prefix = AOCL_ALIGNMENT - ((size_t) src & (AOCL_ALIGNMENT - 1));
 				if( (prefix != AOCL_ALIGNMENT) && (prefix < count) ) {
         			err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, prefix, src, 0, NULL, NULL);
@@ -1065,6 +1066,40 @@ HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI
 				} else {
         			err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, count, src, 0, NULL, NULL);
 				}
+*/
+				size_t offset = tHandle.offset;
+				size_t h_prefix = AOCL_ALIGNMENT - ((size_t) src & (AOCL_ALIGNMENT - 1));
+				size_t d_prefix = AOCL_ALIGNMENT - ((size_t) offset & (AOCL_ALIGNMENT - 1));
+				cl_mem mem = (cl_mem)tHandle.basePtr;
+
+    			if (h_prefix == AOCL_ALIGNMENT && d_prefix == AOCL_ALIGNMENT) {
+                	err = clEnqueueWriteBuffer(queue, mem, CL_TRUE, offset, count, src, 0, NULL, NULL);
+    			} else if (h_prefix == d_prefix) {
+        			if (count < AOCL_ALIGNMENT) {
+            			err = clEnqueueWriteBuffer(queue, mem, CL_TRUE, offset, count, src, 0, NULL, NULL);
+        			} else {
+            			err = clEnqueueWriteBuffer(queue, mem, CL_FALSE, offset, d_prefix, src, 0, NULL, NULL);
+            			err = clEnqueueWriteBuffer(queue, mem, CL_TRUE, offset + d_prefix, count - d_prefix, (const void*) ((char*) (src) + d_prefix), 0, NULL, NULL);
+        			}
+    			} else if (d_prefix == AOCL_ALIGNMENT) {
+        			void* t = NULL;
+        			err = posix_memalign(&t, AOCL_ALIGNMENT, count);
+        			memcpy(t, src, count);
+        			err = clEnqueueWriteBuffer(queue, mem, CL_TRUE, offset, count, (const void*) t, 0, NULL, NULL);
+        			if (t) free(t);
+    			} else {
+        			if (count < AOCL_ALIGNMENT) {
+            			err = clEnqueueWriteBuffer(queue, mem, CL_TRUE, offset, count, src, 0, NULL, NULL);
+        			} else {
+            			size_t pof = offset & (AOCL_ALIGNMENT - 1);
+            			void* t = NULL;
+            			err = posix_memalign(&t, AOCL_ALIGNMENT, count + pof);
+            			memcpy((char*) t + pof, src, count);
+            			err = clEnqueueWriteBuffer(queue, mem, CL_FALSE, offset, d_prefix, (const void*) ((char*) t + pof), 0, NULL, NULL);
+            			err = clEnqueueWriteBuffer(queue, mem, CL_TRUE, offset + d_prefix, count - d_prefix, (const void*) ((char*) (t) + pof + d_prefix), 0, NULL, NULL);
+            			if (t) free(t);
+        			}
+    			}
 #else
         		err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, count, src, 0, NULL, NULL);
 #endif
@@ -1081,6 +1116,7 @@ HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI
 			HI_device_mem_handle_t tHandle;
 			if( HI_get_device_mem_handle(src, &tHandle, tconf->threadID) == HI_success ) {
 #if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+/*
 				size_t prefix = AOCL_ALIGNMENT - ((size_t) dst & (AOCL_ALIGNMENT - 1));
 				if( (prefix != AOCL_ALIGNMENT) && (prefix < count) ) {
         			err = clEnqueueReadBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, prefix, dst, 0, NULL, NULL);
@@ -1088,6 +1124,39 @@ HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI
 				} else {
         			err = clEnqueueReadBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, count, dst, 0, NULL, NULL);
 				}
+*/
+				size_t offset = tHandle.offset;
+    			size_t h_prefix = AOCL_ALIGNMENT - ((size_t) dst & (AOCL_ALIGNMENT - 1));
+    			size_t d_prefix = AOCL_ALIGNMENT - ((size_t) offset & (AOCL_ALIGNMENT - 1));
+				cl_mem mem = (cl_mem)tHandle.basePtr;
+    			if (h_prefix == AOCL_ALIGNMENT && d_prefix == AOCL_ALIGNMENT) {
+        			err = clEnqueueReadBuffer(queue, mem, CL_TRUE, offset, count, dst, 0, NULL, NULL);
+    			} else if (h_prefix == d_prefix) {
+        			if (count < AOCL_ALIGNMENT) {
+            			err = clEnqueueReadBuffer(queue, mem, CL_TRUE, offset, count, dst, 0, NULL, NULL);
+        			} else {
+            			err = clEnqueueReadBuffer(queue, mem, CL_FALSE, offset, d_prefix, dst, 0, NULL, NULL);
+            			err = clEnqueueReadBuffer(queue, mem, CL_TRUE, offset + d_prefix, count - d_prefix, (char*) (dst) + d_prefix, 0, NULL, NULL);
+        			}
+    			} else if (d_prefix == AOCL_ALIGNMENT) {
+        			void* t = NULL;
+        			err = posix_memalign(&t, AOCL_ALIGNMENT, count);
+        			err = clEnqueueReadBuffer(queue, mem, CL_TRUE, offset, count, t, 0, NULL, NULL);
+        			memcpy(dst, t, count);
+        			if (t) free(t);
+    			} else {
+        			if (count < AOCL_ALIGNMENT) {
+            			err = clEnqueueReadBuffer(queue, mem, CL_TRUE, offset, count, dst, 0, NULL, NULL);
+        			} else {
+            			size_t pof = offset & (AOCL_ALIGNMENT - 1);
+            			void* t = NULL;
+            			err = posix_memalign(&t, AOCL_ALIGNMENT, count + pof);
+            			err = clEnqueueReadBuffer(queue, mem, CL_FALSE, offset, d_prefix, (char*) t + pof, 0, NULL, NULL);
+            			err = clEnqueueReadBuffer(queue, mem, CL_TRUE, offset + d_prefix, count - d_prefix, (char*) (t) + pof + d_prefix, 0, NULL, NULL);
+            			memcpy(dst, (char*) t + pof, count);
+            			if (t) free(t);
+        			}
+    			}
 #else
         		err = clEnqueueReadBuffer(queue, (cl_mem)(tHandle.basePtr), CL_TRUE, tHandle.offset, count, dst, 0, NULL, NULL);
 #endif
