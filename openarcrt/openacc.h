@@ -85,4 +85,14 @@ extern void* acc_present_or_create_unified(h_void* hostPtr, size_t size);
 extern void acc_copyout_unified(h_void* hostPtr, size_t size);
 extern void acc_delete_unified(h_void* hostPtr, size_t size);
 
+/////////////////////////////////////////////////////////////////
+// Additional OpenACC Runtime Library Routines Used by OpenARC //
+/////////////////////////////////////////////////////////////////
+extern void* acc_copyin_const(h_void* hostPtr, size_t size);
+extern void* acc_pcopyin_const(h_void* hostPtr, size_t size);
+extern void* acc_present_or_copyin_const(h_void* hostPtr, size_t size);
+extern void* acc_create_const(h_void* hostPtr, size_t size);
+extern void* acc_pcreate_const(h_void* hostPtr, size_t size);
+extern void* acc_present_or_create_const(h_void* hostPtr, size_t size);
+
 #endif

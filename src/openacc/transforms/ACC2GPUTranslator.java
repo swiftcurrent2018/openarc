@@ -181,6 +181,17 @@ public abstract class ACC2GPUTranslator {
 
 			List<ACCAnnotation> atomicAnnots =
                                         AnalysisTools.collectPragmas(cProc, ACCAnnotation.class, new HashSet(Arrays.asList("atomic")), false);
+			
+			List<FunctionCall> fCallList = IRTools.getFunctionCalls(cProc);
+			List<FunctionCall> memoryAPIList = new LinkedList<FunctionCall>();
+			for( FunctionCall fCall : fCallList ) {
+				if(OpenACCRuntimeLibrary.isMemoryAPI(fCall)) {
+					memoryAPIList.add(fCall);
+				}
+			}
+			if( !memoryAPIList.isEmpty() ) {
+				handleMemoryRuntimeAPIs(cProc, memoryAPIList);
+			}
 
 			List<ACCAnnotation> parallelRegionAnnots = new LinkedList<ACCAnnotation>();
 			List<ACCAnnotation> kernelsRegionAnnots = new LinkedList<ACCAnnotation>();
@@ -736,6 +747,12 @@ public abstract class ACC2GPUTranslator {
 		}
 	}
 	
+	protected void handleMemoryRuntimeAPIs(Procedure cProc, List<FunctionCall> fCallList) {
+		//Transform OpenACC runtime library APIs to allocate data on constant memory.
+		runtimeTransformationForConstMemory(cProc, fCallList);
+		//Transform OpenACC runtime library APIs to allocate data on texture memory.
+	}
+	
 	protected void convComputeRegionsToGPUKernels(Procedure cProc, List<ACCAnnotation> parallelRegionAnnots,
 			List<ACCAnnotation> kernelsRegionAnnots) {
 		DataRegionType regionT = DataRegionType.ComputeRegion;
@@ -954,6 +971,8 @@ public abstract class ACC2GPUTranslator {
 	
 	protected abstract void extractComputeRegion(Procedure cProc, ACCAnnotation cAnnot, String cRegionKind, String new_func_name,
 			boolean IRSymbolOnly);
+	
+	protected abstract void runtimeTransformationForConstMemory(Procedure cProc, List<FunctionCall> fCallList );
 
 	protected Traversable findKernelConfInsertPoint(Annotatable region, boolean IRSymbolOnly) {
 		Set<Symbol> reductionSymbols = null;

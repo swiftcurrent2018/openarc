@@ -7,12 +7,81 @@
 //See HI_synchronize() to see the effect of using
 //blocking streams.
 #define USE_BLOCKING_STREAMS
+#define SHOW_ERROR_CODE
 
 //[DEBUG] commented out since they are no more static.
 //std::map<std::string, CUfunction> CudaDriver::kernelMap;
 //std::set<std::string> CudaDriver::kernelNameSet;
 std::map<CUdeviceptr,int> CudaDriver::pinnedHostMemCounter;
 std::vector<const void *> CudaDriver::hostMemToUnpin;
+
+const char * cuda_error_code(CUresult err) {
+	std::string str = "";
+#ifdef SHOW_ERROR_CODE
+	/* Error Codes */
+	switch ( err ) {
+		case CUDA_SUCCESS: { str = "CUDA_SUCCESS"; break; } 
+		case CUDA_ERROR_INVALID_VALUE: { str = "CUDA_ERROR_INVALID_VALUE"; break; } 
+		case CUDA_ERROR_OUT_OF_MEMORY: { str = "CUDA_ERROR_OUT_OF_MEMORY"; break; }
+		case CUDA_ERROR_NOT_INITIALIZED: { str = "CUDA_ERROR_NOT_INITIALIZED"; break; }
+		case CUDA_ERROR_DEINITIALIZED: { str = "CUDA_ERROR_DEINITIALIZED"; break; }
+		case CUDA_ERROR_PROFILER_DISABLED: { str = "CUDA_ERROR_PROFILER_DISABLED"; break; }
+		case CUDA_ERROR_PROFILER_NOT_INITIALIZED: { str = "CUDA_ERROR_PROFILER_NOT_INITIALIZED"; break; }
+		case CUDA_ERROR_PROFILER_ALREADY_STARTED: { str = "CUDA_ERROR_PROFILER_ALREADY_STARTED"; break; }
+		case CUDA_ERROR_PROFILER_ALREADY_STOPPED: { str = "CUDA_ERROR_PROFILER_ALREADY_STOPPED"; break; }
+		case CUDA_ERROR_NO_DEVICE: { str = "CUDA_ERROR_NO_DEVICE"; break; }
+		case CUDA_ERROR_INVALID_DEVICE: { str = "CUDA_ERROR_INVALID_DEVICE"; break; }
+		case CUDA_ERROR_INVALID_IMAGE: { str = "CUDA_ERROR_INVALID_IMAGE"; break; }
+		case CUDA_ERROR_INVALID_CONTEXT: { str = "CUDA_ERROR_INVALID_CONTEXT"; break; }
+		case CUDA_ERROR_CONTEXT_ALREADY_CURRENT: { str = "CUDA_ERROR_CONTEXT_ALREADY_CURRENT"; break; }
+		case CUDA_ERROR_MAP_FAILED: { str = "CUDA_ERROR_MAP_FAILED"; break; }
+		case CUDA_ERROR_UNMAP_FAILED: { str = "CUDA_ERROR_UNMAP_FAILED"; break; }
+		case CUDA_ERROR_ARRAY_IS_MAPPED: { str = "CUDA_ERROR_ARRAY_IS_MAPPED"; break; }
+		case CUDA_ERROR_ALREADY_MAPPED: { str = "CUDA_ERROR_ALREADY_MAPPED"; break; }
+		case CUDA_ERROR_NO_BINARY_FOR_GPU: { str = "CUDA_ERROR_NO_BINARY_FOR_GPU"; break; }
+		case CUDA_ERROR_ALREADY_ACQUIRED: { str = "CUDA_ERROR_ALREADY_ACQUIRED"; break; }
+		case CUDA_ERROR_NOT_MAPPED: { str = "CUDA_ERROR_NOT_MAPPED"; break; }
+		case CUDA_ERROR_NOT_MAPPED_AS_ARRAY: { str = "CUDA_ERROR_NOT_MAPPED_AS_ARRAY"; break; }
+		case CUDA_ERROR_NOT_MAPPED_AS_POINTER: { str = "CUDA_ERROR_NOT_MAPPED_AS_POINTER"; break; }
+		case CUDA_ERROR_ECC_UNCORRECTABLE: { str = "CUDA_ERROR_ECC_UNCORRECTABLE"; break; }
+		case CUDA_ERROR_UNSUPPORTED_LIMIT: { str = "CUDA_ERROR_UNSUPPORTED_LIMIT"; break; }
+		case CUDA_ERROR_CONTEXT_ALREADY_IN_USE: { str = "CUDA_ERROR_CONTEXT_ALREADY_IN_USE"; break; }
+		case CUDA_ERROR_PEER_ACCESS_UNSUPPORTED: { str = "CUDA_ERROR_PEER_ACCESS_UNSUPPORTED"; break; }
+		case CUDA_ERROR_INVALID_PTX: { str = "CUDA_ERROR_INVALID_PTX"; break; }
+//		case CUDA_ERROR_INVALID_GRAPHICS_CONTEXT: { str = "CUDA_ERROR_INVALID_GRAPHICS_CONTEXT"; break; }
+		case CUDA_ERROR_INVALID_SOURCE: { str = "CUDA_ERROR_INVALID_SOURCE"; break; }
+		case CUDA_ERROR_FILE_NOT_FOUND: { str = "CUDA_ERROR_FILE_NOT_FOUND"; break; }
+		case CUDA_ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND: { str = "CUDA_ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND"; break; }
+		case CUDA_ERROR_SHARED_OBJECT_INIT_FAILED: { str = "CUDA_ERROR_SHARED_OBJECT_INIT_FAILED"; break; }
+		case CUDA_ERROR_OPERATING_SYSTEM: { str = "CUDA_ERROR_OPERATING_SYSTEM"; break; }
+		case CUDA_ERROR_INVALID_HANDLE: { str = "CUDA_ERROR_INVALID_HANDLE"; break; }
+		case CUDA_ERROR_NOT_FOUND: { str = "CUDA_ERROR_NOT_FOUND"; break; }
+		case CUDA_ERROR_NOT_READY: { str = "CUDA_ERROR_NOT_READY"; break; }
+		case CUDA_ERROR_ILLEGAL_ADDRESS: { str = "CUDA_ERROR_ILLEGAL_ADDRESS"; break; }
+		case CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES: { str = "CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES"; break; }
+		case CUDA_ERROR_LAUNCH_TIMEOUT: { str = "CUDA_ERROR_LAUNCH_TIMEOUT"; break; }
+		case CUDA_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING: { str = "CUDA_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING"; break; }
+		case CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED: { str = "CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED"; break; }
+		case CUDA_ERROR_PEER_ACCESS_NOT_ENABLED: { str = "CUDA_ERROR_PEER_ACCESS_NOT_ENABLED"; break; }
+		case CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE: { str = "CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE"; break; }
+		case CUDA_ERROR_CONTEXT_IS_DESTROYED: { str = "CUDA_ERROR_CONTEXT_IS_DESTROYED"; break; }
+		case CUDA_ERROR_ASSERT: { str = "CUDA_ERROR_ASSERT"; break; }
+		case CUDA_ERROR_TOO_MANY_PEERS: { str = "CUDA_ERROR_TOO_MANY_PEERS"; break; }
+		case CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED: { str = "CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED"; break; }
+		case CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED: { str = "CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED"; break; }
+		case CUDA_ERROR_HARDWARE_STACK_ERROR: { str = "CUDA_ERROR_HARDWARE_STACK_ERROR"; break; }
+		case CUDA_ERROR_ILLEGAL_INSTRUCTION: { str = "CUDA_ERROR_ILLEGAL_INSTRUCTION"; break; }
+		case CUDA_ERROR_MISALIGNED_ADDRESS: { str = "CUDA_ERROR_MISALIGNED_ADDRESS"; break; }
+		case CUDA_ERROR_INVALID_ADDRESS_SPACE: { str = "CUDA_ERROR_INVALID_ADDRESS_SPACE"; break; }
+		case CUDA_ERROR_INVALID_PC: { str = "CUDA_ERROR_INVALID_PC"; break; }
+		case CUDA_ERROR_LAUNCH_FAILED: { str = "CUDA_ERROR_LAUNCH_FAILED"; break; }
+		case CUDA_ERROR_NOT_PERMITTED: { str = "CUDA_ERROR_NOT_PERMITTED"; break; }
+		case CUDA_ERROR_NOT_SUPPORTED: { str = "CUDA_ERROR_NOT_SUPPORTED"; break; }
+		default: { str = "CUDA_ERROR_UNKNOWN"; break; }
+	}
+#endif
+	return str.c_str();
+}
 
 ///////////////////////////
 // Device Initialization //
@@ -111,7 +180,7 @@ HI_error_t CudaDriver::init() {
     //err = cuCtxCreate(&cuContext, 0, cuDevice);
     err = cuCtxCreate(&cuContext, CU_CTX_SCHED_BLOCKING_SYNC, cuDevice);
     if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::init()] failed to create CUDA context with error %d (NVIDIA CUDA GPU)\n", err);
+        fprintf(stderr, "[ERROR in CudaDriver::init()] failed to create CUDA context with error %d (%s)\n", err, cuda_error_code(err));
 		exit(1);
     }
 
@@ -159,7 +228,7 @@ HI_error_t CudaDriver::init() {
 
     err = cuModuleLoadDataEx(&cuModule, ptx_source.c_str(), jitNumOptions, jitOptions, (void **)jitOptVals);
     if (err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::init()] Module Load FAIL\n");
+        fprintf(stderr, "[ERROR in CudaDriver::init()] Module Load FAIL with error = %d (%s)\n", err, cuda_error_code(err));
 		exit(1);
     }
 
@@ -223,7 +292,7 @@ HI_error_t CudaDriver::createKernelArgMap() {
         kernelArgs.insert(std::pair<std::string, kernelParams_t*>(std::string(kernelName), kernelParams));
         err = cuModuleGetFunction(&cuFunc, cuModule, kernelName);
         if (err != CUDA_SUCCESS) {
-            fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Function Load FAIL on %s\n", kernelName);
+            fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Function Load FAIL on %s with error = %d (%s)\n", kernelName, err, cuda_error_code(err));
 			exit(1);
         }
         kernelMap[*it] = cuFunc;
@@ -260,7 +329,7 @@ HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames) {
         	(tconf->kernelArgsMap[this]).insert(std::pair<std::string, kernelParams_t*>(std::string(kernelName), kernelParams));
         	err = cuModuleGetFunction(&cuFunc, cuModule, kernelName);
         	if (err != CUDA_SUCCESS) {
-            	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Function Load FAIL on %s\n", kernelName);
+            	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Function Load FAIL on %s with error = %d (%s)\n", kernelName, err, cuda_error_code(err));
 				exit(1);
         	}
         	(tconf->kernelsMap[this])[*it] = cuFunc;
@@ -305,7 +374,7 @@ HI_error_t CudaDriver::destroy() {
 #endif
     CUresult err = cuCtxDestroy(cuContext);
     if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::destroy()] failed to destroy CUDA context with error %d (NVIDIA CUDA GPU)\n", err);
+        fprintf(stderr, "[ERROR in CudaDriver::destroy()] failed to destroy CUDA context with error %d (%s)\n", err, cuda_error_code(err));
         return HI_error;
     }
 #ifdef _OPENARC_PROFILE_
@@ -409,7 +478,7 @@ void CudaDriver::HI_unpin_host_memory(const void* hostPtr)
                 	//CudaDriver::pinnedHostMemCounter[host] = 0;
                 	CudaDriver::pinnedHostMemCounter.erase(host);
                 } else {
-                	fprintf(stderr, "[ERROR in CudaDriver::HI_unpin_host_memory()] Cannot unpin host memory with error %d\n", cuResult);
+                	fprintf(stderr, "[ERROR in CudaDriver::HI_unpin_host_memory()] Cannot unpin host memory with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 					exit(1);
                 }
             }
@@ -502,7 +571,7 @@ void CudaDriver::unpin_host_memory_all(int asyncID)
                 			CudaDriver::pinnedHostMemCounter.erase(host);
 							CudaDriver::hostMemToUnpin.push_back(it2->first);
                 		} else {
-                			fprintf(stderr, "[ERROR in CudaDriver::unpin_host_memory_all(%d)] Cannot unpin host memory with error %d\n", asyncID, cuResult);
+                			fprintf(stderr, "[ERROR in CudaDriver::unpin_host_memory_all(%d)] Cannot unpin host memory with error %d (%s)\n", asyncID, cuResult, cuda_error_code(cuResult));
 							exit(1);
                 		}
 						//Free corresponding device memory.
@@ -553,7 +622,7 @@ void CudaDriver::unpin_host_memory_all()
                 			CudaDriver::pinnedHostMemCounter.erase(host);
 							CudaDriver::hostMemToUnpin.push_back(it2->first);
                 		} else {
-                			fprintf(stderr, "[ERROR in CudaDriver::unpin_host_memory_all()] Cannot unpin host memory with error %d\n", cuResult);
+                			fprintf(stderr, "[ERROR in CudaDriver::unpin_host_memory_all()] Cannot unpin host memory with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 							exit(1);
                 		}
 						//Free corresponding device memory.
@@ -696,7 +765,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
             		tconf->IDFreeCnt++;
 #endif
                     if(cuResult != CUDA_SUCCESS) {
-                        fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] failed to free on CUDA with error %d (NVIDIA CUDA GPU)\n", cuResult);
+                        fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] failed to free on CUDA with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
                     }
                 }
                 memPool->clear();
@@ -719,9 +788,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
             HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID, tconf->threadID);
             result = HI_success;
         } else {
-			//[DEBUG] CUresult and cudaError_t do not match.
-            //fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] CUDA memory alloc failed with error %d %s\n", cuResult, cudaGetErrorString((cudaError_t)cuResult));
-            fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] CUDA memory alloc failed with error %d\n", cuResult);
+            fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] CUDA memory alloc failed with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 			exit(1);
         }
 #else
@@ -788,7 +855,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
             HI_set_device_address(hostPtr, *devPtr, (size_t) count, asyncID, tconf->threadID);
             result = HI_success;
         } else {
-            fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] CUDA memory alloc failed with error %d\n", cuResult);
+            fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] CUDA memory alloc failed with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 			exit(1);
         }
 #endif
@@ -861,9 +928,7 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
             	HI_set_device_address(*devPtr, *devPtr, count, asyncID, tconf->threadID);
             	result = HI_success;
         	} else {
-				//[DEBUG] CUresult and cudaError_t do not match.
-            	//fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D_unified()] CUDA memory alloc failed with error %d %s\n", cuResult, cudaGetErrorString((cudaError_t)cuResult));
-            	fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D_unified()] CUDA memory alloc failed with error %d\n", cuResult);
+            	fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D_unified()] CUDA memory alloc failed with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 				exit(1);
         	}
 		}
@@ -935,9 +1000,7 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
             HI_set_device_address(hostPtr, *devPtr, (size_t) widthInBytes*height, asyncID, tconf->threadID);
             result = HI_success;
         } else {
-			//[DEBUG] CUresult and cudaError_t do not match.
-            //fprintf(stderr, "[ERROR in CudaDriver::HI_malloc2D()] CUDA memory alloc failed with error %d %s\n", cuResult, cudaGetErrorString((cudaError_t)cuResult));
-            fprintf(stderr, "[ERROR in CudaDriver::HI_malloc2D()] CUDA memory alloc failed with error %d\n", cuResult);
+            fprintf(stderr, "[ERROR in CudaDriver::HI_malloc2D()] CUDA memory alloc failed with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 			exit(1);
         }
     }
@@ -1036,7 +1099,7 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
 				}
 
         	} else {
-            	fprintf(stderr, "[ERROR in CudaDriver::HI_free()] CUDA memory free failed with error %d\n", cuResult);
+            	fprintf(stderr, "[ERROR in CudaDriver::HI_free()] CUDA memory free failed with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 				exit(1);
             	result = HI_error;
         	}
@@ -1084,9 +1147,7 @@ HI_error_t CudaDriver::HI_free_unified( const void *hostPtr, int asyncID) {
             	tconf->IDFreeCnt++;
 #endif
         	} else {
-				//[DEBUG] CUresult and cudaError_t do not match.
-            	//fprintf(stderr, "[ERROR in CudaDriver::HI_free_unified()] CUDA memory free failed with error %d %s\n", cuResult, cudaGetErrorString((cudaError_t)cuResult));
-            	fprintf(stderr, "[ERROR in CudaDriver::HI_free_unified()] CUDA memory free failed with error %d\n", cuResult);
+            	fprintf(stderr, "[ERROR in CudaDriver::HI_free_unified()] CUDA memory free failed with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 				exit(1);
             	result = HI_error;
         	}
@@ -1126,7 +1187,7 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
 			tempMallocSet.erase(*tempPtr);	
     		CUresult cuResult = cuMemFree((CUdeviceptr)*tempPtr);
     		if(cuResult != CUDA_SUCCESS) {
-        		fprintf(stderr, "[ERROR in CudaDriver::HI_tempMalloc1D()] failed to free on CUDA with error %d (NVIDIA CUDA GPU)\n", cuResult);
+        		fprintf(stderr, "[ERROR in CudaDriver::HI_tempMalloc1D()] failed to free on CUDA with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 				exit(1);
     		}
 #ifdef _OPENARC_PROFILE_
@@ -1135,7 +1196,7 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
 		}
     	CUresult cuResult = cuMemAlloc((CUdeviceptr*)tempPtr, (size_t) count);
     	if(cuResult != CUDA_SUCCESS) {
-        	fprintf(stderr, "[ERROR in CudaDriver::HI_tempMalloc1D()] failed to malloc on CUDA with error %d (NVIDIA CUDA GPU)\n", cuResult);
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_tempMalloc1D()] failed to malloc on CUDA with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 			exit(1);
     	}
 		tempMallocSet.insert(*tempPtr);	
@@ -1187,7 +1248,7 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
             //cudaFree(*tempPtr);
     		CUresult cuResult = cuMemFree((CUdeviceptr)*tempPtr);
     		if(cuResult != CUDA_SUCCESS) {
-        		fprintf(stderr, "[ERROR in CudaDriver::HI_tempFree()] failed to free on CUDA with error %d (NVIDIA CUDA GPU)\n", cuResult);
+        		fprintf(stderr, "[ERROR in CudaDriver::HI_tempFree()] failed to free on CUDA with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 				exit(1);
     		}
 #ifdef _OPENARC_PROFILE_
@@ -1285,15 +1346,11 @@ HI_error_t  CudaDriver::HI_memcpy(void *dst, const void *src, size_t count, HI_M
         return HI_success;
     } else {
 #ifdef _OPENMP
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy()] Memcpy failed with error %d in tid %d\n", cuResult, omp_get_thread_num());
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy()] Memcpy failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), omp_get_thread_num());
 		exit(1);
-		//[DEBUG] CUresult and cudaError_t do not match.
-        //fprintf(stderr, "Error messages: %s\n", cudaGetErrorString((cudaError_t)cuResult));
 #else
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy()] Memcpy failed with error %d in tid %d\n", cuResult, 0);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy()] Memcpy failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), 0);
 		exit(1);
-		//[DEBUG] CUresult and cudaError_t do not match.
-        //fprintf(stderr, "Error messages: %s\n", cudaGetErrorString((cudaError_t)cuResult));
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1367,15 +1424,11 @@ HI_error_t  CudaDriver::HI_memcpy_unified(void *dst, const void *src, size_t cou
         return HI_success;
     } else {
 #ifdef _OPENMP
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_unified()] Memcpy failed with error %d in tid %d\n", cuResult, omp_get_thread_num());
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_unified()] Memcpy failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), omp_get_thread_num());
 		exit(1);
-		//[DEBUG] CUresult and cudaError_t do not match.
-        //fprintf(stderr, "Error messages: %s\n", cudaGetErrorString((cudaError_t)cuResult));
 #else
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_unified()] Memcpy failed with error %d in tid %d\n", cuResult, 0);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_unified()] Memcpy failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), 0);
 		exit(1);
-		//[DEBUG] CUresult and cudaError_t do not match.
-        //fprintf(stderr, "Error messages: %s\n", cudaGetErrorString((cudaError_t)cuResult));
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1387,6 +1440,7 @@ HI_error_t  CudaDriver::HI_memcpy_unified(void *dst, const void *src, size_t cou
 }
 
 HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+	void *devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_const(%lu)\n", count);
@@ -1397,6 +1451,7 @@ HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_
     HI_error_t result = HI_success;
     CUdeviceptr dptr;
     size_t size;
+	int asyncID = DEFAULT_QUEUE+tconf->asyncID_offset;
     cuResult = cuModuleGetGlobal( &dptr, &size, cuModule, constName.c_str());
 
 //#ifdef _OPENARC_PROFILE_
@@ -1405,16 +1460,21 @@ HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_
 
     if( cuResult != CUDA_SUCCESS ) {
 #ifdef _OPENMP
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const()] Acquiring constant memory handle failed with error %d in tid %d\n", cuResult, omp_get_thread_num());
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const()] Acquiring constant memory handle failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), omp_get_thread_num());
 		exit(1);
 #else
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const()] Acquiring constant memory handle failed with error %d in tid %d\n", cuResult, 0);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const()] Acquiring constant memory handle failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), 0);
 		exit(1);
 #endif
         result = HI_error;
     }
 
     result = HI_memcpy((void*)dptr, hostPtr, count, kind, 0);
+    if(HI_get_device_address(hostPtr, &devPtr, NULL, NULL, asyncID, tconf->threadID) != HI_success ) {
+		//Add to present table.
+		devPtr = 0; //set to a fake address.
+		HI_set_device_address(hostPtr, devPtr, (size_t) count, asyncID, tconf->threadID);
+	}
 
 //#ifdef _OPENARC_PROFILE_
 //    tconf->totalMemTrTime += HI_get_localtime() - ltime;
@@ -1431,6 +1491,7 @@ HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_
 //[DEBUG] CUDA driver does not offer asynchronous version of cuModuleGetGlobal(), 
 //and thus HI_memcpy_const_async() is the same as HI_memcpy_const().
 HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
+	void *devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_const_async(%d, %lu)\n", async, count);
@@ -1449,16 +1510,21 @@ HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constNam
 
     if( cuResult != CUDA_SUCCESS ) {
 #ifdef _OPENMP
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const_async()] Acquiring constant memory handle failed with error %d in tid %d\n", cuResult, omp_get_thread_num());
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const_async()] Acquiring constant memory handle failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), omp_get_thread_num());
 		exit(1);
 #else
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const_async()] Acquiring constant memory handle failed with error %d in tid %d\n", cuResult, 0);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const_async()] Acquiring constant memory handle failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), 0);
 		exit(1);
 #endif
         result = HI_error;
     }
 
     result = HI_memcpy((void*)dptr, hostPtr, count, kind, 0);
+    if(HI_get_device_address(hostPtr, &devPtr, NULL, NULL, async, tconf->threadID) != HI_success ) {
+		//Add to present table.
+		devPtr = 0; //set to a fake address.
+		HI_set_device_address(hostPtr, devPtr, (size_t) count, async, tconf->threadID);
+	}
 
 //#ifdef _OPENARC_PROFILE_
 //    tconf->totalMemTrTime += HI_get_localtime() - ltime;
@@ -1467,6 +1533,55 @@ HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constNam
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_memcpy_const_async(%d, %lu)\n", async, count);
+	}
+#endif
+    return result;
+}
+
+HI_error_t CudaDriver::HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+	void *devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_const(%lu)\n", count);
+	}
+#endif
+    HostConf_t * tconf = getHostConf();
+    CUresult cuResult;
+    HI_error_t result = HI_success;
+    CUdeviceptr dptr;
+    size_t size;
+	int asyncID = DEFAULT_QUEUE+tconf->asyncID_offset;
+    cuResult = cuModuleGetGlobal( &dptr, &size, cuModule, constName.c_str());
+
+//#ifdef _OPENARC_PROFILE_
+//	double ltime = HI_get_localtime();
+//#endif
+
+    if( cuResult != CUDA_SUCCESS ) {
+#ifdef _OPENMP
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const()] Acquiring constant memory handle failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), omp_get_thread_num());
+		exit(1);
+#else
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_const()] Acquiring constant memory handle failed with error %d (%s) in tid %d\n", cuResult, cuda_error_code(cuResult), 0);
+		exit(1);
+#endif
+        result = HI_error;
+    }
+
+    if(HI_get_device_address(hostPtr, &devPtr, NULL, NULL, asyncID, tconf->threadID) != HI_success ) {
+    	result = HI_memcpy((void*)dptr, hostPtr, count, kind, 0);
+		//Add to present table.
+		devPtr = 0; //set to a fake address.
+		HI_set_device_address(hostPtr, devPtr, (size_t) count, asyncID, tconf->threadID);
+	}
+
+//#ifdef _OPENARC_PROFILE_
+//    tconf->totalMemTrTime += HI_get_localtime() - ltime;
+//#endif
+
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_memcpy_const(%lu)\n", count);
 	}
 #endif
     return result;
@@ -1557,10 +1672,10 @@ HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
         return HI_success;
     } else {
 #ifdef _OPENMP
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_async()] Memcpy failed with error %d in tid %d with asyncId %d\n", cuResult, omp_get_thread_num(), async);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_async()] Memcpy failed with error %d (%s) in tid %d with asyncId %d\n", cuResult, cuda_error_code(cuResult), omp_get_thread_num(), async);
 		exit(1);
 #else
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_async()] Memcpy failed with error %d in tid %d with asyncId %d\n", cuResult, 0, async);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_async()] Memcpy failed with error %d (%s) in tid %d with asyncId %d\n", cuResult, cuda_error_code(cuResult), 0, async);
 		exit(1);
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -1650,10 +1765,10 @@ HI_error_t CudaDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count
         return HI_success;
     } else {
 #ifdef _OPENMP
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_asyncS()] Memcpy failed with error %d in tid %d with asyncId %d\n", cuResult, omp_get_thread_num(), async);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_asyncS()] Memcpy failed with error %d (%s) in tid %d with asyncId %d\n", cuResult, cuda_error_code(cuResult), omp_get_thread_num(), async);
 		exit(1);
 #else
-        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_asyncS()] Memcpy failed with error %d in tid %d with asyncId %d\n", cuResult, 0, async);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy_asyncS()] Memcpy failed with error %d (%s) in tid %d with asyncId %d\n", cuResult, cuda_error_code(cuResult), 0, async);
 		exit(1);
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -1747,7 +1862,7 @@ HI_error_t CudaDriver::HI_memcpy2D(void *dst, size_t dpitch, const void *src, si
 #endif
         return HI_success;
     } else {
-				fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy2D()] Memcpy failed with error %d \n", cuResult);
+				fprintf(stderr, "[ERROR in CudaDriver::HI_memcpy2D()] Memcpy failed with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 				exit(1);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1990,9 +2105,7 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], 
         err = cuLaunchKernel(tconf->kernelsMap.at(this).at(kernel_name), gridSize[0], gridSize[1], gridSize[2], blockSize[0], blockSize[1], blockSize[2], 0, 0, (tconf->kernelArgsMap.at(this).at(kernel_name))->kernelParams, NULL);
     }
     if (err != CUDA_SUCCESS) {
-		//[DEBUG] CUresult and cudaError_t do not match.
-        //fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL with error %d %s\n",kernel_name.c_str(), err, cudaGetErrorString((cudaError_t)err));
-        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL with error %d\n",kernel_name.c_str(), err);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL with error %d (%s)\n",kernel_name.c_str(), err, cuda_error_code(err));
 		exit(1);
         return HI_error;
     }
@@ -2042,9 +2155,7 @@ HI_error_t CudaDriver::HI_synchronize( int forcedSync )
     	CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
     	err = cuStreamSynchronize(0);
     	if (err != CUDA_SUCCESS) {
-			//[DEBUG] CUresult and cudaError_t do not match.
-        	//fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] Context Synchronization FAIL with error %d %s\n", err, cudaGetErrorString((cudaError_t)err));
-        	fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] Context Synchronization FAIL with error %d\n", err);
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
 			exit(1);
         	return HI_error;
     	}
@@ -2076,27 +2187,27 @@ HI_error_t CudaDriver::HI_bind_tex(std::string texName,  HI_datatype_t type, con
     HI_error_t result = HI_success;
     err = cuModuleGetTexRef(&cuTexref, cuModule, texName.c_str());
     if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to find CUDA texture '%s' with error %d (NVIDIA CUDA GPU)\n", texName.c_str(), err);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to find CUDA texture '%s' with error %d (%s)\n", texName.c_str(), err, cuda_error_code(err));
 		exit(1);
     }
     err = cuTexRefSetAddress(0, cuTexref, (CUdeviceptr)devPtr, size);
     if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set address for CUDA texture '%s' with error %d (NVIDIA CUDA GPU)\n", texName.c_str(), err);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set address for CUDA texture '%s' with error %d (%s)\n", texName.c_str(), err, cuda_error_code(err));
 		exit(1);
     }
     err = cuTexRefSetAddressMode(cuTexref, 0, CU_TR_ADDRESS_MODE_WRAP);
     if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set address mode for CUDA texture '%s' with error %d (NVIDIA CUDA GPU)\n", texName.c_str(), err);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set address mode for CUDA texture '%s' with error %d (%s)\n", texName.c_str(), err, cuda_error_code(err));
 		exit(1);
     }
     err = cuTexRefSetFilterMode(cuTexref, CU_TR_FILTER_MODE_LINEAR);
     if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set filter mode for CUDA texture '%s' with error %d (NVIDIA CUDA GPU)\n", texName.c_str(), err);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set filter mode for CUDA texture '%s' with error %d (%s)\n", texName.c_str(), err, cuda_error_code(err));
 		exit(1);
     }
     err = cuTexRefSetFlags(cuTexref, CU_TRSF_NORMALIZED_COORDINATES);
     if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set flags for CUDA texture '%s' with error %d (NVIDIA CUDA GPU)\n", texName.c_str(), err);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set flags for CUDA texture '%s' with error %d (%s)\n", texName.c_str(), err, cuda_error_code(err));
 		exit(1);
     }
 
@@ -2111,7 +2222,7 @@ HI_error_t CudaDriver::HI_bind_tex(std::string texName,  HI_datatype_t type, con
     }
 
     if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set format for CUDA texture '%s' with error %d (NVIDIA CUDA GPU)\n", texName.c_str(), err);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_bind_tex()] failed to set format for CUDA texture '%s' with error %d (%s)\n", texName.c_str(), err, cuda_error_code(err));
 		exit(1);
         result = HI_error;
     }
@@ -2184,7 +2295,7 @@ void CudaDriver::HI_set_async(int asyncId) {
     	CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
     	err = cuStreamSynchronize(0);
     	if (err != CUDA_SUCCESS) {
-        	fprintf(stderr, "[ERROR in CudaDriver::HI_set_async()] Context Synchronization FAIL with error %d\n", err);
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_set_async()] Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
 			exit(1);
     	}
 	}
@@ -2208,7 +2319,7 @@ void CudaDriver::HI_wait(int arg) {
     CUresult cuResult = cuEventSynchronize(event);
 
     if(cuResult != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_wait()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", arg, cuResult);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_wait()] failed wait on CUDA queue %d with error %d (%s)\n", arg, cuResult, cuda_error_code(cuResult));
 		exit(1);
     }
 
@@ -2233,7 +2344,7 @@ void CudaDriver::HI_wait_ifpresent(int arg) {
     	CUresult cuResult = cuEventSynchronize(event);
 
     	if(cuResult != CUDA_SUCCESS) {
-        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_ifpresent()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", arg, cuResult);
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_ifpresent()] failed wait on CUDA queue %d with error %d (%s)\n", arg, cuResult, cuda_error_code(cuResult));
 			exit(1);
     	}
 
@@ -2260,7 +2371,7 @@ void CudaDriver::HI_wait_async(int arg, int async) {
     CUresult cuResult = cuEventSynchronize(event);
 
     if(cuResult != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", arg, cuResult);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async()] failed wait on CUDA queue %d with error %d (%s)\n", arg, cuResult, cuda_error_code(cuResult));
 		exit(1);
     }
 
@@ -2269,7 +2380,7 @@ void CudaDriver::HI_wait_async(int arg, int async) {
     cuResult = cuEventSynchronize(event2);
 
     if(cuResult != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", async, cuResult);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async()] failed wait on CUDA queue %d with error %d (%s)\n", async, cuResult, cuda_error_code(cuResult));
 		exit(1);
     }
 
@@ -2294,7 +2405,7 @@ void CudaDriver::HI_wait_async_ifpresent(int arg, int async) {
     	CUresult cuResult = cuEventSynchronize(event);
 
     	if(cuResult != CUDA_SUCCESS) {
-        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async_ifpresent()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", arg, cuResult);
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async_ifpresent()] failed wait on CUDA queue %d with error %d (%s)\n", arg, cuResult, cuda_error_code(cuResult));
 			exit(1);
     	}
 
@@ -2303,7 +2414,7 @@ void CudaDriver::HI_wait_async_ifpresent(int arg, int async) {
     	cuResult = cuEventSynchronize(event2);
 
     	if(cuResult != CUDA_SUCCESS) {
-        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async_ifpresent()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", async, cuResult);
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_wait_async_ifpresent()] failed wait on CUDA queue %d with error %d (%s)\n", async, cuResult, cuda_error_code(cuResult));
 			exit(1);
     	}
 	}
@@ -2327,7 +2438,7 @@ void CudaDriver::HI_waitS1(int asyncId) {
     CUresult cuResult = cuEventSynchronize(event);
 
     if(cuResult != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_wait()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", asyncId, cuResult);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_wait()] failed wait on CUDA queue %d with error %d (%s)\n", asyncId, cuResult, cuda_error_code(cuResult));
 		exit(1);
     }
 
@@ -2366,7 +2477,7 @@ void CudaDriver::HI_wait_all() {
     for(eventmap_cuda_t::iterator it = eventMap->begin(); it != eventMap->end(); ++it) {
         cuResult = cuEventSynchronize(it->second);
         if(cuResult != CUDA_SUCCESS) {
-            fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, cuResult);
+            fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all()] failed wait on CUDA queue %d with error %d (%s)\n", it->first, cuResult, cuda_error_code(cuResult));
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);
@@ -2393,7 +2504,7 @@ void CudaDriver::HI_wait_all_async(int async) {
     for(eventmap_cuda_t::iterator it = eventMap->begin(); it != eventMap->end(); ++it) {
         cuResult = cuEventSynchronize(it->second);
         if(cuResult != CUDA_SUCCESS) {
-            fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, cuResult);
+            fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all()] failed wait on CUDA queue %d with error %d (%s)\n", it->first, cuResult, cuda_error_code(cuResult));
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);
@@ -2403,7 +2514,7 @@ void CudaDriver::HI_wait_all_async(int async) {
     cuResult = cuEventSynchronize(event2);
 
     if(cuResult != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all_async()] failed wait on CUDA queue %d with error %d (NVIDIA CUDA GPU)\n", async, cuResult);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all_async()] failed wait on CUDA queue %d with error %d (%s)\n", async, cuResult, cuda_error_code(cuResult));
 		exit(1);
     }
 #ifdef _OPENARC_PROFILE_
@@ -2522,7 +2633,7 @@ void CudaDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {
 #endif
     CUresult cuResult = cuMemAlloc((CUdeviceptr*)devPtr, (size_t) size);
     if(cuResult != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_malloc()] failed to malloc on CUDA with error %d (NVIDIA CUDA GPU)\n", cuResult);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_malloc()] failed to malloc on CUDA with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 		exit(1);
     }
 #ifdef _OPENARC_PROFILE_
@@ -2561,7 +2672,7 @@ void CudaDriver::HI_free(void *devPtr) {
 	}
 
     if(cuResult != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_free()] failed to free on CUDA with error %d (NVIDIA CUDA GPU)\n", cuResult);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_free()] failed to free on CUDA with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 		exit(1);
     }
 #ifdef _OPENARC_PROFILE_

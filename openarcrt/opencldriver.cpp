@@ -3,10 +3,82 @@
 
 #define MAX_SOURCE_SIZE (0x100000)
 #define AOCL_ALIGNMENT 64
+#define SHOW_ERROR_CODE
+
 //[DEBUG] commented out since it is no more static.
 //std::set<std::string> OpenCLDriver::kernelNameSet;
 
 cl_context OpenCLDriver_t::clContext;
+
+const char * opencl_error_code(cl_int err) {
+	std::string str = "";
+#ifdef SHOW_ERROR_CODE
+	/* Error Codes */
+	switch ( err ) {
+		case CL_SUCCESS: { str = "CL_SUCCESS"; break; }      
+		case CL_DEVICE_NOT_FOUND: { str = "CL_DEVICE_NOT_FOUND"; break; }
+		case CL_DEVICE_NOT_AVAILABLE: { str = "CL_DEVICE_NOT_AVAILABLE"; break; }
+		case CL_COMPILER_NOT_AVAILABLE: { str = " CL_COMPILER_NOT_AVAILABLE"; break; }
+		case CL_MEM_OBJECT_ALLOCATION_FAILURE: { str = "CL_MEM_OBJECT_ALLOCATION_FAILURE"; break; }
+		case CL_OUT_OF_RESOURCES: { str = "CL_OUT_OF_RESOURCES"; break; }
+		case CL_OUT_OF_HOST_MEMORY: { str = "CL_OUT_OF_HOST_MEMORY"; break; }
+		case CL_PROFILING_INFO_NOT_AVAILABLE: { str = "CL_PROFILING_INFO_NOT_AVAILABLE"; break; }
+		case CL_MEM_COPY_OVERLAP: { str = "CL_MEM_COPY_OVERLAP"; break; }
+		case CL_IMAGE_FORMAT_MISMATCH: { str = "CL_IMAGE_FORMAT_MISMATCH"; break; }
+		case CL_IMAGE_FORMAT_NOT_SUPPORTED: { str = "CL_IMAGE_FORMAT_NOT_SUPPORTED"; break; }
+		case CL_BUILD_PROGRAM_FAILURE: { str = "CL_BUILD_PROGRAM_FAILURE"; break; }
+		case CL_MAP_FAILURE: { str = "CL_MAP_FAILURE"; break; }
+		case CL_MISALIGNED_SUB_BUFFER_OFFSET: { str = "CL_MISALIGNED_SUB_BUFFER_OFFSET"; break; }
+		case CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST: { str = "CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST"; break; }
+		case CL_COMPILE_PROGRAM_FAILURE: { str = "CL_COMPILE_PROGRAM_FAILURE"; break; }
+		case CL_LINKER_NOT_AVAILABLE: { str = "CL_LINKER_NOT_AVAILABLE"; break; }
+		case CL_LINK_PROGRAM_FAILURE: { str = "CL_LINK_PROGRAM_FAILURE"; break; }
+		case CL_DEVICE_PARTITION_FAILED: { str = "CL_DEVICE_PARTITION_FAILED"; break; }
+		case CL_KERNEL_ARG_INFO_NOT_AVAILABLE: { str = "CL_KERNEL_ARG_INFO_NOT_AVAILABLE"; break; }
+		case CL_INVALID_VALUE: { str = "CL_INVALID_VALUE"; break; }
+		case CL_INVALID_DEVICE_TYPE: { str = "CL_INVALID_DEVICE_TYPE"; break; }
+		case CL_INVALID_PLATFORM: { str = "CL_INVALID_PLATFORM"; break; }
+		case CL_INVALID_DEVICE: { str = "CL_INVALID_DEVICE"; break; }
+		case CL_INVALID_CONTEXT: { str = " CL_INVALID_CONTEXT"; break; }
+		case CL_INVALID_QUEUE_PROPERTIES: { str = "CL_INVALID_QUEUE_PROPERTIES"; break; }
+		case CL_INVALID_COMMAND_QUEUE: { str = "CL_INVALID_COMMAND_QUEUE"; break; }
+		case CL_INVALID_HOST_PTR: { str = "CL_INVALID_HOST_PTR"; break; }
+		case CL_INVALID_MEM_OBJECT: { str = "CL_INVALID_MEM_OBJECT"; break; }
+		case CL_INVALID_IMAGE_FORMAT_DESCRIPTOR: { str = "CL_INVALID_IMAGE_FORMAT_DESCRIPTOR"; break; }
+		case CL_INVALID_IMAGE_SIZE: { str = "CL_INVALID_IMAGE_SIZE"; break; }
+		case CL_INVALID_SAMPLER: { str = "CL_INVALID_SAMPLER"; break; }
+		case CL_INVALID_BINARY: { str = "CL_INVALID_BINARY"; break; }
+		case CL_INVALID_BUILD_OPTIONS: { str = "CL_INVALID_BUILD_OPTIONS"; break; }
+		case CL_INVALID_PROGRAM: { str = "CL_INVALID_PROGRAM"; break; }
+		case CL_INVALID_PROGRAM_EXECUTABLE: { str = "CL_INVALID_PROGRAM_EXECUTABLE"; break; }
+		case CL_INVALID_KERNEL_NAME: { str = "CL_INVALID_KERNEL_NAME"; break; }
+		case CL_INVALID_KERNEL_DEFINITION: { str = "CL_INVALID_KERNEL_DEFINITION"; break; }
+		case CL_INVALID_KERNEL: { str = "CL_INVALID_KERNEL"; break; }
+		case CL_INVALID_ARG_INDEX: { str = "CL_INVALID_ARG_INDEX"; break; }
+		case CL_INVALID_ARG_VALUE: { str = "CL_INVALID_ARG_VALUE"; break; }
+		case CL_INVALID_ARG_SIZE: { str = "CL_INVALID_ARG_SIZE"; break; }
+		case CL_INVALID_KERNEL_ARGS: { str = "CL_INVALID_KERNEL_ARGS"; break; }
+		case CL_INVALID_WORK_DIMENSION: { str = "CL_INVALID_WORK_DIMENSION"; break; }
+		case CL_INVALID_WORK_GROUP_SIZE: { str = "CL_INVALID_WORK_GROUP_SIZE"; break; }
+		case CL_INVALID_WORK_ITEM_SIZE: { str = "CL_INVALID_WORK_ITEM_SIZE"; break; }
+		case CL_INVALID_GLOBAL_OFFSET: { str = "CL_INVALID_GLOBAL_OFFSET"; break; }
+		case CL_INVALID_EVENT_WAIT_LIST: { str = "CL_INVALID_EVENT_WAIT_LIST"; break; }
+		case CL_INVALID_EVENT: { str = "CL_INVALID_EVENT"; break; }
+		case CL_INVALID_OPERATION: { str = "CL_INVALID_OPERATION"; break; }
+		case CL_INVALID_GL_OBJECT: { str = "CL_INVALID_GL_OBJECT"; break; }
+		case CL_INVALID_BUFFER_SIZE: { str = "CL_INVALID_BUFFER_SIZE"; break; }
+		case CL_INVALID_MIP_LEVEL: { str = "CL_INVALID_MIP_LEVEL"; break; }
+		case CL_INVALID_GLOBAL_WORK_SIZE: { str = "CL_INVALID_GLOBAL_WORK_SIZE"; break; }
+		case CL_INVALID_PROPERTY: { str = "CL_INVALID_PROPERTY"; break; }
+		case CL_INVALID_IMAGE_DESCRIPTOR: { str = "CL_INVALID_IMAGE_DESCRIPTOR"; break; }
+		case CL_INVALID_COMPILER_OPTIONS: { str = "CL_INVALID_COMPILER_OPTIONS"; break; }
+		case CL_INVALID_LINKER_OPTIONS: { str = "CL_INVALID_LINKER_OPTIONS"; break; }
+		case CL_INVALID_DEVICE_PARTITION_COUNT: { str = "CL_INVALID_DEVICE_PARTITION_COUNT"; break; }
+		default: { str = "UNKNOWN ERROR"; break; }
+	}
+#endif
+	return str.c_str();
+}
 
 char * deblank(char *str)
 {
@@ -121,7 +193,7 @@ HI_error_t OpenCLDriver::init() {
 #endif
             clContext = clCreateContext( NULL, num_devices, devices, NULL, NULL, &err);
             if(err != CL_SUCCESS) {
-                fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL context with error %d (OPENCL Device)\n", err);
+                fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL context with error %d (%s)\n", err, opencl_error_code(err));
                 exit(1);
             }
         }
@@ -149,7 +221,7 @@ HI_error_t OpenCLDriver::init() {
 				//Compile the kernel file only if a kernel exists.
         		clProgram = clCreateProgramWithSource(clContext, 1, (const char **)&source_str, (const size_t *)&source_size, &err);
         		if(err != CL_SUCCESS) {
-            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL program with error %d (OPENCL Device)\n", err);
+            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL program with error %d (%s)\n", err, opencl_error_code(err));
 					exit(1);
         		}
 
@@ -158,7 +230,7 @@ HI_error_t OpenCLDriver::init() {
        			err = clBuildProgram(clProgram, 1, &clDevice, envVar, NULL, NULL);
         		if(err != CL_SUCCESS)
 				{
-            		printf("[ERROR in OpenCLDriver::init()] Error in clBuildProgram, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+            		printf("[ERROR in OpenCLDriver::init()] Error in clBuildProgram, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
             		if (err == CL_BUILD_PROGRAM_FAILURE)
             		{
                 		// Determine the size of the log
@@ -181,7 +253,7 @@ HI_error_t OpenCLDriver::init() {
         		size_t size;
         		err = clGetProgramInfo( clProgram, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &size, NULL );
         		if(err != CL_SUCCESS) {
-            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to get OPENCL program info error %d (OPENCL Device)\n", err);
+            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to get OPENCL program info error %d (%s)\n", err, opencl_error_code(err));
 					exit(1);
         		}
 
@@ -194,7 +266,7 @@ HI_error_t OpenCLDriver::init() {
 #endif
 
         		if(err != CL_SUCCESS) {
-            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to dump OPENCL program binary error %d (OPENCL Device)\n", err);
+            		fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to dump OPENCL program binary error %d (%s)\n", err, opencl_error_code(err));
 					exit(1);
         		}
 
@@ -223,19 +295,19 @@ HI_error_t OpenCLDriver::init() {
                                               &binaryStatus, &err);
 
         if(err != CL_SUCCESS) {
-            fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to read OPENCL program binary error %d (OPENCL Device)\n", err);
+            fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to read OPENCL program binary error %d (%s)\n", err, opencl_error_code(err));
 			exit(1);
         }
 
         if(binaryStatus != CL_SUCCESS) {
-            fprintf(stderr, "[ERROR in OpenCLDriver::init()] Invalid binary found for the device (OPENCL Device)\n");
+            fprintf(stderr, "[ERROR in OpenCLDriver::init()] Invalid binary found for the device %d (%s)\n", binaryStatus, opencl_error_code(binaryStatus));
 			exit(1);
         }
 
         err = clBuildProgram(clProgram, 1, &clDevice, NULL, NULL, NULL);
         if(err != CL_SUCCESS)
         {
-            printf("[ERROR in OpenCLDriver::init()] Error in clBuildProgram, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+            printf("[ERROR in OpenCLDriver::init()] Error in clBuildProgram, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
             if (err == CL_BUILD_PROGRAM_FAILURE)
             {
                 // Determine the size of the log
@@ -261,34 +333,12 @@ HI_error_t OpenCLDriver::init() {
 	for ( int i=0; i<HI_num_hostthreads; i++ ) {
     	s0 = clCreateCommandQueue(clContext, clDevice, 0, &err);
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (OPENCL Device)\n", err);
-			if( err == CL_INVALID_CONTEXT ) {
-				fprintf(stderr, "Invalid OpenCL context\n");
-			} else if( err == CL_INVALID_DEVICE ) {
-				fprintf(stderr, "Invalid OpenCL device\n");
-			} else if( err == CL_INVALID_VALUE ) {
-				fprintf(stderr, "Invalid property value\n");
-			} else if( err == CL_INVALID_QUEUE_PROPERTIES ) {
-				fprintf(stderr, "Invalid queue properties\n");
-			} else if( err == CL_OUT_OF_HOST_MEMORY ) {
-				fprintf(stderr, "Out of host memory\n");
-			}
+        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (%s Device)\n", err, opencl_error_code(err));
 			exit(1);
     	}
     	s1 = clCreateCommandQueue(clContext, clDevice, 0, &err);
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (OPENCL Device)\n", err);
-			if( err == CL_INVALID_CONTEXT ) {
-				fprintf(stderr, "Invalid OpenCL context\n");
-			} else if( err == CL_INVALID_DEVICE ) {
-				fprintf(stderr, "Invalid OpenCL device\n");
-			} else if( err == CL_INVALID_VALUE ) {
-				fprintf(stderr, "Invalid property value\n");
-			} else if( err == CL_INVALID_QUEUE_PROPERTIES ) {
-				fprintf(stderr, "Invalid queue properties\n");
-			} else if( err == CL_OUT_OF_HOST_MEMORY ) {
-				fprintf(stderr, "Out of host memory\n");
-			}
+        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
 			exit(1);
     	}
     	queueMap[0+i*MAX_NUM_QUEUES_PER_THREAD] = s0;
@@ -300,14 +350,14 @@ HI_error_t OpenCLDriver::init() {
     	std::map<int, cl_event> eventMap;
     	e0 = clCreateUserEvent(clContext, &err);
     	if(err != CL_SUCCESS) {
-        	printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+        	printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
 			exit(1);
     	}
     	clSetUserEventStatus(e0, CL_COMPLETE);
 
     	e1 = clCreateUserEvent(clContext, &err);
     	if(err != CL_SUCCESS) {
-        	printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+        	printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
 			exit(1);
     	}
     	clSetUserEventStatus(e1, CL_COMPLETE);
@@ -376,7 +426,7 @@ HI_error_t OpenCLDriver::createKernelArgMap() {
         const char *kernelName = (*it).c_str();
         clFunc = clCreateKernel(clProgram, kernelName, &err);
         if (err != CL_SUCCESS) {
-            fprintf(stderr, "[%d] [ERROR in OpenCLDriver::init()] Function Load FAIL on %s, %d\n", __LINE__, kernelName, err);
+            fprintf(stderr, "[%d] [ERROR in OpenCLDriver::init()] Function Load FAIL on %s, %d (%s)\n", __LINE__, kernelName, err, opencl_error_code(err));
 			exit(1);
         }
         kernelMap[*it] = clFunc;
@@ -415,7 +465,7 @@ HI_error_t OpenCLDriver::HI_register_kernels(std::set<std::string> kernelNames) 
         	const char *kernelName = (*it).c_str();
         	clFunc = clCreateKernel(clProgram, kernelName, &err);
         	if (err != CL_SUCCESS) {
-            	fprintf(stderr, "[%d] [ERROR in OpenCLDriver::HI_register_kernels()] Function Load FAIL on %s, %d\n", __LINE__, kernelName, err);
+            	fprintf(stderr, "[%d] [ERROR in OpenCLDriver::HI_register_kernels()] Function Load FAIL on %s, %d (%s)\n", __LINE__, kernelName, err, opencl_error_code(err));
 				exit(1);
         	}
         	(tconf->kernelsMap[this])[*it] = clFunc;
@@ -459,7 +509,7 @@ int OpenCLDriver::HI_get_num_devices(acc_device_t devType) {
 		}
 			
         if (err != CL_SUCCESS) {
-            fprintf(stderr, "[ERROR in OpenCLDriver::HI_get_num_devices()] Failed to get device IDs  for type %d\n", devType);
+            fprintf(stderr, "[ERROR in OpenCLDriver::HI_get_num_devices()] Failed to get device IDs  for type %d, error = %d (%s)\n", devType, err, opencl_error_code(err));
 			exit(1);
         }
     }
@@ -485,19 +535,19 @@ HI_error_t OpenCLDriver::destroy() {
 	for( std::map<int, cl_command_queue >::iterator it= queueMap.begin(); it != queueMap.end(); ++it ) {
     	err = clFlush(it->second);
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to flush OPENCL queue with error %d (OPENCL Device)\n", err);
+        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to flush OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
 			exit(1);
         	return HI_error;
     	}
     	err = clFinish(it->second);
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to finish OPENCL queue with error %d (OPENCL Device)\n", err);
+        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to finish OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
 			exit(1);
         	return HI_error;
     	}
     	err = clReleaseCommandQueue(it->second);
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL queue with error %d (OPENCL Device)\n", err);
+        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
 			exit(1);
         	return HI_error;
     	}
@@ -507,7 +557,7 @@ HI_error_t OpenCLDriver::destroy() {
     for(std::map<std::string, cl_kernel>::iterator it=kernels.begin(); it!=kernels.end(); ++it) {
         err = clReleaseKernel(it->second);
         if(err != CL_SUCCESS) {
-            fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL kernel with error %d (OPENCL Device)\n", err);
+            fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL kernel with error %d (%s)\n", err, opencl_error_code(err));
 			exit(1);
             return HI_error;
         }
@@ -515,7 +565,7 @@ HI_error_t OpenCLDriver::destroy() {
 	if( clProgram != NULL ) {
     	err = clReleaseProgram(clProgram);
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL program with error %d (OPENCL Device)\n", err);
+        	fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL program with error %d (%s)\n", err, opencl_error_code(err));
 			exit(1);
         	return HI_error;
     	}
@@ -532,7 +582,7 @@ HI_error_t OpenCLDriver::destroy() {
 #endif
             err = clReleaseContext(clContext);
             if(err != CL_SUCCESS) {
-                fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL context with error %d (OPENCL Device)\n", err);
+                fprintf(stderr, "[ERROR in OpenCLDriver::destroy()] failed to release OPENCL context with error %d (%s)\n", err, opencl_error_code(err));
                 exit(1);
             }
             clContext = NULL;
@@ -820,7 +870,7 @@ HI_error_t OpenCLDriver::HI_free( const void *hostPtr, int asyncID) {
 					free(devPtr);
 					HI_remove_device_mem_handle(devPtr, tconf->threadID);
         		} else {
-            		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] OpenCL memory free failed with error %d\n", err);
+            		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] OpenCL memory free failed with error %d (%s)\n", err, opencl_error_code(err));
 					exit(1);
             		result = HI_error;
         		}
@@ -876,7 +926,7 @@ HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
 					tconf->IDFreeCnt++;
 #endif
         		} else {
-            		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free_unified()] OpenCL memory free failed with error %d\n", err);
+            		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free_unified()] OpenCL memory free failed with error %d (%s)\n", err, opencl_error_code(err));
 					exit(1);
             		result = HI_error;
         		}
@@ -1207,7 +1257,7 @@ HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_memcpy(%lu)\n", count);
 	}
 #endif
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy()] Memcpy failed with error %d\n", err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy()] Memcpy failed with error %d (%s)\n", err, opencl_error_code(err));
 		exit(1);
         return HI_error;
     }
@@ -1430,7 +1480,7 @@ HI_error_t OpenCLDriver::HI_memcpy_async(void *dst, const void *src, size_t coun
 #endif
         return HI_success;
     } else {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_async()] Memcpy failed with error %d\n", err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_async()] Memcpy failed with error %d (%s)\n", err, opencl_error_code(err));
 		exit(1);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1521,7 +1571,7 @@ HI_error_t OpenCLDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t cou
 #endif
         return HI_success;
     } else {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_asyncS()] Memcpy failed with error %d\n", err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_asyncS()] Memcpy failed with error %d (%s)\n", err, opencl_error_code(err));
 		exit(1);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1641,7 +1691,7 @@ HI_error_t OpenCLDriver::HI_register_kernel_arg(std::string kernel_name, int arg
 	}
     if(err != CL_SUCCESS)
     {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_register_kernel_arg()] failed to add argument %d to kernel %s with error %d (OPENCL Device)\n", arg_index, kernel_name.c_str(), err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_register_kernel_arg()] failed to add argument %d to kernel %s with error %d (%s)\n", arg_index, kernel_name.c_str(), err, opencl_error_code(err));
 		exit(1);
         return HI_error;
     }
@@ -1684,7 +1734,7 @@ HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, int gridSize[3]
         err = clEnqueueNDRangeKernel(queue, (cl_kernel)(tconf->kernelsMap.at(this).at(kernel_name)), 3, NULL, globalSize, localSize, 0, NULL, NULL);
     }
     if (err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_kernel_call()] Kernel Launch FAIL\n");
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_kernel_call()] Kernel Launch FAIL with error = %d (%s)\n", err, opencl_error_code(err));
 		exit(1);
         return HI_error;
     }
@@ -1769,7 +1819,7 @@ void OpenCLDriver::HI_set_async(int asyncId) {
             cl_command_queue queue;
             queue = clCreateCommandQueue(clContext, clDevice, 0, &err);
             if(err != CL_SUCCESS) {
-                fprintf(stderr, "[ERROR in OpenCLDriver::HI_set_async()] failed to create OPENCL queue with error %d (OPENCL Device)\n", err);
+                fprintf(stderr, "[ERROR in OpenCLDriver::HI_set_async()] failed to create OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
 				exit(1);
             }
             queueMap[asyncId] = queue;
@@ -1785,7 +1835,7 @@ void OpenCLDriver::HI_set_async(int asyncId) {
             cl_event ev;
             ev = clCreateUserEvent(clContext, &err);
             if(err != CL_SUCCESS) {
-                printf("[ERROR in OpenCLDriver::HI_set_async()] Error in clCreateUserEvent, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+                printf("[ERROR in OpenCLDriver::HI_set_async()] Error in clCreateUserEvent, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
 				exit(1);
             }
             clSetUserEventStatus(ev, CL_COMPLETE);
@@ -1798,7 +1848,7 @@ void OpenCLDriver::HI_set_async(int asyncId) {
                 cl_event ev;
                 ev = clCreateUserEvent(clContext, &err);
                 if(err != CL_SUCCESS) {
-                    printf("[ERROR in OpenCLDriver::HI_set_async()] Error in clCreateUserEvent, Line %u in file %s : %d!!!\n\n", __LINE__, __FILE__, err);
+                    printf("[ERROR in OpenCLDriver::HI_set_async()] Error in clCreateUserEvent, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
 					exit(1);
                 }
                 clSetUserEventStatus(ev, CL_COMPLETE);
@@ -1841,7 +1891,7 @@ void OpenCLDriver::HI_wait(int arg) {
     err = clWaitForEvents(1, event);
 
     if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", arg, err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait()] failed wait on OpenCL queue %d with error %d (%s)\n", arg, err, opencl_error_code(err));
 		exit(1);
     }
 
@@ -1866,7 +1916,7 @@ void OpenCLDriver::HI_wait_ifpresent(int arg) {
     	err = clWaitForEvents(1, event);
 
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_ifpresent()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", arg, err);
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_ifpresent()] failed wait on OpenCL queue %d with error %d (%s)\n", arg, err, opencl_error_code(err));
 			exit(1);
     	}
 
@@ -1893,7 +1943,7 @@ void OpenCLDriver::HI_wait_async(int arg, int async) {
     err = clWaitForEvents(1, event);
 
     if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", arg, err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async()] failed wait on OpenCL queue %d with error %d (%s)\n", arg, err, opencl_error_code(err));
 		exit(1);
     }
 
@@ -1902,7 +1952,7 @@ void OpenCLDriver::HI_wait_async(int arg, int async) {
     err = clWaitForEvents(1, event2);
 
     if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", async, err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async()] failed wait on OpenCL queue %d with error %d (%s)\n", async, err, opencl_error_code(err));
 		exit(1);
     }
 
@@ -1928,7 +1978,7 @@ void OpenCLDriver::HI_wait_async_ifpresent(int arg, int async) {
     	err = clWaitForEvents(1, event);
 
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async_ifpresent()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", arg, err);
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async_ifpresent()] failed wait on OpenCL queue %d with error %d (%s)\n", arg, err, opencl_error_code(err));
 			exit(1);
     	}
 
@@ -1937,7 +1987,7 @@ void OpenCLDriver::HI_wait_async_ifpresent(int arg, int async) {
     	err = clWaitForEvents(1, event2);
 
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async_ifpresent()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", async, err);
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_async_ifpresent()] failed wait on OpenCL queue %d with error %d (%s)\n", async, err, opencl_error_code(err));
 			exit(1);
     	}
 	}
@@ -1964,7 +2014,7 @@ void OpenCLDriver::HI_waitS1(int asyncId) {
     err = clWaitForEvents(1, event);
 
     if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", asyncId, err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait()] failed wait on OpenCL queue %d with error %d (%s)\n", asyncId, err, opencl_error_code(err));
 		exit(1);
     }
 
@@ -2005,7 +2055,7 @@ void OpenCLDriver::HI_wait_all() {
         //fprintf(stderr, "[OpenCLDriver::HI_wait_all()] status is %d on queue %d (NVIDIA CUDA GPU)\n", err, it->first);
         err = clWaitForEvents(1, &(it->second));
         if(err != CL_SUCCESS) {
-            fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_all()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, err);
+            fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_all()] failed wait on OpenCL queue %d with error %d (%s)\n", it->first, err, opencl_error_code(err));
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);
@@ -2033,7 +2083,7 @@ void OpenCLDriver::HI_wait_all_async(int async) {
         //fprintf(stderr, "[OpenCLDriver::HI_wait_all_async()] status is %d on queue %d (NVIDIA CUDA GPU)\n", err, it->first);
         err = clWaitForEvents(1, &(it->second));
         if(err != CL_SUCCESS) {
-            fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_all_async()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, err);
+            fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_all_async()] failed wait on OpenCL queue %d with error %d (%s)\n", it->first, err, opencl_error_code(err));
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);
@@ -2043,7 +2093,7 @@ void OpenCLDriver::HI_wait_all_async(int async) {
     err = clWaitForEvents(1, event2);
 
     if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_all_async()] failed wait on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", async, err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_all_async()] failed wait on OpenCL queue %d with error %d (%s)\n", async, err, opencl_error_code(err));
 		exit(1);
     }
 
@@ -2066,7 +2116,7 @@ int OpenCLDriver::HI_async_test(int asyncId) {
 
     err = clGetEventInfo(*event,  CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &status, NULL);
     if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_async_test()] failed test on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", asyncId, err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_async_test()] failed test on OpenCL queue %d with error %d (%s)\n", asyncId, err, opencl_error_code(err));
 		exit(1);
     }
 
@@ -2100,7 +2150,7 @@ int OpenCLDriver::HI_async_test_ifpresent(int asyncId) {
 
     	err = clGetEventInfo(*event,  CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &status, NULL);
     	if(err != CL_SUCCESS) {
-        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_async_test_ifpresent()] failed test on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", asyncId, err);
+        	fprintf(stderr, "[ERROR in OpenCLDriver::HI_async_test_ifpresent()] failed test on OpenCL queue %d with error %d (%s)\n", asyncId, err, opencl_error_code(err));
 			exit(1);
     	}
 
@@ -2138,7 +2188,7 @@ int OpenCLDriver::HI_async_test_all() {
         //fprintf(stderr, "[OpenCLDriver::HI_wait_all()] status is %d on queue %d (NVIDIA CUDA GPU)\n", err, it->first);
         err = clGetEventInfo(it->second,  CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &status, NULL);
         if(err != CL_SUCCESS) {
-            fprintf(stderr, "[ERROR in OpenCLDriver::HI_async_test_all()] failed test on OpenCL queue %d with error %d (NVIDIA CUDA GPU)\n", it->first, err);
+            fprintf(stderr, "[ERROR in OpenCLDriver::HI_async_test_all()] failed test on OpenCL queue %d with error %d (%s)\n", it->first, err, opencl_error_code(err));
 			exit(1);
         }
         if(status != CL_COMPLETE) {
@@ -2179,7 +2229,7 @@ void OpenCLDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) 
 	tconf->IDMallocSize += size;
 #endif
     if( err != CL_SUCCESS ) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc()] :failed to malloc on OpenCL with clCreateBuffer error %d\n", err);
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc()] :failed to malloc on OpenCL with clCreateBuffer error %d (%s)\n", err, opencl_error_code(err));
 		exit(1);
     }
 #if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
@@ -2226,7 +2276,7 @@ void OpenCLDriver::HI_free(void *devPtr) {
 			tconf->IDFreeCnt++;
 #endif
         	if(err != CL_SUCCESS) {
-        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] :failed to free on OpenCL with error %d\n", err);
+        		fprintf(stderr, "[ERROR in OpenCLDriver::HI_free()] :failed to free on OpenCL with error %d (%s)\n", err, opencl_error_code(err));
 				exit(1);
 			}
 			free(devPtr);

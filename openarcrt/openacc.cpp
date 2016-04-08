@@ -835,6 +835,84 @@ void* acc_present_or_create(h_void* hostPtr, size_t size) {
 	return acc_pcreate(hostPtr, size);
 }
 
+void* acc_copyin_const(h_void* hostPtr, size_t size) {
+	void* devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyin_const()\n");
+	}
+#endif
+	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_ONLY);
+	HI_memcpy(devPtr, hostPtr, size, HI_MemcpyHostToDevice, 0);
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_copyin_const()\n");
+	}
+#endif
+	return devPtr;
+}
+
+void* acc_pcopyin_const(h_void* hostPtr, size_t size) {
+	void* devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_pcopyin_const()\n");
+	}
+#endif
+	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
+		HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_ONLY);
+		HI_memcpy(devPtr, hostPtr, size, HI_MemcpyHostToDevice, 0);
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_pcopyin_const()\n");
+	}
+#endif
+	return devPtr;
+}
+
+void* acc_present_or_copyin_const(h_void* hostPtr, size_t size) {
+	return acc_pcopyin_const(hostPtr, size);
+}
+
+void* acc_create_const(h_void* hostPtr, size_t size) {
+	void* devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_create_const()\n");
+	}
+#endif
+	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_ONLY);
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_create_const()\n");
+	}
+#endif
+	return devPtr;
+}
+
+void* acc_pcreate_const(h_void* hostPtr, size_t size) {
+	void* devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_pcreate_const()\n");
+	}
+#endif
+	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
+		HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_ONLY);
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_pcreate_const()\n");
+	}
+#endif
+	return devPtr;
+}
+
+void* acc_present_or_create_const(h_void* hostPtr, size_t size) {
+	return acc_pcreate_const(hostPtr, size);
+}
+
 //[FIXME] A call to this routine is NOT alloed within a data region for
 //the specified data, but the current runtime does not check this.
 void acc_copyout(h_void* hostPtr, size_t size) {

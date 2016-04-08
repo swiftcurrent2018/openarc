@@ -6829,4 +6829,148 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
             }
         }
     }
+
+    protected void runtimeTransformationForConstMemory(Procedure cProc, List<FunctionCall> fCallList ) {
+    	Set<FunctionCall> removeSet = new HashSet<FunctionCall>();
+    	for( FunctionCall fCall : fCallList ) {
+    		Statement fCallStmt = fCall.getStatement();
+    		Annotation tAnnot = fCallStmt.getAnnotation(ARCAnnotation.class, "constant");
+    		if( tAnnot != null ) {
+    			if( !OpenACCRuntimeLibrary.isOpenARCAPI(fCall) ) {
+    				Set<SubArray> dataSet = (Set<SubArray>)tAnnot.get("constant");	
+    				SubArray sArray = dataSet.iterator().next();
+    				List<Symbol> constantList = new LinkedList<Symbol>();
+    				constantList.addAll(AnalysisTools.subarraysToSymbols(dataSet, IRSymbolOnly));
+    				Symbol constSym = constantList.get(0);
+    				Symbol IRSym = constSym;
+    				if( constSym instanceof PseudoSymbol ) {
+    					IRSym = ((PseudoSymbol)constSym).getIRSymbol();
+    				}
+    				String symNameBase = null;
+    				if( constSym instanceof AccessSymbol) {
+    					symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)constSym);
+    				} else {
+    					symNameBase = constSym.getSymbolName();
+    				}
+    				String constVarName = "const__" + symNameBase;
+    				if( !SymbolTools.isGlobal(IRSym) ) {
+    					constVarName += "__" + cProc.getSymbolName();
+    				}
+					List<Expression> startList = new LinkedList<Expression>();
+					List<Expression> lengthList = new LinkedList<Expression>();
+					boolean foundDimensions = AnalysisTools.extractDimensionInfo(sArray, startList, lengthList, IRSymbolOnly, fCallStmt);
+					if( !foundDimensions ) {
+						Tools.exit("[ERROR in ACC2CUDATranslator.runtimeTransformationForConstMemory()] Dimension information " +
+								"of the following variable is unknown; exit.\n" + 
+								"Variable: " + constSym.getSymbolName() + "\n" +
+								"OpenACC Runtime API: " + fCall + "\n" +
+								"Enclosing Procedure: " + cProc.getSymbolName() + "\n");
+					}
+					List<Specifier> typeSpecs = new ArrayList<Specifier>();
+					if( IRSymbolOnly ) {
+						typeSpecs.addAll(((VariableDeclaration)IRSym.getDeclaration()).getSpecifiers());
+					} else {
+						Symbol tSym = constSym;
+						while( tSym instanceof AccessSymbol ) {
+							tSym = ((AccessSymbol)tSym).getMemberSymbol();
+						}
+						typeSpecs.addAll(((VariableDeclaration)tSym.getDeclaration()).getSpecifiers());
+					}
+					List<Specifier> clonedspecs = new ChainedList<Specifier>();
+					clonedspecs.addAll(typeSpecs);
+					clonedspecs.remove(Specifier.STATIC);
+					///////////////////////////////////////////
+					// GPU variables should not be constant. //
+					///////////////////////////////////////////
+					clonedspecs.remove(Specifier.CONST);
+					//////////////////////////////
+					// Remove extern specifier. //
+					//////////////////////////////
+					clonedspecs.remove(Specifier.EXTERN);
+    				String oldFName = fCall.getName().toString();
+    				if( OpenACCRuntimeLibrary.isDeviceMallocAPI(fCall) ) {
+    					if( OpenACCRuntimeLibrary.isCopyInAPI(fCall) || oldFName.equals("acc_create") || oldFName.equals("acc_pcreate") 
+    							|| oldFName.equals("acc_present_or_create")) {
+    						//acc_copyin(), acc_pcopyin(), acc_present_or_copyin(), acc_create(), acc_pcreate(),
+    						//or acc_present_or_create()
+    						//[Step 1] Add global constant memory declaration into the kernel file.
+    						/////////////////////////////////////
+    						// Create a __constant__ variable. //
+    						/////////////////////////////////////
+    						//  __constant__ float a[SIZE1][SIZE2];  //
+    						/////////////////////////////
+    			            Set<Symbol> symbolSet = kernelsTranslationUnit.getSymbols();
+    						Symbol constantSym = AnalysisTools.findsSymbol(symbolSet, constVarName);
+    						boolean addNewConstSymbol = false;
+    						Identifier constantID = null;
+    						if( constantSym != null ) {
+    							constantID = new Identifier((VariableDeclarator)constantSym);
+    							//DEBUG: For implicit program-level data region, multiple constantID may be needed.
+    						} else {
+    							addNewConstSymbol = true;
+    							List<Expression> arryDimList = new ArrayList<Expression>();
+    							for( int i=0; i<lengthList.size(); i++ ) {
+    								arryDimList.add(lengthList.get(i).clone());
+    							}
+    							ArraySpecifier arraySpecs = new ArraySpecifier(arryDimList);
+    							VariableDeclarator constantRef_declarator = new VariableDeclarator(new NameID(constVarName), arraySpecs);
+    							List<Specifier> constspecs = new ChainedList<Specifier>();
+    							constspecs.add(CUDASpecifier.CUDA_CONSTANT);
+    							constspecs.addAll(clonedspecs);
+    							Declaration constantRef_decl = new VariableDeclaration(constspecs, constantRef_declarator);
+    							constantID = new Identifier(constantRef_declarator); 
+    							//Insert __constant__ variable declaration.
+    							Procedure ttProc = AnalysisTools.findFirstProcedure(kernelsTranslationUnit);
+    							if( ttProc == null ) {
+    								kernelsTranslationUnit.addDeclaration(constantRef_decl);
+    							} else {
+    								kernelsTranslationUnit.addDeclarationBefore(ttProc, constantRef_decl);
+    							}
+    						}
+
+    						if( OpenACCRuntimeLibrary.isCopyInAPI(fCall) ) {
+    							//[Step 2] Replace the API call with HI_memcpy_const() or HI_present_or_memcpy_const() call.
+    							Expression memcpyName = null;
+    							if( OpenACCRuntimeLibrary.isPresentCheckAPI(fCall) ) {
+    								memcpyName = new NameID("HI_present_or_memcpy_const");
+    							} else {
+    								memcpyName = new NameID("HI_memcpy_const");
+    							}
+    							FunctionCall memcpyFunc = new FunctionCall(memcpyName);
+    							memcpyFunc.addArgument(fCall.getArgument(0).clone());
+    							memcpyFunc.addArgument(new StringLiteral(constVarName));
+    							memcpyFunc.addArgument(new NameID("HI_MemcpyHostToDevice"));
+    							memcpyFunc.addArgument(fCall.getArgument(1).clone());
+    							ExpressionStatement eStmt = new ExpressionStatement(memcpyFunc);
+    							fCallStmt.swapWith(eStmt);
+    							removeSet.add(fCall);
+    						}
+    					} else if( oldFName.equals("acc_copyout") ) {
+    						FunctionCall unmapFunc = new FunctionCall(new NameID("acc_unmap_data"));
+    						unmapFunc.addArgument(fCall.getArgument(0).clone());
+    						ExpressionStatement eStmt = new ExpressionStatement(unmapFunc);
+    						fCallStmt.swapWith(eStmt);
+    						removeSet.add(fCall);
+    					}
+    				} else if( oldFName.equals("acc_memcpy_to_device") ) {
+    					FunctionCall memcpyFunc = new FunctionCall(new NameID("HI_memcpy_const"));
+    					memcpyFunc.addArgument(fCall.getArgument(1).clone());
+    					memcpyFunc.addArgument(new StringLiteral(constVarName));
+    					memcpyFunc.addArgument(new NameID("HI_MemcpyHostToDevice"));
+    					memcpyFunc.addArgument(fCall.getArgument(2).clone());
+    					ExpressionStatement eStmt = new ExpressionStatement(memcpyFunc);
+    					fCallStmt.swapWith(eStmt);
+    					removeSet.add(fCall);
+    				} else if( oldFName.equals("acc_delete") ) {
+    					FunctionCall unmapFunc = new FunctionCall(new NameID("acc_unmap_data"));
+    					unmapFunc.addArgument(fCall.getArgument(0).clone());
+    					ExpressionStatement eStmt = new ExpressionStatement(unmapFunc);
+    					fCallStmt.swapWith(eStmt);
+    					removeSet.add(fCall);
+    				}
+    			} 
+    		}
+    	}
+    	fCallList.removeAll(removeSet);
+    }
 }

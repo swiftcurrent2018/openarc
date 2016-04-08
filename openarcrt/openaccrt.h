@@ -207,6 +207,9 @@ public:
     virtual HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
         return HI_success;
     }
+    virtual HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+        return HI_success;
+    }
     virtual void HI_set_async(int asyncId)=0;
     virtual void HI_wait(int arg) {}
     virtual void HI_wait_ifpresent(int arg) {}
@@ -1175,6 +1178,7 @@ extern HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
 //	HI_MemcpyKind_t kind, int async);
 extern HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
 extern HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async);
+extern HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
 
 ////////////////////////////////////////////////
 // Experimental API to support unified memory //

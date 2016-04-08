@@ -5951,4 +5951,24 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
             }
         }
     }
+    
+    protected void runtimeTransformationForConstMemory(Procedure cProc, List<FunctionCall> fCallList ) {
+    	for( FunctionCall fCall : fCallList ) {
+    		Statement fCallStmt = fCall.getStatement();
+    		if(fCallStmt.containsAnnotation(ARCAnnotation.class, "constant")) {
+    			if( !OpenACCRuntimeLibrary.isOpenARCAPI(fCall) && OpenACCRuntimeLibrary.isDeviceMallocAPI(fCall) ) {
+    				String oldFName = fCall.getName().toString();
+    				if( OpenACCRuntimeLibrary.isCopyInAPI(fCall) || oldFName.equals("acc_create") || oldFName.equals("acc_pcreate") 
+    						|| oldFName.equals("acc_present_or_create")) {
+    					//Add suffix of "_const" to the following runtime APIs.
+    					//acc_copyin(), acc_pcopyin(), acc_present_or_copyin(), acc_create(), acc_pcreate(),
+    					//or acc_present_or_create()
+    					Expression newName = new NameID(oldFName + "_const");
+    					fCall.setFunction(newName);
+    				}
+    			} 
+    		}
+    	}
+    }
+
 }

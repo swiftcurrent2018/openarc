@@ -1847,7 +1847,7 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
 	}
 #endif
 	if( hostPtr == NULL ) {
-    	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] NULL host pointer; exit!\n");
+    	fprintf(stderr, "[ERROR in HI_memcpy_const()] NULL host pointer; exit!\n");
         exit(1);
 	}
     HostConf_t * tconf = getHostConf();
@@ -1874,7 +1874,7 @@ HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_Memcpy
 	}
 #endif
 	if( hostPtr == NULL ) {
-    	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] NULL host pointer; exit!\n");
+    	fprintf(stderr, "[ERROR in HI_memcpy_const_async()] NULL host pointer; exit!\n");
         exit(1);
 	}
     HostConf_t * tconf = getHostConf();
@@ -1882,10 +1882,37 @@ HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_Memcpy
         fprintf(stderr, "[ERROR in HI_memcpy_const_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
-    return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async);
+    return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const_async(%d, %ld)\n",async, count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
+	}
+#endif
+	return return_status;
+}
+
+HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+	HI_error_t return_status;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_present_or_memcpy_const(%ld)\n", count);
+		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
+	}
+#endif
+	if( hostPtr == NULL ) {
+    	fprintf(stderr, "[ERROR in HI_present_or_memcpy_const()] NULL host pointer; exit!\n");
+        exit(1);
+	}
+    HostConf_t * tconf = getHostConf();
+    if( tconf->isOnAccDevice == 0 ) {
+        fprintf(stderr, "[ERROR in HI_present_or_memcpy_const()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        exit(1);
+    }    
+    return_status = tconf->device->HI_present_or_memcpy_const(hostPtr, constName, kind, count);
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_present_or_memcpy_const(%ld)\n", count);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
