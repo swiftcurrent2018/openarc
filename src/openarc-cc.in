@@ -157,18 +157,23 @@ sub main {
       # passes regardless of the order in which we specify them on the
       # command line, so we have to call opt twice.
       my $optPhase1File = "$CETUS_OUTDIR/opt-phase1/$fileBase.bc";
-      # -mem2reg -adce is not required, but running it before
-      # -nvl-add-ref-counting helps the latter to avoid inserting
-      # unnecessary V-to-NV inc/dec calls.
       $cmd = shesc($LLVM_OPT)
-             ." -fitl"
-             .($nvlAddTxsPass ? " -nvl-add-txs" : "")
-             .($nvlAddSafetyPass ? " -nvl-add-safety" : "")
-             .($nvlAddRefCountingPass
-               ? " -mem2reg -adce -nvl-add-ref-counting" : "")
-             .($nvlAddPersistsPass ? " -nvl-add-persists" : "")
-             ." -nvl-lower-pointers"
-             ." ".shesc($file)." -o ".shesc($optPhase1File);
+        ." -fitl"
+        # Without -mem2reg -loop-rotate, the -nvl-hoist-tx-adds pass fails
+        # to optimize many loops.
+        .($nvlAddTxsPass
+          ? " -nvl-add-txs -mem2reg -loop-rotate -nvl-hoist-tx-adds"
+            . " -nvl-hoist-tx-adds-aggressive=true"
+          : "")
+        .($nvlAddSafetyPass ? " -nvl-add-safety" : "")
+        # -mem2reg -adce is not required, but running it before
+        # -nvl-add-ref-counting helps the latter to avoid inserting
+        # unnecessary V-to-NV inc/dec calls.
+        .($nvlAddRefCountingPass
+          ? " -mem2reg -adce -nvl-add-ref-counting" : "")
+        .($nvlAddPersistsPass ? " -nvl-add-persists" : "")
+        ." -nvl-lower-pointers"
+        ." ".shesc($file)." -o ".shesc($optPhase1File);
       run($cmd, "opt phase 1 for $file");
       my $optPhase2File;
       if ($optPhase2Opts) {

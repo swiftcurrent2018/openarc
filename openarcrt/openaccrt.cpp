@@ -1091,7 +1091,7 @@ char const *HI_getMemcpyTypeString( HI_MemcpyKind_t kind ) {
 //         1: use cudaMemcpyToSymbol or cudaMemcpyFromSymbol
 HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
                            HI_MemcpyKind_t kind, int trType) {
-	HI_error_t return_status;
+	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy(%ld)\n", count);
@@ -1106,12 +1106,14 @@ HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
     	fprintf(stderr, "[ERROR in HI_memcpy()] NULL src pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
-    if( tconf->isOnAccDevice == 0 ) {
-        fprintf(stderr, "[ERROR in HI_memcpy()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
-        exit(1);
-    }    
-    return_status = tconf->device->HI_memcpy( dst, src, count, kind, trType);
+	if( count > 0 ) {
+    	HostConf_t * tconf = getHostConf();
+    	if( tconf->isOnAccDevice == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_memcpy()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        	exit(1);
+    	}    
+    	return_status = tconf->device->HI_memcpy( dst, src, count, kind, trType);
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy(%ld)\n", count);
@@ -1123,7 +1125,7 @@ HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
 
 HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
                            HI_MemcpyKind_t kind, int trType) {
-	HI_error_t return_status;
+	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_unified(%ld)\n", count);
@@ -1138,12 +1140,14 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
 		//If src pointer is NULL, skip memory copy operation.
 		return HI_success;
 	}
-    HostConf_t * tconf = getHostConf();
-    if( tconf->isOnAccDevice == 0 ) {
-        fprintf(stderr, "[ERROR in HI_memcpy_unified()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
-        exit(1);
-    }    
-    return_status = tconf->device->HI_memcpy_unified( dst, src, count, kind, trType);
+	if( count > 0 ) {
+    	HostConf_t * tconf = getHostConf();
+    	if( tconf->isOnAccDevice == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_unified()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        	exit(1);
+    	}    
+    	return_status = tconf->device->HI_memcpy_unified( dst, src, count, kind, trType);
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_unified(%ld)\n", count);
@@ -1155,7 +1159,7 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
 
 HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
                                  HI_MemcpyKind_t kind, int trType, int async) {
-	HI_error_t return_status;
+	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_async(%d, %ld)\n", async, count);
@@ -1170,12 +1174,14 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
     	fprintf(stderr, "[ERROR in HI_memcpy_async()] NULL src pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
-    if( tconf->isOnAccDevice == 0 ) {
-        fprintf(stderr, "[ERROR in HI_memcpy_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
-        exit(1);
-    }    
-    return_status = tconf->device->HI_memcpy_async(dst, src, count, kind, trType, async+tconf->asyncID_offset);
+	if( count > 0 ) {
+    	HostConf_t * tconf = getHostConf();
+    	if( tconf->isOnAccDevice == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        	exit(1);
+    	}    
+    	return_status = tconf->device->HI_memcpy_async(dst, src, count, kind, trType, async+tconf->asyncID_offset);
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_async(%d, %ld)\n", async, count);
@@ -1187,7 +1193,7 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
 
 HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
                                  HI_MemcpyKind_t kind, int trType, int async) {
-	HI_error_t return_status;
+	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_asyncS(%ld, %d)\n", count, async);
@@ -1202,8 +1208,10 @@ HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
     	fprintf(stderr, "[ERROR in HI_memcpy_asyncS()] NULL src pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
-    return_status = tconf->device->HI_memcpy_asyncS(dst, src, count, kind, trType, async+tconf->asyncID_offset);
+	if( count > 0 ) {
+    	HostConf_t * tconf = getHostConf();
+    	return_status = tconf->device->HI_memcpy_asyncS(dst, src, count, kind, trType, async+tconf->asyncID_offset);
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_asyncS(%ld, %d)\n", count, async);
@@ -1251,7 +1259,7 @@ void  HI_waitS2(int async) {
 
 HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
                              size_t widthInBytes, size_t height, HI_MemcpyKind_t kind) {
-	HI_error_t return_status;
+	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D(%ld)\n", widthInBytes*height);
@@ -1266,12 +1274,14 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
     	fprintf(stderr, "[ERROR in HI_memcpy2D()] NULL src pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
-    if( tconf->isOnAccDevice == 0 ) {
-        fprintf(stderr, "[ERROR in HI_memcpy2D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
-        exit(1);
-    }    
-    return_status = tconf->device->HI_memcpy2D(dst, dpitch, src, spitch, widthInBytes, height, kind);
+	if( widthInBytes*height > 0 ) {
+    	HostConf_t * tconf = getHostConf();
+    	if( tconf->isOnAccDevice == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_memcpy2D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        	exit(1);
+    	}    
+    	return_status = tconf->device->HI_memcpy2D(dst, dpitch, src, spitch, widthInBytes, height, kind);
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D(%ld)\n", widthInBytes*height);
@@ -1283,7 +1293,7 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
 
 HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
                                    size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async) {
-	HI_error_t return_status;
+	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D_async(%ld, %d)\n", widthInBytes*height, async);
@@ -1298,12 +1308,14 @@ HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
     	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] NULL src pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
-    if( tconf->isOnAccDevice == 0 ) {
-        fprintf(stderr, "[ERROR in HI_memcpy2D_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
-        exit(1);
-    }    
-    return_status = tconf->device->HI_memcpy2D_async(dst, dpitch, src, spitch, widthInBytes, height, kind, async+tconf->asyncID_offset);
+	if( widthInBytes*height > 0 ) {
+    	HostConf_t * tconf = getHostConf();
+    	if( tconf->isOnAccDevice == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        	exit(1);
+    	}    
+    	return_status = tconf->device->HI_memcpy2D_async(dst, dpitch, src, spitch, widthInBytes, height, kind, async+tconf->asyncID_offset);
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D_async(%ld, %d)\n", widthInBytes*height, async);
@@ -1839,7 +1851,7 @@ HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *dev
 
 
 HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
-	HI_error_t return_status;
+	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const(%ld)\n", count);
@@ -1850,12 +1862,14 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
     	fprintf(stderr, "[ERROR in HI_memcpy_const()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
-    if( tconf->isOnAccDevice == 0 ) {
-        fprintf(stderr, "[ERROR in HI_memcpy_const()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
-        exit(1);
-    }    
-    return_status = tconf->device->HI_memcpy_const(hostPtr, constName, kind, count);
+	if( count > 0 ) {
+    	HostConf_t * tconf = getHostConf();
+    	if( tconf->isOnAccDevice == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_const()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        	exit(1);
+    	}    
+    	return_status = tconf->device->HI_memcpy_const(hostPtr, constName, kind, count);
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const(%ld)\n", count);
@@ -1866,7 +1880,7 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
 }
 
 HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
-	HI_error_t return_status;
+	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const_async(%d, %ld)\n",async, count);
@@ -1877,12 +1891,14 @@ HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_Memcpy
     	fprintf(stderr, "[ERROR in HI_memcpy_const_async()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
-    if( tconf->isOnAccDevice == 0 ) {
-        fprintf(stderr, "[ERROR in HI_memcpy_const_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
-        exit(1);
-    }    
-    return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async+tconf->asyncID_offset);
+	if( count > 0 ) {
+    	HostConf_t * tconf = getHostConf();
+    	if( tconf->isOnAccDevice == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_const_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
+        	exit(1);
+    	}    
+    	return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async+tconf->asyncID_offset);
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const_async(%d, %ld)\n",async, count);
