@@ -1127,6 +1127,17 @@ public:
 #endif
     }
 
+	char * deblank(char *str) {
+		char *out = str, *put = str;
+		for(; *str != '\0'; ++str) {
+			if((*str != ' ') && (*str != ':') && (*str != '(') && (*str != ')') && (*str != '[') && (*str != ']') && (*str != '<') && (*str != '>')) {
+				*put++ = *str; 
+			}
+		}
+		*put = '\0';
+		return out;
+	}
+
 } Accelerator_t;
 
 //////////////////////////

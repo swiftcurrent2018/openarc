@@ -84,20 +84,6 @@ const char * opencl_error_code(cl_int err) {
 	return str.c_str();
 }
 
-char * deblank(char *str)
-{
-  char *out = str, *put = str;
-
-  for(; *str != '\0'; ++str)
-  {
-    if((*str != ' ') && (*str != ':'))
-      *put++ = *str;
-  }
-  *put = '\0';
-
-  return out;
-}
-
 cl_mem_flags convert2CLMemFlags(HI_MallocKind_t flags) {
 	cl_mem_flags mem_flags = 0;
 	if( flags & HI_MEM_READ_WRITE ) {

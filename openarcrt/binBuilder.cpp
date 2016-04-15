@@ -20,19 +20,16 @@
 
 #define MAX_SOURCE_SIZE (0x100000)
 
-char * deblank(char *str)
-{
-  char *out = str, *put = str;
-
-  for(; *str != '\0'; ++str)
-  {
-    if(*str != ' ')
-      *put++ = *str;
-  }
-  *put = '\0';
-
-  return out;
-}
+char * deblank(char *str) {
+	char *out = str, *put = str; 
+	for(; *str != '\0'; ++str) {
+		if((*str != ' ') && (*str != ':') && (*str != '(') && (*str != ')') && (*str != '[') && (*str != ']') && (*str != '<') && (*str != '>')) {
+			*put++ = *str; 
+		}    
+	}    
+	*put = '\0';
+	return out; 
+}   
 
 int main (){
 	cl_platform_id clPlatform;

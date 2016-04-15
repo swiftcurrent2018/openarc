@@ -63,7 +63,7 @@ MatrixMultiplication_openacc(float * a, float * b, float * c)
     for (i=0; i<M; i++){
       for (j=0; j<N; j++)
         {
-	  float sum = 0.0 ;
+	  float sum = 0.0F;
 #pragma acc loop seq
 	  for (k=0; k<P; k++) {
 	    sum += b[i*P+k]*c[k*N+j] ;
