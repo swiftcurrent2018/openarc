@@ -309,12 +309,24 @@ public abstract class ACC2GPUTranslationTools {
 					}
 				} else {
 					HashSet<ForLoop> targetLoops = new HashSet<ForLoop>();
+					//Find symobls used in the index expression
+					Set<Symbol> indexSyms = new HashSet<Symbol>();
+					for( Expression tExp : indexList) {
+						indexSyms.addAll(DataFlowTools.getUseSymbol(tExp));
+					}
+					List<Statement> defStmts;
+					if( indexSyms.isEmpty() ) {
+						defStmts = new LinkedList<Statement>();
+					} else {
+						defStmts = AnalysisTools.getDefStmts(indexSyms, targetStmt);
+					}
 					///////////////////////////////////////////////////////////////////////
 					// Find inner-most loops containing the array access and their index //
 					// variables are used in the array access.                           //
 					///////////////////////////////////////////////////////////////////////
 					//DEBUG: Is it OK to use region for targetStmt2, instead of using targetStmt?
 					Statement targetStmt2 = region;
+					boolean indexLoopExist = false;
 					DepthFirstIterator iter = new DepthFirstIterator(targetStmt2);
 					for (;;)
 					{
@@ -344,8 +356,22 @@ public abstract class ACC2GPUTranslationTools {
 									if( IRTools.containsSymbol(tAccess, indexSym) ) {
 										if( !foundLoop ) {
 											foundLoop = true;
+											indexLoopExist = true;
 											ForLoop cLoop = (ForLoop)t;
-											if( !targetLoops.contains(cLoop) ) {
+											Statement cLoopBody = cLoop.getBody();
+											//Check whether cLoop is a parent of any defStmts.
+											boolean innerDEFExist = false;
+											for(Statement ttStmt : defStmts) {
+												Traversable pp = ttStmt;
+												while( (pp != null) && (pp.getParent() != targetStmt) && (pp.getParent() != cLoopBody) ) {
+													pp = pp.getParent();
+												}
+												if( (pp != null) && (pp.getParent() == cLoopBody) ) {
+													innerDEFExist = true;
+													break;
+												}
+											}
+											if( (!innerDEFExist) && (!targetLoops.contains(cLoop)) ) {
 												boolean addLoop = true;
 												//Check whether cLoop is a parent of one of targetLoops.
 												for(ForLoop ttL : targetLoops ) {
@@ -620,18 +646,13 @@ public abstract class ACC2GPUTranslationTools {
 							}
 						}
 					}
-					if( targetLoops.isEmpty() ) {
+					if( (!indexLoopExist) && targetLoops.isEmpty() ) {
 						/////////////////////////////////////////////////////////////
 						// The array access is independent of any enclosing loops  //
 						// and the index expressions are not constant.             //
 						/////////////////////////////////////////////////////////////
 						boolean isCached = true;
 						int errorCode = 0;
-						//Find symobls used in the index expression
-						Set<Symbol> indexSyms = new HashSet<Symbol>();
-						for( Expression tExp : indexList) {
-							indexSyms.addAll(DataFlowTools.getUseSymbol(tExp));
-						}
 						Statement defStmt = null;
 						if( indexSyms.isEmpty() ) {
 							//index expressions are not constant, but we could not find symbols for variables used 
@@ -639,7 +660,6 @@ public abstract class ACC2GPUTranslationTools {
 							isCached = false;
 							errorCode = 1;
 						} else {
-							List<Statement> defStmts = AnalysisTools.getDefStmts(indexSyms, targetStmt);
 							if( defStmts.isEmpty() ) {
 								//Index expressions are not defined within the target region.
 								isCached = true;
@@ -647,23 +667,35 @@ public abstract class ACC2GPUTranslationTools {
 								//Find a common statement including all statements modifying index expressions.
 								for( Statement ttStmt : defStmts ) {
 									Traversable pp = ttStmt;
-									while( (pp != null) && (pp.getParent() != targetStmt) ) {
-										pp = pp.getParent();
-									}
-									if( pp == null ) {
-										//Could not find child statement of targetStmt including the DEF statement (ttStmt).
-										isCached = false;
-										errorCode = 2;
-										break;
+									if( defStmt == null ) {
+										defStmt = (Statement)pp.getParent();
 									} else {
-										if( defStmt == null ) {
-											defStmt = (Statement)pp;
-										} else if( pp != defStmt ) {
-											//Multiple child statements of targetStmt that modify index expressions.
-											//Conservatively skip caching.
+										while( (pp != null) && (pp.getParent() != targetStmt) && (pp != defStmt) ) {
+											pp = pp.getParent();
+										}
+										if( pp == null ) {
+											//Could not find child statement of targetStmt including the DEF statement (ttStmt).
 											isCached = false;
-											errorCode = 3;
+											errorCode = 2;
 											break;
+										} else {
+											if( defStmt == null ) {
+												defStmt = (Statement)pp;
+											} else if( pp != defStmt ) {
+												Traversable pp2 = defStmt.getParent();
+												while( (pp2 != null) && (pp2.getParent() != targetStmt) ) {
+													pp2 = pp2.getParent();
+												}
+												if( pp == pp2 ) {
+													defStmt = (Statement)pp;
+												} else {
+													//Multiple child statements of targetStmt that modify index expressions.
+													//Conservatively skip caching.
+													isCached = false;
+													errorCode = 3;
+													break;
+												}
+											}
 										}
 									}
 								}

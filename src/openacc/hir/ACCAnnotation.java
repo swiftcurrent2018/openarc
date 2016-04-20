@@ -162,7 +162,7 @@ public class ACCAnnotation extends PragmaAnnotation
 		new HashSet<String>(Arrays.asList("parallel", "kernels", 
 				"data", "loop", "declare", "update", "host_data",
 				"seq", "independent", "internal", "routine", 
-				"enter", "exit" ));
+				"enter", "exit", "set"));
 
 	// Pragmas used with collection of values
 	private static final Set<String> collection_values =
@@ -176,7 +176,8 @@ public class ACCAnnotation extends PragmaAnnotation
 		"accglobal", "accshared", "accprivate", "accreduction", "accdeviceptr",
 		"accexplicitshared", "accreadonly",
 		"iterspace", "rcreate", "gangdim", "workerdim", "gangconf", "workerconf",
-		"totalnumgangs", "totalnumworkers", "tile", "pipe", "pipein", "pipeout" ));
+		"totalnumgangs", "totalnumworkers", "tile", "pipe", "pipein", "pipeout",
+		"default_async", "device_num", "device_type"));
 
 	// Pragmas used with optional value
 	private static final Set<String> optional_values = 
@@ -197,7 +198,7 @@ public class ACCAnnotation extends PragmaAnnotation
 	
 	// List of OpenACC directives.
 	public static final Set<String> OpenACCDirectiveSet = new HashSet(Arrays.asList("parallel", "kernels", "loop", "data", "host_data",
-			"declare", "update", "cache", "wait", "routine", "enter", "exit", "barrier"));
+			"declare", "update", "cache", "wait", "routine", "enter", "exit", "barrier", "set"));
 	
 	// List of OpenACC directives with optional if clauses
 	public static final Set<String> OpenACCDirectivesWithConditional = new HashSet(Arrays.asList("parallel",
@@ -226,7 +227,7 @@ public class ACCAnnotation extends PragmaAnnotation
 	"pcopyout", "present_or_create", "pcreate", "deviceptr", "device_resident", "host", "device", "private",
 	"pipe", "pipein", "pipeout",
 	"firstprivate", "use_device", "collapse", "gang", "worker", "vector", "seq", "independent", "bind",
-	"nohost", "nowait", "type", "tile"
+	"nohost", "nowait", "type", "tile", "default_async", "device_num", "device_type"
 	));
 	
 	// Clauses that specify worksharing loops
@@ -304,7 +305,7 @@ public class ACCAnnotation extends PragmaAnnotation
 			}
 		} else if( containsKey("declare") || containsKey("update") || containsKey("cache") ||
 				containsKey("barrier") || containsKey("enter") ||
-				containsKey("exit") ) {
+				containsKey("exit") || containsKey("set") ) {
 			//Stand-alone directives
 			//acc profile measure is a stand-alone directive.
 			//enter/exit data and enter/exit profile are stand-alone directives.
