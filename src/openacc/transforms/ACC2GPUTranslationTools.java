@@ -223,7 +223,8 @@ public abstract class ACC2GPUTranslationTools {
 						break;
 					}
 				}
-				if( constantIndices ) {
+				//[FIXME] Constant index array transformation is incorrect; disable it for now.
+/*				if( constantIndices ) {
 					///////////////////////////////////////////////////////////////////////////
 					// If array access has constant index expressions, we can insert loading //
 					// statement at the beginning and dump statement at the end of the target//
@@ -298,7 +299,8 @@ public abstract class ACC2GPUTranslationTools {
 							!cudaRegisterROSet.contains(aAccessString2) ) {
 						targetStmt.addStatement(astmt.clone());
 					}
-				} else if( containsIndirectAccess ) {
+				} else */
+				if( containsIndirectAccess ) {
 					if( !checkedArrayAccessSet.contains(aAccessString) ) {
 						PrintTools.println("[INFO in arrayCachingOnRegister()] " +
 								"the array access, " + aAccess + 
@@ -311,8 +313,10 @@ public abstract class ACC2GPUTranslationTools {
 					HashSet<ForLoop> targetLoops = new HashSet<ForLoop>();
 					//Find symobls used in the index expression
 					Set<Symbol> indexSyms = new HashSet<Symbol>();
-					for( Expression tExp : indexList) {
-						indexSyms.addAll(DataFlowTools.getUseSymbol(tExp));
+					if( !constantIndices ) {
+						for( Expression tExp : indexList) {
+							indexSyms.addAll(DataFlowTools.getUseSymbol(tExp));
+						}
 					}
 					List<Statement> defStmts;
 					if( indexSyms.isEmpty() ) {
@@ -320,106 +324,107 @@ public abstract class ACC2GPUTranslationTools {
 					} else {
 						defStmts = AnalysisTools.getDefStmts(indexSyms, targetStmt);
 					}
-					///////////////////////////////////////////////////////////////////////
-					// Find inner-most loops containing the array access and their index //
-					// variables are used in the array access.                           //
-					///////////////////////////////////////////////////////////////////////
-					//DEBUG: Is it OK to use region for targetStmt2, instead of using targetStmt?
-					Statement targetStmt2 = region;
 					boolean indexLoopExist = false;
-					DepthFirstIterator iter = new DepthFirstIterator(targetStmt2);
-					for (;;)
-					{
-						Expression tAccess = null;
+					if( !defStmts.isEmpty() ) {
+						///////////////////////////////////////////////////////////////////////
+						// Find inner-most loops containing the array access and their index //
+						// variables are used in the array access.                           //
+						///////////////////////////////////////////////////////////////////////
+						//DEBUG: Is it OK to use region for targetStmt2, instead of using targetStmt?
+						Statement targetStmt2 = region;
+						DepthFirstIterator iter = new DepthFirstIterator(targetStmt2);
+						for (;;)
+						{
+							Expression tAccess = null;
 
-						try {
-							tAccess = (Expression)iter.next(Expression.class);
-						} catch (NoSuchElementException e) {
-							break;
-						}
-						if( aAccess.equals(tAccess) ) {
-							Traversable t = tAccess.getParent();
-							Symbol indexSym = null;
-							Identifier tIndexVar = null;
-							boolean foundLoop = false;
-							while( t != targetStmt2 ) {
-								while( !(t instanceof ForLoop) && !(t == targetStmt2) ) {
-									t = t.getParent();
-								}
-								if( t instanceof ForLoop ) {
-									tIndexVar = (Identifier)LoopTools.getIndexVariable((ForLoop)t);
-									if( tIndexVar ==  null ) {
-										indexSym = null;
-									} else {
-										indexSym = tIndexVar.getSymbol();
+							try {
+								tAccess = (Expression)iter.next(Expression.class);
+							} catch (NoSuchElementException e) {
+								break;
+							}
+							if( aAccess.equals(tAccess) ) {
+								Traversable t = tAccess.getParent();
+								Symbol indexSym = null;
+								Identifier tIndexVar = null;
+								boolean foundLoop = false;
+								while( t != targetStmt2 ) {
+									while( !(t instanceof ForLoop) && !(t == targetStmt2) ) {
+										t = t.getParent();
 									}
-									if( IRTools.containsSymbol(tAccess, indexSym) ) {
-										if( !foundLoop ) {
-											foundLoop = true;
-											indexLoopExist = true;
-											ForLoop cLoop = (ForLoop)t;
-											Statement cLoopBody = cLoop.getBody();
-											//Check whether cLoop is a parent of any defStmts.
-											boolean innerDEFExist = false;
-											for(Statement ttStmt : defStmts) {
-												Traversable pp = ttStmt;
-												while( (pp != null) && (pp.getParent() != targetStmt) && (pp.getParent() != cLoopBody) ) {
-													pp = pp.getParent();
-												}
-												if( (pp != null) && (pp.getParent() == cLoopBody) ) {
-													innerDEFExist = true;
-													break;
-												}
-											}
-											if( (!innerDEFExist) && (!targetLoops.contains(cLoop)) ) {
-												boolean addLoop = true;
-												//Check whether cLoop is a parent of one of targetLoops.
-												for(ForLoop ttL : targetLoops ) {
-													Traversable ttt = ttL.getParent();
-													while( ttt != null ) {
-														if( ttt == t ) {
-															//cLoop is parent of ttL.
-															addLoop = false;
-															break;
-														}
-														ttt = ttt.getParent();
+									if( t instanceof ForLoop ) {
+										tIndexVar = (Identifier)LoopTools.getIndexVariable((ForLoop)t);
+										if( tIndexVar ==  null ) {
+											indexSym = null;
+										} else {
+											indexSym = tIndexVar.getSymbol();
+										}
+										if( IRTools.containsSymbol(tAccess, indexSym) ) {
+											if( !foundLoop ) {
+												foundLoop = true;
+												indexLoopExist = true;
+												ForLoop cLoop = (ForLoop)t;
+												Statement cLoopBody = cLoop.getBody();
+												//Check whether cLoop is a parent of any defStmts.
+												boolean innerDEFExist = false;
+												for(Statement ttStmt : defStmts) {
+													Traversable pp = ttStmt;
+													while( (pp != null) && (pp.getParent() != targetStmt) && (pp.getParent() != cLoopBody) ) {
+														pp = pp.getParent();
 													}
-													if( !addLoop ) {
+													if( (pp != null) && (pp.getParent() == cLoopBody) ) {
+														innerDEFExist = true;
 														break;
 													}
 												}
-												if(addLoop) {
-													//Check whether cLoop is a child of one of targetLoops.
-													Set<ForLoop> removeSet = new HashSet<ForLoop>();
+												if( (!innerDEFExist) && (!targetLoops.contains(cLoop)) ) {
+													boolean addLoop = true;
+													//Check whether cLoop is a parent of one of targetLoops.
 													for(ForLoop ttL : targetLoops ) {
-														Traversable ttt = cLoop.getParent();
+														Traversable ttt = ttL.getParent();
 														while( ttt != null ) {
-															if( ttt == ttL ) {
-																//cLoop is a child of ttL.
-																removeSet.add(ttL);
+															if( ttt == t ) {
+																//cLoop is parent of ttL.
+																addLoop = false;
 																break;
 															}
 															ttt = ttt.getParent();
 														}
+														if( !addLoop ) {
+															break;
+														}
 													}
-													if( !removeSet.isEmpty() ) {
-														targetLoops.removeAll(removeSet);
+													if(addLoop) {
+														//Check whether cLoop is a child of one of targetLoops.
+														Set<ForLoop> removeSet = new HashSet<ForLoop>();
+														for(ForLoop ttL : targetLoops ) {
+															Traversable ttt = cLoop.getParent();
+															while( ttt != null ) {
+																if( ttt == ttL ) {
+																	//cLoop is a child of ttL.
+																	removeSet.add(ttL);
+																	break;
+																}
+																ttt = ttt.getParent();
+															}
+														}
+														if( !removeSet.isEmpty() ) {
+															targetLoops.removeAll(removeSet);
+														}
+														targetLoops.add(cLoop);
 													}
-													targetLoops.add(cLoop);
 												}
 											}
-										}
-										break;
-									} else {
-										if( t == targetStmt2 ) {
 											break;
 										} else {
-											t = t.getParent();
+											if( t == targetStmt2 ) {
+												break;
+											} else {
+												t = t.getParent();
+											}
 										}
 									}
 								}
-							}
-/*							if( !foundLoop ) {
+								/*							if( !foundLoop ) {
 								/////////////////////////////////////////////////////////////
 								// FIXME: The array access is independent of any enclosing //
 								// loops. If the index expressions of the array access are //
@@ -437,123 +442,123 @@ public abstract class ACC2GPUTranslationTools {
 									checkedArrayAccessSet.add(aAccessString);
 								}
 							}*/
+							}
 						}
-					}
-/*					if( targetLoops.size() > 1 ) {
+						/*					if( targetLoops.size() > 1 ) {
 						PrintTools.println("[WARNING in ACC2GPUTranslationToos.arrayCachingOnRegister()] Multiple target loops are found for array " + aAccess + AnalysisTools.getEnclosingContext(aAccess), 0);
 					}*/
-					for( ForLoop fLoop : targetLoops ) {
-						//PrintTools.println("fLoop check point1 ", 0);
-						///////////////////////////////////////////////////
-						// Find the first instance of this array access. //
-						///////////////////////////////////////////////////
-						Expression firstAccess = null;
-						Expression lastAccess = null;
-						Statement firstAccessStmt = null;
-						Statement lastAccessStmt = null;
-						boolean foundFirstArrayAccess = false;
-						iter = new DepthFirstIterator(fLoop);
-						for (;;)
-						{
-							Expression tAccess = null;
+						for( ForLoop fLoop : targetLoops ) {
+							//PrintTools.println("fLoop check point1 ", 0);
+							///////////////////////////////////////////////////
+							// Find the first instance of this array access. //
+							///////////////////////////////////////////////////
+							Expression firstAccess = null;
+							Expression lastAccess = null;
+							Statement firstAccessStmt = null;
+							Statement lastAccessStmt = null;
+							boolean foundFirstArrayAccess = false;
+							iter = new DepthFirstIterator(fLoop);
+							for (;;)
+							{
+								Expression tAccess = null;
 
-							try {
-								tAccess = (Expression)iter.next(Expression.class);
-							} catch (NoSuchElementException e) {
-								break;
-							}
-							if( aAccess.equals(tAccess) ) {
-								if( !foundFirstArrayAccess ) {
-									firstAccess = tAccess;
-									foundFirstArrayAccess = true;
-								}
-								lastAccess = tAccess;
-							}
-						}
-						//PrintTools.println("fLoop check point2 ", 0);
-						if( (!foundFirstArrayAccess) || (firstAccess == lastAccess) ) {
-							continue;
-						}
-						Traversable t = (Traversable)firstAccess;
-						while( !(t instanceof Statement) ) {
-							t = t.getParent();
-						}
-						if( t instanceof Statement ) {
-							firstAccessStmt = (Statement)t;
-						}
-						if( (fLoop == region) && ((firstAccessStmt == fLoop) 
-								|| (firstAccessStmt == fLoop.getInitialStatement())) ) {
-							continue;
-						}
-						t = (Traversable)lastAccess;
-						while( !(t instanceof Statement) ) {
-							t = t.getParent();
-						}
-						if( t instanceof Statement ) {
-							lastAccessStmt = (Statement)t;
-						}
-
-						//DEBUG: if below check is for detecting reduction array, it
-						//can be removed, since reduction variable has been already excluded.
-						//if( firstAccessStmt == lastAccessStmt ) {
-						//	continue;
-						//}
-
-						if( cudaRegisterSet.contains(aAccessString) ) {
-							cachedArrayElmts.add(aAccessString);
-						} else if( cudaRegisterSet.contains(aAccessString2) ) {
-							cachedArrayElmts.add(aAccessString2);
-						}
-						// Replace all instances of the shared variable to the local variable
-						IRTools.replaceAll((Traversable) fLoop, aAccess, local_var);
-						//PrintTools.println("fLoop check point3 ", 0);
-						/////////////////////////////////////////////////////////////////////////////////////////
-						// If the address of the shared variable is passed as an argument of a function called //
-						// in the for-loop, load&store statement should be inserted before&after the function  //
-						// call site.                                                                          //
-						/////////////////////////////////////////////////////////////////////////////////////////
-						List<FunctionCall> funcCalls = IRTools.getFunctionCalls(fLoop); 
-						for( FunctionCall calledProc : funcCalls ) {
-							List<Expression> argList = (List<Expression>)calledProc.getArguments();
-							boolean foundArg = false;
-							for( Expression arg : argList ) {
-								if(IRTools.containsSymbol(arg, tSym) ) {
-									foundArg = true;
+								try {
+									tAccess = (Expression)iter.next(Expression.class);
+								} catch (NoSuchElementException e) {
 									break;
-								}    
-							}    
+								}
+								if( aAccess.equals(tAccess) ) {
+									if( !foundFirstArrayAccess ) {
+										firstAccess = tAccess;
+										foundFirstArrayAccess = true;
+									}
+									lastAccess = tAccess;
+								}
+							}
+							//PrintTools.println("fLoop check point2 ", 0);
+							if( (!foundFirstArrayAccess) || (firstAccess == lastAccess) ) {
+								continue;
+							}
+							Traversable t = (Traversable)firstAccess;
+							while( !(t instanceof Statement) ) {
+								t = t.getParent();
+							}
+							if( t instanceof Statement ) {
+								firstAccessStmt = (Statement)t;
+							}
+							if( (fLoop == region) && ((firstAccessStmt == fLoop) 
+									|| (firstAccessStmt == fLoop.getInitialStatement())) ) {
+								continue;
+							}
+							t = (Traversable)lastAccess;
+							while( !(t instanceof Statement) ) {
+								t = t.getParent();
+							}
+							if( t instanceof Statement ) {
+								lastAccessStmt = (Statement)t;
+							}
 
-							if( !cudaRegisterROSet.contains(aAccessString) && 
-									!cudaRegisterROSet.contains(aAccessString2) ) {
-								Statement fStmt = calledProc.getStatement();
-								if( foundArg ) {
-									((CompoundStatement)fStmt.getParent()).addStatementBefore(fStmt,
-											(Statement)astmt.clone());
-									((CompoundStatement)fStmt.getParent()).addStatementAfter(fStmt,
-											(Statement)estmt.clone());
-								} else {
-									///////////////////////////////////////////////////////////////////////////
-									// If the address of the shared variable is not passed as an argument    //   
-									// of a function called in the kernel region, but accessed in the called //
-									// function, load&store statements should be inserted before&after the   //   
-									// function call site.                                                   //
-									///////////////////////////////////////////////////////////////////////////
-									Procedure proc = calledProc.getProcedure();
-									if( proc != null ) {
-										Statement body = proc.getBody();
-										if( IRTools.containsSymbol(body, tSym) ) {
-											((CompoundStatement)fStmt.getParent()).addStatementBefore(fStmt,
-													(Statement)astmt.clone());
-											((CompoundStatement)fStmt.getParent()).addStatementAfter(fStmt,
-													(Statement)estmt.clone());
+							//DEBUG: if below check is for detecting reduction array, it
+							//can be removed, since reduction variable has been already excluded.
+							//if( firstAccessStmt == lastAccessStmt ) {
+							//	continue;
+							//}
+
+							if( cudaRegisterSet.contains(aAccessString) ) {
+								cachedArrayElmts.add(aAccessString);
+							} else if( cudaRegisterSet.contains(aAccessString2) ) {
+								cachedArrayElmts.add(aAccessString2);
+							}
+							// Replace all instances of the shared variable to the local variable
+							IRTools.replaceAll((Traversable) fLoop, aAccess, local_var);
+							//PrintTools.println("fLoop check point3 ", 0);
+							/////////////////////////////////////////////////////////////////////////////////////////
+							// If the address of the shared variable is passed as an argument of a function called //
+							// in the for-loop, load&store statement should be inserted before&after the function  //
+							// call site.                                                                          //
+							/////////////////////////////////////////////////////////////////////////////////////////
+							List<FunctionCall> funcCalls = IRTools.getFunctionCalls(fLoop); 
+							for( FunctionCall calledProc : funcCalls ) {
+								List<Expression> argList = (List<Expression>)calledProc.getArguments();
+								boolean foundArg = false;
+								for( Expression arg : argList ) {
+									if(IRTools.containsSymbol(arg, tSym) ) {
+										foundArg = true;
+										break;
+									}    
+								}    
+
+								if( !cudaRegisterROSet.contains(aAccessString) && 
+										!cudaRegisterROSet.contains(aAccessString2) ) {
+									Statement fStmt = calledProc.getStatement();
+									if( foundArg ) {
+										((CompoundStatement)fStmt.getParent()).addStatementBefore(fStmt,
+												(Statement)astmt.clone());
+										((CompoundStatement)fStmt.getParent()).addStatementAfter(fStmt,
+												(Statement)estmt.clone());
+									} else {
+										///////////////////////////////////////////////////////////////////////////
+										// If the address of the shared variable is not passed as an argument    //   
+										// of a function called in the kernel region, but accessed in the called //
+										// function, load&store statements should be inserted before&after the   //   
+										// function call site.                                                   //
+										///////////////////////////////////////////////////////////////////////////
+										Procedure proc = calledProc.getProcedure();
+										if( proc != null ) {
+											Statement body = proc.getBody();
+											if( IRTools.containsSymbol(body, tSym) ) {
+												((CompoundStatement)fStmt.getParent()).addStatementBefore(fStmt,
+														(Statement)astmt.clone());
+												((CompoundStatement)fStmt.getParent()).addStatementAfter(fStmt,
+														(Statement)estmt.clone());
+											}
 										}
 									}
 								}
 							}
-						}
-						//PrintTools.println("fLoop check point4 ", 0);
-						if( firstAccessStmt != null ) {
-							/*						Traversable p = firstAccessStmt.getParent();
+							//PrintTools.println("fLoop check point4 ", 0);
+							if( firstAccessStmt != null ) {
+								/*						Traversable p = firstAccessStmt.getParent();
 						while( !(p instanceof CompoundStatement) ) {
 							p = p.getParent();
 						}
@@ -567,28 +572,28 @@ public abstract class ACC2GPUTranslationTools {
 							((CompoundStatement)p).addStatementBefore(
 									firstAccessStmt, estmt.clone());
 						}*/
-							if( (firstAccessStmt == fLoop) || 
-									(firstAccessStmt == fLoop.getInitialStatement()) ) {
-								((CompoundStatement)fLoop.getParent()).addStatementBefore(fLoop, estmt.clone());
-							} else {
-								CompoundStatement fBody = (CompoundStatement)fLoop.getBody();
-								Statement fStmt = IRTools.getFirstNonDeclarationStatement(fBody);
-								if( fStmt == null ) {
-									fBody.addStatement(estmt.clone());
+								if( (firstAccessStmt == fLoop) || 
+										(firstAccessStmt == fLoop.getInitialStatement()) ) {
+									((CompoundStatement)fLoop.getParent()).addStatementBefore(fLoop, estmt.clone());
 								} else {
-									fBody.addStatementBefore(fStmt, estmt.clone());
+									CompoundStatement fBody = (CompoundStatement)fLoop.getBody();
+									Statement fStmt = IRTools.getFirstNonDeclarationStatement(fBody);
+									if( fStmt == null ) {
+										fBody.addStatement(estmt.clone());
+									} else {
+										fBody.addStatementBefore(fStmt, estmt.clone());
+									}
 								}
+							} else {
+								Tools.exit("[ERROR in arrayCachingOnRegister()] can't find a statement " +
+										"containing array access, " + aAccessString + 
+										"; remove the array access string from registerRO or registerRW clause.");
 							}
-						} else {
-							Tools.exit("[ERROR in arrayCachingOnRegister()] can't find a statement " +
-									"containing array access, " + aAccessString + 
-									"; remove the array access string from registerRO or registerRW clause.");
-						}
-						//PrintTools.println("fLoop check point5 ", 0);
-						if( !cudaRegisterROSet.contains(aAccessString) && 
-								!cudaRegisterROSet.contains(aAccessString2) ) {
-							ForLoop commonPLoop = null;
-							/*						Traversable parent_t1 = null;
+							//PrintTools.println("fLoop check point5 ", 0);
+							if( !cudaRegisterROSet.contains(aAccessString) && 
+									!cudaRegisterROSet.contains(aAccessString2) ) {
+								ForLoop commonPLoop = null;
+								/*						Traversable parent_t1 = null;
 						Traversable parent_t2 = null;
 						t = firstAccessStmt.getParent();
 						while( !(t instanceof ForLoop) ) {
@@ -630,31 +635,33 @@ public abstract class ACC2GPUTranslationTools {
 								} 
 							}
 						}*/
-							commonPLoop = fLoop;
-							if( commonPLoop != null ) {
-								if( (commonPLoop == fLoop) && ((firstAccessStmt == fLoop) || 
-										(firstAccessStmt == fLoop.getInitialStatement())) ) {
-									((CompoundStatement)fLoop.getParent()).addStatementAfter(fLoop, astmt.clone());
+								commonPLoop = fLoop;
+								if( commonPLoop != null ) {
+									if( (commonPLoop == fLoop) && ((firstAccessStmt == fLoop) || 
+											(firstAccessStmt == fLoop.getInitialStatement())) ) {
+										((CompoundStatement)fLoop.getParent()).addStatementAfter(fLoop, astmt.clone());
+									} else {
+										((CompoundStatement)commonPLoop.getBody()).addStatement(astmt.clone());
+									}
 								} else {
-									((CompoundStatement)commonPLoop.getBody()).addStatement(astmt.clone());
+									PrintTools.println("[Current for-loop] \n" + fLoop + "\n", 0);
+									Tools.exit("[ERROR in arrayCachingOnRegister()] can't find a common, enclosing for-loop " +
+											"containing all instances of array access, " + aAccessString + 
+											"; remove the array access string from registerRO or registerRW clause.");
 								}
-							} else {
-								PrintTools.println("[Current for-loop] \n" + fLoop + "\n", 0);
-								Tools.exit("[ERROR in arrayCachingOnRegister()] can't find a common, enclosing for-loop " +
-										"containing all instances of array access, " + aAccessString + 
-										"; remove the array access string from registerRO or registerRW clause.");
 							}
 						}
 					}
 					if( (!indexLoopExist) && targetLoops.isEmpty() ) {
-						/////////////////////////////////////////////////////////////
-						// The array access is independent of any enclosing loops  //
-						// and the index expressions are not constant.             //
-						/////////////////////////////////////////////////////////////
+						//////////////////////////////////////////////////////////////
+						// The array access is independent of any enclosing loops.  //
+						//////////////////////////////////////////////////////////////
 						boolean isCached = true;
 						int errorCode = 0;
 						Statement defStmt = null;
-						if( indexSyms.isEmpty() ) {
+						Statement parentDefStmt = null;
+						boolean sameParentDefStmt = true;
+						if( (!constantIndices) && indexSyms.isEmpty() ) {
 							//index expressions are not constant, but we could not find symbols for variables used 
 							//in the index expression; conservatively skip caching.
 							isCached = false;
@@ -667,10 +674,23 @@ public abstract class ACC2GPUTranslationTools {
 								//Find a common statement including all statements modifying index expressions.
 								for( Statement ttStmt : defStmts ) {
 									Traversable pp = ttStmt;
+									if( sameParentDefStmt && (parentDefStmt == null) ) {
+										parentDefStmt = (Statement)pp.getParent();
+									} else if( sameParentDefStmt ) {
+										if( ((Statement)pp.getParent()) != parentDefStmt ) {
+											sameParentDefStmt = false;
+											parentDefStmt = null;
+										}
+									}
 									if( defStmt == null ) {
-										defStmt = (Statement)pp.getParent();
+										if( pp.getParent() == targetStmt ) {
+											defStmt = (Statement)pp;
+										} else {
+											defStmt = (Statement)pp.getParent();
+										}
 									} else {
 										while( (pp != null) && (pp.getParent() != targetStmt) && (pp != defStmt) ) {
+											//Find a child statement of targetStmt containing the current DEF statement.
 											pp = pp.getParent();
 										}
 										if( pp == null ) {
@@ -682,7 +702,7 @@ public abstract class ACC2GPUTranslationTools {
 											if( defStmt == null ) {
 												defStmt = (Statement)pp;
 											} else if( pp != defStmt ) {
-												Traversable pp2 = defStmt.getParent();
+												Traversable pp2 = defStmt;
 												while( (pp2 != null) && (pp2.getParent() != targetStmt) ) {
 													pp2 = pp2.getParent();
 												}
@@ -701,7 +721,7 @@ public abstract class ACC2GPUTranslationTools {
 								}
 							}
 						}
-						if( isCached ) {
+						if( isCached || sameParentDefStmt ) {
 							///////////////////////////////////////////////////
 							// Find the first instance of this array access. //
 							///////////////////////////////////////////////////
@@ -710,7 +730,9 @@ public abstract class ACC2GPUTranslationTools {
 							Statement firstAccessStmt = null;
 							Statement lastAccessStmt = null;
 							boolean foundFirstArrayAccess = false;
-							iter = new DepthFirstIterator(region);
+							boolean sameParentArrayAccessStmt = true;
+							Statement parentArrayAccessStmt = null;
+							DepthFirstIterator iter = new DepthFirstIterator(region);
 							for (;;)
 							{
 								Expression tAccess = null;
@@ -725,8 +747,40 @@ public abstract class ACC2GPUTranslationTools {
 										firstAccess = tAccess;
 										foundFirstArrayAccess = true;
 									}
+									if( sameParentDefStmt && sameParentArrayAccessStmt ) {
+										Traversable t = (Traversable)tAccess;
+										while( (t != null) && !(t instanceof Statement) ) {
+											t = t.getParent();
+										}
+										if( t instanceof Statement ) {
+											Statement ttStmt = (Statement)t.getParent();
+											if( parentArrayAccessStmt == null ) {
+												parentArrayAccessStmt = ttStmt;
+											} else if ( parentArrayAccessStmt != ttStmt ) {
+												parentArrayAccessStmt = null;
+												sameParentArrayAccessStmt = false;
+											}
+										} else {
+											parentArrayAccessStmt = null;
+											sameParentArrayAccessStmt = false;
+										}
+									}
 									lastAccess = tAccess;
 								}
+							}
+							if( !isCached && (!sameParentArrayAccessStmt || (parentArrayAccessStmt != parentDefStmt)) ) {
+								if( !checkedArrayAccessSet.contains(aAccessString) ) {
+									errorCode = 4;
+									PrintTools.println("[INFO in arrayCachingOnRegister()] " +
+											"index expression of the array access, " + aAccess + 
+											", is independent of any enclosing loops, but not constant. " +
+											"Current implementation fails to detect the possible dependency problem of this " +
+											"index expression, and thus it will not be cached conservatively, " +
+											"even though it may have locality. (Internal code = " + errorCode + ")" +
+											AnalysisTools.getEnclosingContext(region), 0);
+									checkedArrayAccessSet.add(aAccessString);
+								}
+								continue;
 							}
 							//PrintTools.println("fLoop check point2 ", 0);
 							if( (!foundFirstArrayAccess) || (firstAccess == lastAccess) ) {
@@ -756,16 +810,50 @@ public abstract class ACC2GPUTranslationTools {
 										"containing array access, " + aAccessString + 
 								"; remove the array access string from registerRO or registerRW clause.");
 							}
-							
-							Traversable pp = lastAccessStmt;
-							while( (pp != null) && (pp.getParent() != defStmt) && (pp.getParent() != targetStmt) ) {
-								pp = pp.getParent();
-							}
-							if( (pp != null) && (defStmt != null) && (pp.getParent() == defStmt) ) {
-								//lastAccessStmt is in the same block where index expressions are modified, which
-								//implies that caching should be done only in that enclosing block; for now, conservatively
-								//skip the caching.
-								continue;
+							Statement lastDefStmt = null;
+							if( !isCached ) {
+								//Check whether all index-def-statements are before the array-access-statements.
+								//If not, skip caching conservatively.
+								if( parentDefStmt instanceof CompoundStatement ) {
+									CompoundStatement cStmt = (CompoundStatement)parentDefStmt;
+									int lastDefIndex = 0;
+									int tmp = 0;
+									for( Statement dStmt : defStmts ) {
+										tmp = cStmt.getChildren().indexOf(dStmt);
+										if( tmp > lastDefIndex ) {
+											lastDefIndex = tmp;
+											lastDefStmt = dStmt;
+										}
+									}
+									tmp = cStmt.getChildren().indexOf(firstAccessStmt);
+									if( (tmp == -1) || (tmp < lastDefIndex) ) {
+										if( !checkedArrayAccessSet.contains(aAccessString) ) {
+											errorCode = 5;
+											PrintTools.println("[INFO in arrayCachingOnRegister()] " +
+													"index expression of the array access, " + aAccess + 
+													", is independent of any enclosing loops, but not constant. " +
+													"Current implementation fails to detect the possible dependency problem of this " +
+													"index expression, and thus it will not be cached conservatively, " +
+													"even though it may have locality. (Internal code = " + errorCode + ")" +
+													AnalysisTools.getEnclosingContext(region), 0);
+											checkedArrayAccessSet.add(aAccessString);
+										}
+										continue;
+									}
+								} else {
+									continue;
+								}
+							} else {
+								Traversable pp = lastAccessStmt;
+								while( (pp != null) && (pp.getParent() != defStmt) && (pp.getParent() != targetStmt) ) {
+									pp = pp.getParent();
+								}
+								if( (pp != null) && (defStmt != null) && (pp.getParent() == defStmt) ) {
+									//lastAccessStmt is in the same block where index expressions are modified, which
+									//implies that caching should be done only in that enclosing block; for now, conservatively
+									//skip the caching.
+									continue;
+								}
 							}
 							
 							if( cudaRegisterSet.contains(aAccessString) ) {
@@ -775,17 +863,30 @@ public abstract class ACC2GPUTranslationTools {
 							}
 							
 							boolean foundDEFStmt = false;
-							if( defStmt == null ) {
+							if( isCached && (defStmt == null) ) {
 								foundDEFStmt = true;
 							}
 							List<Statement> stmtToInsertLSStmts = new LinkedList<Statement>();
-							for( Traversable tChildStmt : targetStmt.getChildren() ) {
+							CompoundStatement cTargetStmt = null;
+							if( isCached ) {
+								cTargetStmt = targetStmt;
+							} else {
+								cTargetStmt = (CompoundStatement)parentDefStmt;
+							}
+							for( Traversable tChildStmt : cTargetStmt.getChildren() ) {
 								if( !foundDEFStmt ) {
-									if( tChildStmt == defStmt ) {
-										foundDEFStmt = true;
+									if( isCached ) {
+										if( tChildStmt == defStmt ) {
+											foundDEFStmt = true;
+										}
+										continue;
+									} else {
+										if( defStmts.contains(tChildStmt) ) {
+											continue;
+										}
 									}
-									continue;
-								} else {
+								} 
+								if( !isCached || foundDEFStmt ) {
 									// Replace all instances of the shared variable to the local variable
 									IRTools.replaceAll(tChildStmt, aAccess, local_var);
 									//PrintTools.println("fLoop check point3 ", 0);
@@ -840,9 +941,12 @@ public abstract class ACC2GPUTranslationTools {
 							
 							
 							//PrintTools.println("fLoop check point4 ", 0);
-							if( defStmt != null ) {
+							if( isCached && (defStmt != null) ) {
 								//Add load statement after the index expressions are modified.
 								((CompoundStatement)defStmt.getParent()).addStatementAfter(defStmt, estmt.clone());
+							} else if( !isCached && (lastDefStmt != null) ) {
+								//Add load statement after the index expressions are modified.
+								((CompoundStatement)lastDefStmt.getParent()).addStatementAfter(lastDefStmt, estmt.clone());
 							} else {
 								//The index expressions remains unchanged within the target region.
 								//Add load statement before the first non-declaration statement.
@@ -854,7 +958,6 @@ public abstract class ACC2GPUTranslationTools {
 								}
 							}
 							
-							//PrintTools.println("fLoop check point5 ", 0);
 							if( !cudaRegisterROSet.contains(aAccessString) && 
 									!cudaRegisterROSet.contains(aAccessString2) ) {
 								//Add store statement at the end of the target region
