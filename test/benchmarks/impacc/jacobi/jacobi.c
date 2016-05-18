@@ -1,0 +1,127 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <unistd.h>
+
+#define MAXITCNT    (10)
+#define EXPITCNT    (1000)
+#define DIFFNORM    (1.0e-2)
+
+#define MAXN        (1 * 1024)
+#pragma openarc #define MAXN (1 * 1024)
+
+int main(int argc, char** argv)
+{
+    int        rank, value, size, errcnt, toterr, i, j, itcnt;
+    int        i_first, i_last;
+    double     diffnorm, gdiffnorm;
+
+    double (*xlocal)[MAXN];
+    double (*xnew)[MAXN];
+
+    char name[256];
+    double time0, time1;
+    double ttime0, ttime1;
+    double time_init, time_loop = 0.0;
+
+    int direct_dev = 1;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    gethostname(name, sizeof(name));
+    printf("[%s:%d] %d/%d [%s]\n", __FILE__, __LINE__, rank, size, name);
+
+    xlocal = (double(*)[MAXN]) malloc(((MAXN/size)+2) * MAXN * sizeof(double));
+    xnew = (double(*)[MAXN]) malloc(((MAXN/size)+2) * MAXN * sizeof(double));
+
+    /* xlocal[][0] is lower ghostpoints, xlocal[][MAXN+2] is upper */
+
+    /* Note that top and bottom processes have one less row of interior points */
+    i_first = 1;
+    i_last  = MAXN/size;
+    if (rank == 0)        i_first++;
+    if (rank == size - 1) i_last--;
+
+    /* Fill the data as specified */
+    for (i = 1; i <= MAXN/size; i++) 
+        for (j = 0; j < MAXN; j++) 
+            xlocal[i][j] = j;
+
+    for (j = 0; j < MAXN; j++) {
+        xlocal[i_first-1][j] = -1;
+        xlocal[i_last+1][j] = -1;
+    }
+
+    itcnt = 0;
+
+    time0 = MPI_Wtime();
+
+#pragma acc data create(xnew[0:(MAXN/size)+2][0:MAXN])
+    {
+#pragma acc data copyin(xlocal[0:(MAXN/size)+2][0:MAXN]) if(direct_dev)
+    do {
+        ttime0 = MPI_Wtime();
+        /* Send up unless I'm at the top, then receive from below */
+        /* Note the use of xlocal[i] for &xlocal[i][0] */
+        if (rank < size - 1) {
+            #pragma acc mpi sendbuf(device)
+            MPI_Send(xlocal[MAXN / size], MAXN, MPI_DOUBLE, rank + 1, 0, MPI_COMM_WORLD);
+		}
+        if (rank > 0) {
+            #pragma acc mpi recvbuf(device)
+            MPI_Recv(xlocal[0], MAXN, MPI_DOUBLE, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		}
+        /* Send down unless I'm at the bottom */
+        if (rank > 0) {
+            #pragma acc mpi sendbuf(device)
+            MPI_Send(xlocal[1], MAXN, MPI_DOUBLE, rank - 1, 1, MPI_COMM_WORLD);
+		}
+        if (rank < size - 1) {
+            #pragma acc mpi recvbuf(device)
+            MPI_Recv(xlocal[MAXN / size + 1], MAXN, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		}
+
+        /* Compute new values (but not on boundary) */
+        itcnt ++;
+        diffnorm = 0.0;
+#pragma acc data copy(xlocal[0:(MAXN/size)+2][0:MAXN]) if(!direct_dev)
+        {
+#pragma acc kernels loop independent reduction(+:diffnorm)
+            for (j = 1; j < MAXN - 1; j++) {
+                for (i = i_first; i <= i_last; i++) {
+                    xnew[i][j] = (xlocal[i][j+1] + xlocal[i][j-1] + xlocal[i+1][j] + xlocal[i-1][j]) / 4.0;
+                    diffnorm += (xnew[i][j] - xlocal[i][j]) * (xnew[i][j] - xlocal[i][j]);
+                }
+            }
+
+        /* Only transfer the interior points */
+#pragma acc kernels loop gang worker independent
+            for (j = 1; j < MAXN - 1; j++) 
+                for (i = i_first; i <= i_last; i++) 
+                    xlocal[i][j] = xnew[i][j];
+        }
+
+        MPI_Allreduce(&diffnorm, &gdiffnorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+        gdiffnorm = sqrt(gdiffnorm);
+        ttime1 = MPI_Wtime();
+        if (rank == 0) printf("At iteration %d, diff is %e [%.5f]\n", itcnt, gdiffnorm, ttime1 - ttime0);
+        if (itcnt == 1) time_init = ttime1 - ttime0;
+        else time_loop += (ttime1 - ttime0);
+    } while (gdiffnorm > DIFFNORM && itcnt < MAXITCNT);
+
+    }
+
+    time1 = MPI_Wtime();
+
+    printf("%lf\n", time1 - time0);
+    if (rank == 0) printf("size[%d] %lf seconds time_init[%lf] time_loop[%lf] exploop[%d] exp_total[%lf]\n", size, time1 - time0, time_init, time_loop / (double) (itcnt - 1), EXPITCNT, time_init + EXPITCNT * (time_loop / (double) (itcnt - 1)));
+
+    MPI_Finalize();
+
+    return 0;
+}
+

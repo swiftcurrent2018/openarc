@@ -160,9 +160,12 @@ sub main {
       $cmd = shesc($LLVM_OPT)
         ." -fitl"
         # Without -mem2reg -loop-rotate, the -nvl-hoist-tx-adds pass fails
-        # to optimize many loops.
+        # to optimize many loops. -inline can be quite important for
+        # enabling shadow updates because it can reduce the number of
+        # V-to-NV pointer isoalloc sets, but obviously it's generally good
+        # for SSA conversion and hoisting.
         .($nvlAddTxsPass
-          ? " -nvl-add-txs -mem2reg -loop-rotate -nvl-hoist-tx-adds"
+          ? " -nvl-add-txs -inline -mem2reg -loop-rotate -nvl-hoist-tx-adds"
             . " -nvl-hoist-tx-adds-aggressive=true"
           : "")
         .($nvlAddSafetyPass ? " -nvl-add-safety" : "")

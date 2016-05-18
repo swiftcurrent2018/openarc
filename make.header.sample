@@ -37,6 +37,7 @@
 #       PERL                    : location of perl                 #
 #   - Modify target-specific test configuration (required only for #
 #     some examples, benchmarks, or other tests):                  #
+#       MPI_FLAGS       : compiler flags for MPI                   #
 #       MPI_INCLUDES    : include path for MPI                     #
 #       MPI_LIBDIR      : library path for MPI                     #
 #       FC              : fortran compiler                         #
@@ -93,7 +94,7 @@ CETUS_OUTPUT = cetus_output
 
 ########################################################################
 # Set the target system                                                #
-# Example targets: Titan, Newark, MacBookPro, Beacon Atlanta           #
+# Example targets: Titan, Newark, MacBookPro, Beacon, Atlanta, Cooley  #
 ########################################################################
 # Titan: Cray XK7 system with NVIDIA GPUs                              #
 #        https://www.olcf.ornl.gov/computing-resources/titan-cray-xk7/ #
@@ -104,6 +105,7 @@ CETUS_OUTPUT = cetus_output
 # MacBookPro: OS X system with an AMD GPU                              #
 # Kold: a mini cluster consisting of four HP SL250 nodes used for      #
 #       pilot studies within the Keeneland project.                    #
+# Cooley: ALCF NVIDIA GPU cluster                                      #
 ########################################################################
 TARGET_SYSTEM = Newark
 
@@ -149,6 +151,7 @@ endif
 #LLVM_TARGET_DATA_LAYOUT =
 #PERL = perl
 
+MPI_FLAGS = -craympich-mt
 #MPI_INCLUDES =
 #MPI_LIBDIR =
 #FC =
@@ -217,6 +220,7 @@ LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
 LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
 PERL = perl
 
+#MPI_FLAGS =
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
 FC = gfortran
@@ -272,6 +276,7 @@ LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
 LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
 PERL = perl
 
+#MPI_FLAGS =
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
 FC = gfortran
@@ -313,6 +318,7 @@ LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
 LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
 PERL = perl
 
+#MPI_FLAGS =
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
 FC = gfortran
@@ -359,8 +365,9 @@ LLVM_TARGET_TRIPLE = x86_64-apple-macosx10.9.0
 LLVM_TARGET_DATA_LAYOUT = e-m:o-i64:64-f80:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
 PERL = perl
 
-MPI_INCLUDES = /opt/local/include/openmpi-mp
-MPI_LIBDIR = /opt/local/lib/openmpi-mp
+#MPI_FLAGS =
+MPI_INCLUDES = /opt/local/include/mpich-mp
+MPI_LIBDIR = /opt/local/lib/mpich-mp
 FC = gfortran-mp-4.9
 SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-osx.cfg.in
@@ -401,6 +408,7 @@ GFRONTEND_DEBUG = -g
 #LLVM_TARGET_DATA_LAYOUT =
 #PERL = perl
 
+#MPI_FLAGS =
 #MPI_INCLUDES =
 #MPI_LIBDIR =
 #FC =
@@ -413,6 +421,61 @@ GFRONTEND_DEBUG = -g
 #PMEM_LIBDIR =
 
 endif
+
+#########################
+# Target System: Cooley #
+#########################
+ifeq ($(TARGET_SYSTEM),Cooley)
+
+OPENARC_ARCH = 0
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = mpicc
+CXX = mpic++
+CPP = $(CC) -E
+GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D_OPENARC_PROFILE_=1
+ifeq ($(OPENARC_ARCH), 0)
+BACKENDCXX = g++
+CC_FLAGS_PREFIX =
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/soft/visualization/cuda-7.0.28/include
+GBACKEND_LIBS = 
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB)
+GFRONTEND_DEBUG = -g
+else
+BACKENDCXX = g++
+CC_FLAGS_PREFIX =
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/soft/visualization/cuda-7.0.28/include
+GBACKEND_LIBS =
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB)
+GFRONTEND_DEBUG = -g
+endif
+
+#LLVM_TARGET_TRIPLE =
+#LLVM_TARGET_DATA_LAYOUT =
+#PERL = perl
+
+#MPI_INCLUDES =
+#MPI_LIBDIR =
+#FC =
+#SPEC_CPU2006 =
+#SPEC_CFG =
+#JUNIT_CLASSPATH =
+#NVM_TESTDIR =
+
+#PMEM_INCLUDES =
+#PMEM_LIBDIR =
+
+endif
+
 
 ##############################################
 # make utilities                             #

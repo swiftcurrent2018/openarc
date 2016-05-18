@@ -6,6 +6,7 @@ package openacc.analysis;
 import java.io.*;
 import java.util.*;
 import java.lang.String;
+
 import cetus.hir.*;
 import openacc.hir.ACCAnnotation;
 import openacc.hir.ASPENData;
@@ -13,6 +14,7 @@ import openacc.hir.ASPENParam;
 import openacc.hir.ASPENResource;
 import openacc.hir.ASPENTrait;
 import openacc.hir.ReductionOperator;
+import openacc.transforms.ACCAnnotationParser;
 
 /**
  * OpenACC annotation parser
@@ -575,6 +577,49 @@ public class ACCParser {
 	 * <p>     
 	 * #pragma acc wait [( scalar-integer-expression )]
 	 * <p>     
+	 * <p>     
+	 * #pragma acc enter data clause[[,] clause]...
+	 * <p>     
+	 * where clause is one of the following:
+	 *      if( condition )
+	 *      async [( scalar-integer-expression )]
+	 *      wait [( scalar-integer-expression )]
+	 *      copyin( list )
+	 *      create( list )
+	 * <p>     
+	 * #pragma acc exit data clause[[,] clause]...
+	 * <p>     
+	 * where clause is one of the following:
+	 *      if( condition )
+	 *      async [( scalar-integer-expression )]
+	 *      wait [( scalar-integer-expression )]
+	 *      copyout( list )
+	 *      delete( list )
+	 *      finalize
+	 * <p>     
+	 * #pragma acc wait [( scalar-integer-expression )]
+	 * <p>     
+	 * #pragma acc routine [clause[[,] clause]...]
+	 * <p>     
+	 * where clause is one of the following
+	 *     bind(name)
+	 *     nohost
+	 *     type(workshare type)     
+	 * <p>     
+	 * #pragma acc set [clause[[,] clause]...]
+	 * <p>     
+	 * where clause is one of the following
+	 *     default_async ( scalar-integer-expression )
+	 *     device_num ( scalar-integer-expression )
+	 *     device_type ( device-type )
+	 * <p>
+	 * #pragma acc mpi [clause[[,] clause]...]
+	 * <p>
+	 * where clause is one of the following
+	 *     sendbuf ( [device] [,] [readonly] )
+	 *     recvbuf ( [device] [,] [readonly] )
+	 *     async [(int-expr)]    
+	 * <p>
 	 * #pragma openarc ainfo procname(proc-name) kernelid(kernel-id)
 	 * <p>     
 	 * #pragma openarc cuda [clause[[,] clause]...]
@@ -691,12 +736,8 @@ public class ACCParser {
 			case acc_barrier 	: parse_acc_barrier(); return false;
 			case acc_enter 	: parse_acc_enter(); return false;
 			case acc_exit 	: parse_acc_exit(); return false;
-			//case acc_ainfo 		: parse_acc_ainfo(); return true;
-			//case acc_cuda 		: parse_acc_cuda(); return true;
-			//case acc_resilience 	: parse_acc_resilience(); return true;
-			//case acc_ftregion 	: parse_acc_ftregion(); return true;
-			//case acc_ftinject 	: parse_acc_ftinject(); return false;
-			//case acc_profile 	: return parse_acc_profile();
+			case acc_set 	: parse_acc_set(); return false;
+			case acc_mpi 	: parse_acc_mpi(); return true;
 			//		default : throw new NonOmpDirectiveException();
 			default : ACCParserError("Not Supported Construct");
 			}
@@ -704,6 +745,58 @@ public class ACCParser {
 			ACCParserError("unexpected or wrong token found (" + token + ")");
 		}
 		return true;		// meaningless return because it is unreachable
+	}
+
+
+	/**
+	 * Standalone subarray-list parser, which takes a String containing comma-separated subarray list and 
+	 * optional macro_map and returns Set<SubArray> as output.
+	 * 
+	 * @param inputStr string containing comma-seperated subarray list
+	 * @param macro_map optional macro map
+	 * @return Set<SubArray>
+	 */
+	public static Set<SubArray> parse_subarraylist(String inputStr, HashMap<String, String>macro_map)
+	{
+		String newStr = ACCAnnotationParser.modifyAnnotationString("(" + inputStr +")");
+		token_array = newStr.split("\\s+");
+		token_index = 1; //Skip leading space before '(' token. 
+		if( macro_map == null ) {
+			macroMap = new HashMap<String, String>();
+		} else {
+			macroMap = macro_map;
+		}
+		PrintTools.println(display_tokens(), 9);
+		match("(");
+		Set<SubArray> set = new HashSet<SubArray>();
+		parse_commaSeparatedSubArrayList(set);
+		match(")");
+
+		return set;
+	}
+
+	/**
+	 * Standalone reduction parser, which takes an input HashMap, a String containing reduction clause and 
+	 * optional macro_map and update the input HashMap with reduction mapping.
+	 * 
+     * @param input_map HashMap that will contain the parsed output pragmas
+	 * @param inputStr string containing comma-seperated subarray list
+	 * @param macro_map optional macro map
+	 * @return Set<SubArray>
+	 */
+	public static void parse_reductionclause(HashMap input_map, String inputStr, HashMap<String, String>macro_map)
+	{
+		String newStr = ACCAnnotationParser.modifyAnnotationString("(" + inputStr +")");
+		acc_map = input_map;
+		token_array = newStr.split("\\s+");
+		token_index = 1; //Skip leading space before '(' token. 
+		if( macro_map == null ) {
+			macroMap = new HashMap<String, String>();
+		} else {
+			macroMap = macro_map;
+		}
+		PrintTools.println(display_tokens(), 9);
+		parse_acc_reduction("reduction");
 	}
 	
 	private static void parse_acc_enter()
@@ -714,7 +807,6 @@ public class ACCParser {
 		try {
 			switch (acc_directives.valueOf(construct)) {
 			case acc_data	: parse_acc_enter_data(); break;
-			//case acc_profile 	: parse_acc_profile(); break;
 			//		default : throw new NonOmpDirectiveException();
 			default : ACCParserError("Not Supported Construct");
 			}
@@ -731,7 +823,6 @@ public class ACCParser {
 		try {
 			switch (acc_directives.valueOf(construct)) {
 			case acc_data	: parse_acc_exit_data(); break;
-			//case acc_profile 	: parse_acc_exit_profile(); break;
 			//		default : throw new NonOmpDirectiveException();
 			default : ACCParserError("Not Supported Construct");
 			}
@@ -1605,7 +1696,8 @@ public class ACCParser {
 				case acc_present_or_create	:	parse_acc_dataclause("pcreate"); break;
 				case acc_pcreate	:	parse_acc_dataclause(tok); break;
 				case acc_pipe 		:	parse_acc_dataclause(tok); break;
-				//[TODO] add async, wait clause handlers.
+				case acc_async	:	parse_acc_optionalconfclause(tok); break;
+				case acc_wait	:	parse_acc_optionalconfclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -1625,6 +1717,7 @@ public class ACCParser {
 	 *      wait [(int-expr-list)]
 	 * 		copyout( list ) 
 	 *      delete( list )
+	 *      finalize
 	 * --------------------------------------------------------------- */
 	private static void parse_acc_exit_data()
 	{
@@ -1641,7 +1734,44 @@ public class ACCParser {
 				switch (acc_clause.valueOf(clause)) {
 				case acc_if		:	parse_acc_confclause(tok); break;
 				case acc_copyout 		:	parse_acc_dataclause(tok); break;
-				//[TODO] add async, wait, delete clause handlers
+				case acc_async	:	parse_acc_optionalconfclause(tok); break;
+				case acc_wait	:	parse_acc_optionalconfclause(tok); break;
+				case acc_finalize		: parse_acc_noargclause(tok); break;
+				case acc_delete 		:	parse_acc_dataclause(tok); break;
+				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
+				}
+			} catch( Exception e) {
+				ACCParserError("unexpected or wrong token found (" + tok + ")");
+			}
+		}
+	}
+
+	/** ---------------------------------------------------------------
+	 *		OpenACC set Construct
+	 *
+	 *		#pragma acc set [clause[[,] clause]...] new-line
+	 *
+	 *	   where clause is one of the following
+	 *     default_async ( scalar-integer-expression )
+	 *     device_num ( scalar-integer-expression )
+	 *     device_type ( device-type )
+	 * --------------------------------------------------------------- */
+	private static void parse_acc_set()
+	{
+		addToMap("set", "_directive");
+		PrintTools.println("ACCParser is parsing [set] directive", 3);
+		while (end_of_token() == false) 
+		{
+			String tok = get_token();
+			if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+			if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+			String clause = "acc_" + tok;
+			PrintTools.println("clause=" + clause, 3);
+			try {
+				switch (acc_clause.valueOf(clause)) {
+				case acc_default_async		:	parse_acc_confclause(tok); break;
+				case acc_device_num	:	parse_acc_confclause(tok); break;
+				case acc_device_type	:	parse_acc_confclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -1783,6 +1913,7 @@ public class ACCParser {
 				case acc_device	:	parse_acc_dataclause(tok); clauseexist = true; break;
 				case acc_if		:	parse_acc_confclause(tok); break;
 				case acc_async	:	parse_acc_optionalconfclause(tok); break;
+				case acc_wait	:	parse_acc_optionalconfclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -1803,6 +1934,40 @@ public class ACCParser {
 	private static void parse_acc_wait()
 	{
 		parse_acc_optionaldirective("wait");
+	}   
+
+	/** ---------------------------------------------------------------
+	 *		OpenACC mpi Construct
+	 *
+	 *		#pragma acc mpi [clause[[,] clause]...] new-line
+	 *
+	 *		where clause is one of the following
+	 *     sendbuf ( [device] [,] [readonly] )
+	 *     recvbuf ( [device] [,] [readonly] )
+	 *     async [(int-expr)]   
+	 * --------------------------------------------------------------- */
+	private static void parse_acc_mpi()
+	{
+		addToMap("mpi", "_directive");
+		PrintTools.println("ACCParser is parsing [mpi] directive", 3);
+		while (end_of_token() == false) 
+		{
+			String tok = get_token();
+			if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+			if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+			String clause = "acc_" + tok;
+			PrintTools.println("clause=" + clause, 3);
+			try {
+				switch (acc_clause.valueOf(clause)) {
+				case acc_sendbuf		:	parse_conf_expressionset(tok); break;
+				case acc_recvbuf		:	parse_conf_expressionset(tok); break;
+				case acc_async	:	parse_acc_optionalconfclause(tok); break;
+				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
+				}
+			} catch( Exception e) {
+				ACCParserError("unexpected or wrong token found (" + tok + ")");
+			}
+		}
 	}
 	
 	/**
@@ -1848,7 +2013,7 @@ public class ACCParser {
 				case token_constant		:	parse_acc_dataclause(tok); break;
 				case token_noconstant	:	parse_acc_dataclause(tok); break;
 				case token_global	:	parse_acc_dataclause(tok); break;
-				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
+				default : ACCParserError("NoSuchOpenARCConstruct : " + clause);
 				}
 			} catch( Exception e) {
 				ACCParserError("unexpected or wrong token found (" + tok + ")");
@@ -1881,7 +2046,7 @@ public class ACCParser {
 				switch (opencl_clause.valueOf(clause)) {
 				case token_num_simd_work_items	:	parse_acc_confclause(tok); break;
 				case token_num_compute_units	:	parse_acc_confclause(tok); break;
-				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
+				default : ACCParserError("NoSuchOpenARCConstruct : " + clause);
 				}
 			} catch( Exception e) {
 				ACCParserError("unexpected or wrong token found (" + tok + ")");
@@ -1934,7 +2099,29 @@ public class ACCParser {
 				case token_multisrcgc	:	parse_acc_dataclause(tok); break;
 				case token_conditionalsrc		: parse_acc_dataclause(tok); break;
 				case token_enclosingloops		: parse_acc_dataclause(tok); break;
-				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
+				default : ACCParserError("NoSuchOpenARCConstruct : " + clause);
+				}
+			} catch( Exception e) {
+				ACCParserError("unexpected or wrong token found (" + tok + ")");
+			}
+		}
+	}
+
+	private static void parse_arc_impacc()
+	{
+		PrintTools.println("ACCParser is parsing [impacc] directive", 3);
+		addToMap("impacc", "_directive");
+		while (end_of_token() == false) 
+		{
+			String tok = get_token();
+			if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+			if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+			String clause = "token_" + tok;
+			PrintTools.println("clause=" + clause, 3);
+			try {
+				switch (impacc_clause.valueOf(clause)) {
+				case token_ignoreglobal		:	parse_conf_stringset(tok); break;
+				default : ACCParserError("NoSuchOpenARCConstruct : " + clause);
 				}
 			} catch( Exception e) {
 				ACCParserError("unexpected or wrong token found (" + tok + ")");
@@ -1974,6 +2161,7 @@ public class ACCParser {
 			case arc_profile 	: return parse_arc_profile();
 			case arc_enter 	: parse_arc_enter(); return false;
 			case arc_exit 	: parse_arc_exit(); return false;
+			case arc_impacc 		: parse_arc_impacc(); return false;
 			//		default : throw new NonOmpDirectiveException();
 			default : ACCParserError("Not Supported Construct");
 			}
@@ -3048,7 +3236,7 @@ public class ACCParser {
 	
 	/**
 		*	This function reads a list of comma-separated variables
-		* It checks the right angle bracke to end the parsing, but does not consume it.
+		* It checks the right angle bracket to end the parsing, but does not consume it.
 		*/
 	private static void parse_commaSeparatedConfList(List<Expression> list)
 	{
@@ -3822,7 +4010,9 @@ public class ACCParser {
 		acc_routine,
 		acc_barrier,
 		acc_enter,
-		acc_exit
+		acc_exit,
+		acc_set,
+		acc_mpi
 	}
 	
 	public static enum arc_directives
@@ -3836,7 +4026,8 @@ public class ACCParser {
 		arc_profile,
 		arc_enter,
 		arc_exit,
-		arc_transform
+		arc_transform,
+		arc_impacc
 	}
 
 	public static enum acc_clause
@@ -3881,7 +4072,15 @@ public class ACCParser {
         acc_tile,
         acc_pipe,
         acc_pipein,
-        acc_pipeout
+        acc_pipeout,
+        acc_wait,
+        acc_finalize,
+        acc_delete,
+        acc_default_async,
+        acc_device_num,
+        acc_device_type,
+        acc_sendbuf,
+        acc_recvbuf
 	}
 	
 	public static enum ainfo_clause
@@ -3909,6 +4108,11 @@ public class ACCParser {
 	{
 		token_num_simd_work_items,
 		token_num_compute_units
+	}
+
+	public static enum impacc_clause
+	{
+		token_ignoreglobal
 	}
 	
 	public static enum transform_clause

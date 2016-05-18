@@ -139,6 +139,40 @@ async [( scalar-integer-expression )]
 where clause is one of the following:
 use_device( condition )
 
+#pragma acc enter data clause[[,] clause]...
+
+where clause is one of the following:
+if( condition )
+async [( scalar-integer-expression )]
+wait [( scalar-integer-expression )]
+copyin( list )
+create( list )
+
+#pragma acc exit data clause[[,] clause]...
+
+where clause is one of the following:
+if( condition )
+async [( scalar-integer-expression )]
+wait [( scalar-integer-expression )]
+copyout( list )
+delete( list )
+finalize
+
+#pragma acc routine [clause[[,] clause]...]
+
+where clause is one of the following
+bind(name)
+nohost
+type(workshare type)     
+
+#pragma acc set [clause[[,] clause]...]
+
+where clause is one of the following
+default_async ( scalar-integer-expression )
+device_num ( scalar-integer-expression )
+device_type ( device-type )
+
+
 
 **************************************************
 ** List of OpenACC constructs not yet supported **
@@ -156,6 +190,13 @@ use_device( condition )
 where mem-fence-flag is one of the following:
 acc_mem_fence_local
 acc_mem_fence_global
+
+#pragma acc mpi [clause[[,] clause]...]
+
+where clause is one of the following
+sendbuf ( [device] [,] [readonly] )
+recvbuf ( [device] [,] [readonly] )
+async [(int-expr)]    
 
 
 *********************************
@@ -309,6 +350,10 @@ event(list) //a list consists of expressions
 induction(induction-expression)
 profcond(expression) 
 
+#pragma openarc impacc [clause[[,] clause]...]
+where clause is one of the following
+ignoreglobal(list) //a list of global symbols to be ignored by IMPACC.
+
 
 ***************************************************************
 ** OpenARC Internal Directives (used internally by compiler) **
@@ -325,6 +370,7 @@ accprivate(list) // The list contains private symbols.
 accreduction(list) // The list contains reduction symbols.
 accdeviceptr(list) // The list contains deviceptr symbols.
 accreadonly(list) // The list contains R/O symbols.
+accpreadonly(list) // The list contains symbols that are R/O in the parent data region.
 rcreate(list) 	// The list contains reduction symbols whose GPU memory will 
 				//be allocated at the attached annotatable.
 iterspace(exp) // exp is the iteration size expression for a gang loop.

@@ -141,7 +141,7 @@ public class ACCAnalysis extends AnalysisPass
 	 * 
 	 * For each async clause, 
 	 *     //- If its argument is empty, add unique integer value as its argument
-	 *     - If its argument is empty, use DEFAULT_ASYNC_QUEUE as its argument
+	 *     - If its argument is empty, use acc_async_noval as its argument
 	 *     - If its argument is not an integer constant, error. (this constrain is removed.)
 	 */
 	private void asyncAnalysis() {
@@ -187,7 +187,7 @@ public class ACCAnalysis extends AnalysisPass
 					cAnnot.put("async", uniqueID.clone());
 				}*/
 				for( ACCAnnotation cAnnot : emptyAsyncs ) {
-					cAnnot.put("async", new NameID("DEFAULT_ASYNC_QUEUE"));
+					cAnnot.put("async", new NameID("acc_async_noval"));
 				}
 			}
 		}
@@ -1256,7 +1256,7 @@ public class ACCAnalysis extends AnalysisPass
 								targetSet.add(newSubArray);
 							} else {
 								Tools.exit("[ERROR in ACCAnalysis.shared_analysis()] symbol, " + dSym.getSymbolName() +
-								", is accessed in the following compute region, but not visible." + AnalysisTools.getEnclosingContext(at));
+										", is accessed in the following compute region, but not visible." + AnalysisTools.getEnclosingContext(at));
 							}
 						}
 						if( privateClauseAllowed && !newPrivSymbols.isEmpty() ) {

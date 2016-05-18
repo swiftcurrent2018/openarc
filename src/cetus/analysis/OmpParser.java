@@ -66,53 +66,53 @@ public class OmpParser {
     // non-pragma statement. Or, it returns false, if the pragma is a
     // standalone pragma
     public static boolean
-            parse_omp_pragma(HashMap input_map, String [] str_array) {
-        omp_map = input_map;
-        token_array = str_array;
-        token_index = 3;    // "#", "pragma", "omp" have already been matched
-        PrintTools.println(display_tokens(), 9);
-        String construct = "omp_" + get_token();
-        switch (omp_pragma.valueOf(construct)) {
-            case omp_parallel       : parse_omp_parallel();     return true;
-            case omp_for            : parse_omp_for();          return true;
-            case omp_sections       : parse_omp_sections();     return true;
-            case omp_section        : parse_omp_section();      return true;
-            case omp_single         : parse_omp_single();       return true;
-            case omp_task           : parse_omp_task();         return true;
-            case omp_master         : parse_omp_master();       return true;
-            case omp_critical       : parse_omp_critical();     return true;
-            case omp_barrier        : parse_omp_barrier();      return false;
-            case omp_taskwait       : parse_omp_taskwait();     return false;
-            case omp_atomic         : parse_omp_atomic();       return true;
-            case omp_flush          : parse_omp_flush();        return false;
-            case omp_ordered        : parse_omp_ordered();      return true;
-            case omp_threadprivate  : parse_omp_threadprivate();return false;
-            case omp_teams          : parse_omp_teams();        return true;
-            case omp_distribute     : parse_omp_distribute();   return true;
-	    case omp_simd           : parse_omp_simd();	        return true;
-            case omp_declare        :
-                boolean declare_ret;
-                if(check("simd"))
-                    declare_ret = true;
-                else
-                    declare_ret = false;
-                parse_omp_declare();
-                return declare_ret;
-            case omp_end            : parse_omp_end_declare();  return false;
-            case omp_target         :
-                boolean target_ret;
-                    if(check("update"))
-                    target_ret = false;
-                else
-                    target_ret = true;
-                parse_omp_target();
-                return target_ret;
-            case omp_taskgroup      : parse_omp_taskgroup();    return true;
-            case omp_cancel         : parse_omp_cancel();       return false;
-            case omp_cancellation   : parse_omp_cancellation_point(); return false;
-            default                 : OmpParserError("Not Supported Construct");
-        }
-        return true;        // meaningless return because it is unreachable
+    parse_omp_pragma(HashMap input_map, String [] str_array) {
+    	omp_map = input_map;
+    	token_array = str_array;
+    	token_index = 3;    // "#", "pragma", "omp" have already been matched
+    	PrintTools.println(display_tokens(), 9);
+    	String construct = "omp_" + get_token();
+    	switch (omp_pragma.valueOf(construct)) {
+    	case omp_parallel       : parse_omp_parallel();     return true;
+    	case omp_for            : parse_omp_for();          return true;
+    	case omp_sections       : parse_omp_sections();     return true;
+    	case omp_section        : parse_omp_section();      return true;
+    	case omp_single         : parse_omp_single();       return true;
+    	case omp_task           : parse_omp_task();         return true;
+    	case omp_master         : parse_omp_master();       return true;
+    	case omp_critical       : parse_omp_critical();     return true;
+    	case omp_barrier        : parse_omp_barrier();      return false;
+    	case omp_taskwait       : parse_omp_taskwait();     return false;
+    	case omp_atomic         : parse_omp_atomic();       return true;
+    	case omp_flush          : parse_omp_flush();        return false;
+    	case omp_ordered        : parse_omp_ordered();      return true;
+    	case omp_threadprivate  : parse_omp_threadprivate();return false;
+    	case omp_teams          : parse_omp_teams();        return true;
+    	case omp_distribute     : parse_omp_distribute();   return true;
+    	case omp_simd           : parse_omp_simd();	        return true;
+    	case omp_declare        :
+    		boolean declare_ret;
+    		if(check("simd"))
+    			declare_ret = true;
+    		else
+    			declare_ret = false;
+    		parse_omp_declare();
+    		return declare_ret;
+    	case omp_end            : parse_omp_end_declare();  return false;
+    	case omp_target         :
+    		boolean target_ret;
+    		if(check("update") || check("enter") || check("exit"))
+    			target_ret = false;
+    		else
+    			target_ret = true;
+    		parse_omp_target();
+    		return target_ret;
+    	case omp_taskgroup      : parse_omp_taskgroup();    return true;
+    	case omp_cancel         : parse_omp_cancel();       return false;
+    	case omp_cancellation   : parse_omp_cancellation_point(); return false;
+    	default                 : OmpParserError("Not Supported Construct");
+    	}
+    	return true;        // meaningless return because it is unreachable
     }
 
     /** ---------------------------------------------------------------
@@ -667,11 +667,22 @@ public class OmpParser {
      *          device(integer-expression)
      *          map([map-type: ] list)
      *          if(scalar-expression)
+     *          private(list)
+     *          firstprivate(list)
+     *          is_device_ptr(list)
      * --------------------------------------------------------------- */
     private static void parse_omp_target() {
         PrintTools.println("OmpParser is parsing [target] clause", 2);
         addToMap("target", "true");
-        if (check("data")) {
+        if (check("enter")) {
+            eat();
+            eat();
+            parse_omp_target_enter_data();
+        } else if (check("exit")) {
+            eat();
+            eat();
+            parse_omp_target_exit_data();
+        } else if (check("data")) {
             eat();
             parse_omp_target_data();
         } else if   (check("update")) {
@@ -687,6 +698,9 @@ public class OmpParser {
                     case token_device       : parse_omp_device();       break;
                     case token_map          : parse_omp_map();          break;
                     case token_if           : parse_omp_if();           break;
+                    case token_private      : parse_omp_private();      break;
+                    case token_firstprivate : parse_omp_firstprivate(); break;
+                    case token_is_device_ptr : parse_omp_is_device_ptr(); break;
                     default : OmpParserError("NoSuchParallelConstruct");
                 }
             }
@@ -857,9 +871,59 @@ public class OmpParser {
      *          device(integer-expression)
      *          map([map-type: ] list)
      *          if(scalar-expression)
+     *          use_device_ptr(list)
      * --------------------------------------------------------------- */
     private static void parse_omp_target_data() {
         PrintTools.println("OmpParser is parsing [data] clause", 2);
+        addToMap("data", "true");
+
+        while (end_of_token() == false) {
+            String clause = "token_" + get_token();
+            switch (omp_clause.valueOf(clause)) {
+                case token_device       : parse_omp_device();       break;
+                case token_map          : parse_omp_map();          break;
+                case token_if           : parse_omp_if();           break;
+                case token_use_device_ptr           : parse_omp_use_device_ptr();           break;
+                default : OmpParserError("NoSuchParallelConstruct");
+            }
+        }
+    }
+
+    /** ---------------------------------------------------------------
+     *       #pragma omp target enter data [clause[ [, ]clause] ...]
+     *       
+     *       clause:
+     *          device(integer-expression)
+     *          map([map-type: ] list)
+     *          if(scalar-expression)
+     * --------------------------------------------------------------- */
+    private static void parse_omp_target_enter_data() {
+        PrintTools.println("OmpParser is parsing [enter data] clause", 2);
+        addToMap("enter", "true");
+        addToMap("data", "true");
+
+        while (end_of_token() == false) {
+            String clause = "token_" + get_token();
+            switch (omp_clause.valueOf(clause)) {
+                case token_device       : parse_omp_device();       break;
+                case token_map          : parse_omp_map();          break;
+                case token_if           : parse_omp_if();           break;
+                default : OmpParserError("NoSuchParallelConstruct");
+            }
+        }
+    }
+
+    /** ---------------------------------------------------------------
+     *       #pragma omp target exit data [clause[ [, ]clause] ...]
+     *       
+     *       clause:
+     *          device(integer-expression)
+     *          map([map-type: ] list)
+     *          if(scalar-expression)
+     * --------------------------------------------------------------- */
+    private static void parse_omp_target_exit_data() {
+        PrintTools.println("OmpParser is parsing [exit data] clause", 2);
+        addToMap("exit", "true");
         addToMap("data", "true");
 
         while (end_of_token() == false) {
@@ -1317,6 +1381,24 @@ public class OmpParser {
         addToMap("copyin", set);
     }
 
+    private static void parse_omp_is_device_ptr() {
+        PrintTools.println("OmpParser is parsing [is_device_ptr] clause", 2);
+        match("(");
+        Set set = new HashSet<String>();
+        parse_commaSeparatedList(set);
+        match(")");
+        addToMap("is_device_ptr", set);
+    }
+
+    private static void parse_omp_use_device_ptr() {
+        PrintTools.println("OmpParser is parsing [use_device_ptr] clause", 2);
+        match("(");
+        Set set = new HashSet<String>();
+        parse_commaSeparatedList(set);
+        match(")");
+        addToMap("use_device_ptr", set);
+    }
+
     // reduction(oprator:list)
     @SuppressWarnings("unchecked")
     private static void parse_omp_reduction() {
@@ -1368,8 +1450,14 @@ public class OmpParser {
       */
     @SuppressWarnings("unchecked")
     private static void parse_commaSeparatedList(Set set) {
+    	String cTok = null;
         for (;;) {
-            set.add(get_token());
+        	cTok = get_token();
+        	if( check(":") ) {
+        		match(":");
+        		cTok = cTok+":"+get_token();
+        	}
+            set.add(cTok);
             if (check(")")) {
                 break;
             } else if (match(",") == false) {
@@ -1472,25 +1560,18 @@ public class OmpParser {
     }
 
     private static void parse_omp_map() {
-        PrintTools.println("OmpParser is parsing [map] clause", 2);
-        String mapType = "tofrom";
-        match("(");
-        if(check("to") || check("from") || check("alloc") || check("tofrom"))
-        {
-            mapType = get_token();
-            match(":");
-        }
+    	PrintTools.println("OmpParser is parsing [map] clause", 2);
+    	String mapType = "tofrom";
+    	match("(");
+    	if(check("to") || check("from") || check("alloc") || check("tofrom") || check("release") || check("delete"))
+    	{
+    		mapType = get_token();
+    		match(":");
+    	}
         Set set = new HashSet<String>();
-	for (;;) {
-            set.add(get_token());
-            if (check(")")) {
-                break;
-            } else if (match(",") == false) {
-                OmpParserError("comma expected in comma separated list");
-            }
-        }
-        match(")");
-        addToMap(mapType, set);
+        parse_commaSeparatedList(set);
+    	match(")");
+    	addToMap(mapType, set);
     }
 
     private static void parse_omp_inbranch() {
@@ -1606,6 +1687,8 @@ public class OmpParser {
         token_thread_limit,
         token_dist_schedule,
         token_to,
-        token_from
+        token_from,
+        token_use_device_ptr,
+        token_is_device_ptr
     }
 }

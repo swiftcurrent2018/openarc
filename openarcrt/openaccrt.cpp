@@ -603,7 +603,7 @@ void HostConf::HI_reset() {
     printf("Number of External Device Memory Allocation Calls: %ld\n", DMallocCnt);
     printf("Number of Internal Device Memory Allocation Calls: %ld\n", IDMallocCnt);
     printf("Number of External Host Memory Allocation Calls by OpenARC runtime: %ld\n", HMallocCnt);
-    printf("Number of Internal Host Memory Allocation Calls by OpenARC runtime: %ld\n", HMallocCnt);
+    printf("Number of Internal Host Memory Allocation Calls by OpenARC runtime: %ld\n", IHMallocCnt);
     printf("Number of External Device Memory Free Calls by OpenARC runtime: %ld\n", DFreeCnt);
     printf("Number of Internal Device Memory Free Calls by OpenARC runtime: %ld\n", IDFreeCnt);
     printf("Number of External Host Memory Free Calls by OpenARC runtime: %ld\n", HFreeCnt);
@@ -1021,8 +1021,15 @@ void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_Mal
     HostConf_t * tconf = getHostConf();
     tconf->device->HI_tempMalloc1D( tempPtr, count, devType, flags);
 #ifdef _OPENARC_PROFILE_
-	tconf->DMallocCnt++;
-	tconf->DMallocSize += count;
+    if(  devType == acc_device_gpu || devType == acc_device_nvidia ||
+    devType == acc_device_radeon || devType == acc_device_xeonphi || 
+    devType == acc_device_altera || devType == acc_device_current) {
+		tconf->DMallocCnt++;
+		tconf->DMallocSize += count;
+	} else {
+		tconf->HMallocCnt++;
+		tconf->HMallocSize += count;
+	}
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempMalloc1D()\n");
 	}
@@ -1039,7 +1046,13 @@ void HI_tempFree( void** tempPtr, acc_device_t devType) {
     HostConf_t * tconf = getHostConf();
     tconf->device->HI_tempFree( tempPtr, devType);
 #ifdef _OPENARC_PROFILE_
-	tconf->DFreeCnt++;
+    if(  devType == acc_device_gpu || devType == acc_device_nvidia ||
+    devType == acc_device_radeon || devType == acc_device_xeonphi || 
+    devType == acc_device_altera || devType == acc_device_current) {
+		tconf->DFreeCnt++;
+	} else {
+		tconf->HFreeCnt++;
+	}
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempFree()\n");
 	}

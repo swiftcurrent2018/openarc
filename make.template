@@ -141,6 +141,7 @@ endif
 # Compiler flags 
 CFLAGS1 += $(OMP_FLAGS1) -I$(OPENARCLIB)
 CFLAGS1_LLVM += $(OMP_FLAGS1) -I$(OPENARCLIB)
+CFLAGS2 += -D_OPENACC=201306
 ifeq ($(MODE),profile)
 CFLAGS2 += $(GFRONTEND_DEBUG) $(OMP_FLAGS2) $(COMMONCINCLUDES)
 ACCRTLIB = $(ACCRT_BASE)pf
@@ -196,4 +197,4 @@ clean:
 	if [ -d $(TARGET) ]; then rm -f $(BENCHMARK_CPU) $(BENCHMARK_TCPU) $(BENCHMARK_LLVM) $(BENCHMARK_OPENACC) Timer; cd $(TARGET); rm -f openarc_kernel*.ptx $(KERNEL_FILE) binBuilder_$(OPENARCLIB_SUFFIX) Timer *.aocx; fi
 
 purge: clean
-	rm -rf $(TARGET) $(CETUS_OUTPUT) cetus_input openarcConf.txt npbparams.h *.log
+	rm -rf $(TARGET) $(CETUS_OUTPUT) cetus_input openarcConf.txt *.log

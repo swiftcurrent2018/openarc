@@ -289,7 +289,10 @@ public final class TranslationUnit implements SymbolTable, Traversable {
                         o.println("");
                     }
                     state.remove(0);
-                } else if (p_name.startsWith("acc") || p_name.startsWith("aspen") || p_name.startsWith("OPENCL")) {
+                } else if (p_name.startsWith("acc") || p_name.startsWith("aspen") || 
+                		p_name.startsWith("OPENCL") || p_name.startsWith("nvl") ||
+                		p_name.startsWith("omp") || p_name.startsWith("openarc") ||
+                		p_name.startsWith("cetus") ) {
                 	//[DEBUG: modified by Seyong Lee]
                     child.print(o);
                     o.println("");

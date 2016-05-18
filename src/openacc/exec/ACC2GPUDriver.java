@@ -27,7 +27,7 @@ public class ACC2GPUDriver extends Driver
 {
 	private final String preprocessorDefault;
 	private Set<String> optionsWithIntArgument;
-	static private String openacc_version = "201111";
+	static private String openacc_version = "201306";
 	private static final Set<String> cachingOpts =
 		new HashSet<String>(Arrays.asList("shrdArryCachingOnConst",
 				"shrdArryCachingOnTM", 

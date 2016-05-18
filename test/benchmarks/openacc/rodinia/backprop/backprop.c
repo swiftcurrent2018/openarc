@@ -56,6 +56,11 @@ float x;
   return (1.0F / (1.0F + expf(-x)));
 }
 
+float *tMalloc(int n) {
+	return (float *)malloc(n*sizeof(float));
+}
+
+
 
 /*** Allocate 1d array of floats ***/
 

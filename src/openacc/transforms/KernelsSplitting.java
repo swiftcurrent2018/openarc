@@ -27,6 +27,7 @@ import openacc.hir.*;
 public class KernelsSplitting extends TransformPass {
 	private static String pass_name = "[KernelsSplitting]";
 	private boolean IRSymbolOnly = true;
+	private List<ACCAnnotation> DataRegions = new LinkedList<ACCAnnotation>();
 
 	/**
 	 * @param program
@@ -320,7 +321,170 @@ public class KernelsSplitting extends TransformPass {
 					//}
 					kAnnot.remove("kernels"); //Remove kernels directive.
 					kAnnot.put("data", "_directive"); //Add data directive.
+					DataRegions.add(kAnnot);
 				}
+			}
+		}
+	}
+	
+	/**
+	 * Update data clauses in the newly created data region based on the results of the locality analysis.
+	 * (For now, this handles the case where there is only one compute region in the data region.)
+	 * 
+	 */
+	public void updateDataClauses() {
+		for( ACCAnnotation aAnnot : DataRegions ) {
+			Annotatable at = aAnnot.getAnnotatable();
+			if( !(at instanceof CompoundStatement) ) {
+				continue;
+			}
+			if( at.getChildren().size() > 1 ) {
+				continue;
+			}
+			Annotatable cRegion = (Annotatable)at.getChildren().get(0);
+			ACCAnnotation cAnnot = cRegion.getAnnotation(ACCAnnotation.class, "accreadonly");
+			if( cAnnot == null ) {
+				continue;
+			}
+			Set<Symbol> accreadonlySet = cAnnot.get("accreadonly");
+			Set<Symbol> accpreadonlySet = cAnnot.get("accpreadonly");
+			if( accpreadonlySet == null ) {
+				accpreadonlySet = new HashSet<Symbol>();
+				cAnnot.put("accpreadonly", accpreadonlySet);
+			}
+			accpreadonlySet.addAll(accreadonlySet);
+
+			ARCAnnotation arcAnnot = cRegion.getAnnotation(ARCAnnotation.class, "sharedRO");
+			if( arcAnnot == null ) {
+				continue;
+			}
+			Set<SubArray> sharedROSubArraySet = arcAnnot.get("sharedRO");
+			Set<Symbol> sharedROSet = AnalysisTools.subarraysToSymbols(sharedROSubArraySet, true);
+			Set<SubArray> psharedROSubArraySet = arcAnnot.get("psharedRO");
+			if( psharedROSubArraySet == null ) {
+				psharedROSubArraySet = new HashSet<SubArray>();
+				arcAnnot.put("psharedRO", psharedROSubArraySet);
+			}
+			psharedROSubArraySet.addAll(sharedROSubArraySet);
+
+ 			cAnnot = at.getAnnotation(ACCAnnotation.class, "accexplicitshared");
+			Set<Symbol> accExShared = null;
+			if( cAnnot == null ) {
+				accExShared = new HashSet<Symbol>();
+			} else {
+				accExShared = cAnnot.get("accexplicitshared");
+			}
+			//For R/O shared variables whose data transfers are not explicitly specified by users,
+			//move them from pcopy/copy to pcopyin/copyin.
+			ACCAnnotation compAnnot = null;
+			Map<Symbol, SubArray> pcopyMap = new HashMap<Symbol, SubArray>();
+			Map<Symbol, SubArray> copyMap = new HashMap<Symbol, SubArray>();
+			Map<Symbol, SubArray> presentMap = new HashMap<Symbol, SubArray>();
+			Set<SubArray> pcopySet = null;
+			Set<SubArray> copySet = null;
+			Set<SubArray> pcopyinSet = null;
+			Set<SubArray> copyinSet = null;
+			Set<SubArray> copyinSet2 = null;
+			Set<SubArray> presentSet = null;
+			ACCAnnotation tempAnnot = at.getAnnotation(ACCAnnotation.class, "pcopy");
+			if( tempAnnot != null ) {
+				compAnnot = tempAnnot;
+				pcopySet = tempAnnot.get("pcopy");
+				for( SubArray tempSAr : pcopySet ) {
+					Symbol temSym = AnalysisTools.subarrayToSymbol(tempSAr, IRSymbolOnly);
+					pcopyMap.put(temSym, tempSAr);
+				}
+			}
+			tempAnnot = at.getAnnotation(ACCAnnotation.class, "copy");
+			if( tempAnnot != null ) {
+				compAnnot = tempAnnot;
+				copySet = tempAnnot.get("copy");
+				for( SubArray tempSAr : copySet ) {
+					Symbol temSym = AnalysisTools.subarrayToSymbol(tempSAr, IRSymbolOnly);
+					copyMap.put(temSym, tempSAr);
+				}
+			}
+			tempAnnot = at.getAnnotation(ACCAnnotation.class, "pcopyin");
+			if( tempAnnot != null ) {
+				compAnnot = tempAnnot;
+				pcopyinSet = tempAnnot.get("pcopyin");
+			}
+			tempAnnot = at.getAnnotation(ACCAnnotation.class, "copyin");
+			if( tempAnnot != null ) {
+				compAnnot = tempAnnot;
+				copyinSet = tempAnnot.get("copyin");
+			}
+			tempAnnot = cRegion.getAnnotation(ACCAnnotation.class, "present");
+			if( tempAnnot != null ) {
+				presentSet = tempAnnot.get("present");
+				for( SubArray tempSAr : presentSet ) {
+					Symbol temSym = AnalysisTools.subarrayToSymbol(tempSAr, IRSymbolOnly);
+					presentMap.put(temSym, tempSAr);
+				}
+			}
+			tempAnnot = cRegion.getAnnotation(ACCAnnotation.class, "copyin");
+			if( tempAnnot != null ) {
+				copyinSet2 = tempAnnot.get("copyin");
+			}
+			for( Symbol roSym : sharedROSet ) {
+				if( !accExShared.contains(roSym) ) {
+					if( pcopyMap.keySet().contains(roSym) ) {
+						SubArray temSAr = pcopyMap.get(roSym);
+						if( pcopyinSet == null ) {
+							pcopyinSet = new HashSet<SubArray>();
+							compAnnot.put("pcopyin", pcopyinSet);
+						}
+						pcopySet.remove(temSAr);
+						pcopyinSet.add(temSAr);
+					}
+					if( copyMap.keySet().contains(roSym) ) {
+						SubArray temSAr = copyMap.get(roSym);
+						if( copyinSet == null ) {
+							copyinSet = new HashSet<SubArray>();
+							compAnnot.put("copyin", copyinSet);
+						}
+						copySet.remove(temSAr);
+						copyinSet.add(temSAr);
+					}
+					if( presentMap.keySet().contains(roSym) ) {
+						SubArray temSAr = presentMap.get(roSym);
+						presentSet.remove(temSAr);
+						if( copyinSet2 == null ) {
+							copyinSet2 = new HashSet<SubArray>();
+							tempAnnot = cRegion.getAnnotation(ACCAnnotation.class, "parallel");
+							if( tempAnnot == null ) {
+								tempAnnot = cRegion.getAnnotation(ACCAnnotation.class, "kernels");
+							}
+							if( tempAnnot != null ) {
+								tempAnnot.put("copyin", copyinSet2);
+							}
+						}
+						copyinSet2.add(temSAr);
+					}
+				}
+			}
+			if( !accreadonlySet.isEmpty() ) {
+				tempAnnot = at.getAnnotation(ACCAnnotation.class, "internal");
+				if( tempAnnot == null ) {
+					tempAnnot = new ACCAnnotation("internal", "_directive");
+					at.annotate(tempAnnot);
+				}
+				Set<Symbol> ROSet = new HashSet<Symbol>();
+				ROSet.addAll(accreadonlySet);
+				tempAnnot.put("accreadonly", ROSet);
+			}
+			if( !sharedROSubArraySet.isEmpty() ) {
+				arcAnnot = at.getAnnotation(ARCAnnotation.class, "cuda");
+				if( arcAnnot == null ) {
+					arcAnnot = new ARCAnnotation("cuda", "_directive");
+					at.annotate(arcAnnot);
+				}
+				Set<SubArray> ROSubArraySet = arcAnnot.get("sharedRO");
+				if( ROSubArraySet == null ) {
+					ROSubArraySet = new HashSet<SubArray>();
+					arcAnnot.put("sharedRO", ROSubArraySet);
+				}
+				ROSubArraySet.addAll(sharedROSubArraySet);
 			}
 		}
 	}

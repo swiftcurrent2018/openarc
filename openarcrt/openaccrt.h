@@ -22,10 +22,12 @@
 #define MAX_NUM_QUEUES_PER_THREAD 1048576
 
 //VICTIM_CACHE_MODE = 0 
+//  - Victim cache is not used
+//VICTIM_CACHE_MODE = 1 
 //  - Victim cache stores freed device memory
 //  - The freed device memory can be reused if the size matches.
 //  - More applicable, but host memory should be pinned again.
-//VICTIM_CACHE_MODE = 1
+//VICTIM_CACHE_MODE = 2
 //  - Victim cache stores both pinned host memory and corresponding device memory.
 //  - The pinned host memory and device memory are reused only for the same 
 //  host pointer; saving both memory pinning cost and device memory allocation cost 
@@ -33,8 +35,8 @@
 //  - Too much prepinning can cause slowdown or crash of the program.
 //  - If OPENARCRT_PREPINHOSTMEM is set to 0, reuse only device memory.
 //
-//For OpenCL devices, VICTIM_CACHE_MODE = 0 is always applied.
-#define VICTIM_CACHE_MODE 0
+//For OpenCL devices, VICTIM_CACHE_MODE = 1 is always applied.
+#define VICTIM_CACHE_MODE 1
 
 //PRESENT_TABLE_SEARCH_MODE = 0
 //	- Assume that the elements in the container follow a strict order at all times
@@ -95,9 +97,10 @@ typedef std::map<int, asyncfreetable_t *> asyncfreetablemap_t;
 typedef std::set<const void *> pointerset_t;
 typedef std::map<int, addresstable_t *> addresstablemap_t;
 typedef std::multimap<size_t, void *> memPool_t;
-typedef std::map<int, memPool_t *> memPoolmap_t;
-typedef std::map<void *, int> countermap_t;
 typedef std::map<const void *, size_t> sizemap_t;
+typedef std::map<int, memPool_t *> memPoolmap_t;
+typedef std::map<int, sizemap_t *> memPoolSizemap_t;
+typedef std::map<void *, int> countermap_t;
 typedef std::map<int, addressmap_t *> asyncphostmap_t;
 typedef std::map<int, sizemap_t *> asynchostsizemap_t;
 typedef std::map<const void *, HI_memstatus_t> memstatusmap_t;
@@ -153,6 +156,7 @@ public:
 	asyncfreetablemap_t postponedFreeTableMap;
 	//memPool_t memPool;
 	memPoolmap_t memPoolMap;
+	memPoolSizemap_t tempMallocSizeMap;
 #ifdef _OPENARC_PROFILE_
 	presenttablecnt_t presentTableCntMap;
 #endif
@@ -891,6 +895,10 @@ public:
     }
 
     HI_error_t HI_get_device_mem_handle(const void *devPtr, HI_device_mem_handle_t *memHandle, int tid) {
+    	return HI_get_device_mem_handle(devPtr, memHandle, NULL, tid);
+	}
+
+    HI_error_t HI_get_device_mem_handle(const void *devPtr, HI_device_mem_handle_t *memHandle, size_t *size, int tid) {
     	addressmap_t *myHandleMap = masterHandleTable[tid];
 #if PRESENT_TABLE_SEARCH_MODE == 0
 		//Check whether devPtr exists as an entry to myHandleMap, 
@@ -909,6 +917,9 @@ public:
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             memHandle->basePtr = aet->basePtr;
             memHandle->offset = 0;
+			if( size != NULL ) {
+				*size = aet->size;
+			}
             return  HI_success;
 		}
 
@@ -925,6 +936,9 @@ public:
             if (devPtr >= aet_devPtr && (size_t) devPtr < (size_t) aet_devPtr + aet->size) {
                 memHandle->basePtr = aet->basePtr;
                 memHandle->offset = (size_t) devPtr - (size_t) aet_devPtr;
+				if( size != NULL ) {
+					*size = aet->size;
+				}
                 return  HI_success;
             }
         }
@@ -947,6 +961,9 @@ public:
             	addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             	memHandle->basePtr = aet->basePtr;
             	memHandle->offset = 0;
+				if( size != NULL ) {
+					*size = aet->size;
+				}
             	return  HI_success;
 			} else {
 				//devPtr may belong to an entry before the current one.
@@ -954,6 +971,9 @@ public:
 					//There is no entry before the current one.
 					memHandle->basePtr = NULL;
 					memHandle->offset = 0;
+					if( size != NULL ) {
+						*size = 0;
+					}
 					return HI_error;
 				} else {
 					--it2; 
@@ -962,6 +982,9 @@ public:
             		if (devPtr >= aet_devPtr && (size_t) devPtr < (size_t) aet_devPtr + aet->size) {
                 		memHandle->basePtr = aet->basePtr;
                 		memHandle->offset = (size_t) devPtr - (size_t) aet_devPtr;
+						if( size != NULL ) {
+							*size = aet->size;
+						}
                 		return  HI_success;
             		}
 				}
@@ -974,6 +997,9 @@ public:
             if (devPtr >= aet_devPtr && (size_t) devPtr < (size_t) aet_devPtr + aet->size) {
             	memHandle->basePtr = aet->basePtr;
                 memHandle->offset = (size_t) devPtr - (size_t) aet_devPtr;
+				if( size != NULL ) {
+					*size = aet->size;
+				}
                 return  HI_success;
             }
 		}
@@ -982,6 +1008,9 @@ public:
         //fprintf(stderr, "[ERROR in get_device_mem_handle()] No mapping found for the device pointer\n");
 		memHandle->basePtr = NULL;
 		memHandle->offset = 0;
+		if( size != NULL ) {
+			*size = 0;
+		}
         return HI_error;
     }
 

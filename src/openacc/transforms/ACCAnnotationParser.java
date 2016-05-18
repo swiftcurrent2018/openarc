@@ -83,6 +83,8 @@ public class ACCAnnotationParser extends TransformPass
 					//////////////////////////////////////////////////////////////////////////
 					if( pAnnot instanceof CetusAnnotation || pAnnot instanceof OmpAnnotation ||
 							pAnnot instanceof InlineAnnotation || pAnnot instanceof PragmaAnnotation.Event ||
+							pAnnot instanceof ACCAnnotation || pAnnot instanceof ARCAnnotation ||
+							pAnnot instanceof ASPENAnnotation || pAnnot instanceof NVLAnnotation ||
 							pAnnot instanceof PragmaAnnotation.Range) {
 						continue;
 					}

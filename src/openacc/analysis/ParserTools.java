@@ -304,19 +304,19 @@ public final class ParserTools
         Expression rhs = null;
 
         int parentCount = 0;
-        int op_idx = 0;
+        int op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (||)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.logicalor)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -331,19 +331,19 @@ public final class ParserTools
         }
 
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (&&)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.logicaland)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -358,19 +358,19 @@ public final class ParserTools
         }
 
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (|)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.bitwiseor)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -385,19 +385,19 @@ public final class ParserTools
         }
 
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (^)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.bitwisexor)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -412,19 +412,19 @@ public final class ParserTools
         }
 
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (&)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.bitwiseand)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -439,19 +439,19 @@ public final class ParserTools
         }
 
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (==, !=)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.EQ) || (tType == token_type.NE)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -471,20 +471,20 @@ public final class ParserTools
         }
         
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (<, <=, >, >=)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.LT) || (tType == token_type.LE) || (tType == token_type.GT) || (tType == token_type.GE))
         			&& parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -506,19 +506,19 @@ public final class ParserTools
         }
         
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (<<, >>)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.leftshift) || (tType == token_type.rightshift)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -538,19 +538,19 @@ public final class ParserTools
         }
         
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (+, -)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.add) || (tType == token_type.subtract)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         if( (op_idx > 0) && (op_idx < token_array.length-1) ) { 
@@ -570,19 +570,19 @@ public final class ParserTools
         } 
         
         parentCount = 0;
-        op_idx = 0;
+        op_idx = token_array.length-1;
         // Finding the operator of the BinaryExpression (*, /)
-        while (op_idx < token_array.length)
+        while (op_idx >= 0)
         {
         	token_type tType = token_array[op_idx].getType();
         	// Found the operator
         	if(((tType == token_type.multiply) || (tType == token_type.divide)) && parentCount == 0 && op_idx > 0)
         		break;
-        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
-        		parentCount++;
         	else if (token_array[op_idx].getVal().compareTo(")") == 0)
+        		parentCount++;
+        	else if (token_array[op_idx].getVal().compareTo("(") == 0)
         		parentCount--;
-        	op_idx++;
+        	op_idx--;
         }
 
         // This expression is not a binary expression

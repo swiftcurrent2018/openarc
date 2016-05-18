@@ -25,6 +25,9 @@ import openacc.analysis.ACCAnalysis;
 import openacc.analysis.AnalysisTools;
 import openacc.analysis.SubArray;
 import openacc.hir.*;
+import openacc.transforms.ACC2GPUTranslator.DataClauseType;
+import openacc.transforms.ACC2GPUTranslator.DataRegionType;
+import openacc.transforms.ACC2GPUTranslator.MemTrType;
 
 /**
  * @author Putt Sakdhnagool <psakdhna@purdue.edu>
@@ -577,7 +580,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			str.append("#include <float.h>\n");
 			str.append("#include <limits.h>\n");
 			if( opt_GenDistOpenACC ) {
-            	if( main_TU ) str.append("#include <pmas/app.h>\n");
+            	str.append("#include <impacc.h>\n");
+            	if( main_TU ) str.append("#include <impacc_app.h>\n");
 			}
 			if( enableCustomProfiling ) {
 				str.append("#include <profile.h>\n");
@@ -791,9 +795,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			}
 			str = new StringBuilder(256);
             if( containsACCAnnotations ) {
-            	if( opt_GenDistOpenACC ) {
-                	str.append("\n#pragma omp threadprivate(gpuNumThreads, totalGpuNumThreads, gpuNumBlocks, gpuBytes)\n");
-            	} else {
+            	if( !opt_GenDistOpenACC ) {
             		str.append("\n#ifdef _OPENMP\n");
                 	str.append("#pragma omp threadprivate(gpuNumThreads, totalGpuNumThreads, gpuNumBlocks, gpuBytes)\n");
             		str.append("#endif\n");
@@ -905,7 +907,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		Set<Symbol> constantSet = new HashSet<Symbol>();
 		Set<Symbol> textureSet = new HashSet<Symbol>();
 		Set<Symbol> sharedROSet = new HashSet<Symbol>();
+		Set<Symbol> psharedROSet = new HashSet<Symbol>();
 		Set<Symbol> ROSymSet = new HashSet<Symbol>();
+		Set<Symbol> PROSymSet = new HashSet<Symbol>();
+		Set<Symbol> expSharedSymSet = new HashSet<Symbol>();
 		ARCAnnotation tCAnnot = at.getAnnotation(ARCAnnotation.class, "constant");
 		Set<SubArray> dataSet;
 		if( tCAnnot != null ) {
@@ -937,9 +942,22 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			dataSet = (Set<SubArray>)tCAnnot.get("noshared");
 			sharedROSet.removeAll(AnalysisTools.subarraysToSymbols(dataSet, IRSymbolOnly));
 		}
-		ACCAnnotation ROAnnot = at.getAnnotation(ACCAnnotation.class, "accreadonly");
-		if( ROAnnot != null ) {
-			ROSymSet.addAll((Set<Symbol>)ROAnnot.get("accreadonly"));
+		tCAnnot = at.getAnnotation(ARCAnnotation.class, "psharedRO");
+		if( tCAnnot != null ) {
+			dataSet = (Set<SubArray>)tCAnnot.get("psharedRO");
+			psharedROSet.addAll(AnalysisTools.subarraysToSymbols(dataSet, IRSymbolOnly));
+		}
+		ACCAnnotation tACCAnnot = at.getAnnotation(ACCAnnotation.class, "accreadonly");
+		if( tACCAnnot != null ) {
+			ROSymSet.addAll((Set<Symbol>)tACCAnnot.get("accreadonly"));
+		}
+		tACCAnnot = at.getAnnotation(ACCAnnotation.class, "accpreadonly");
+		if( tACCAnnot != null ) {
+			PROSymSet.addAll((Set<Symbol>)tACCAnnot.get("accpreadonly"));
+		}
+		tACCAnnot = at.getAnnotation(ACCAnnotation.class, "accexplicitshared");
+		if( tACCAnnot != null ) {
+			expSharedSymSet.addAll((Set<Symbol>)tACCAnnot.get("accexplicitshared"));
 		}
 		//Check if condition
 		Expression ifCond = null;
@@ -975,7 +993,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			Object obj = tAnnot.get("async");
 			if( obj instanceof String ) { //async ID is not specified by a user; use minimum int value.
 				//asyncID = new NameID("INT_MAX");
-				asyncID = new NameID("DEFAULT_ASYNC_QUEUE");
+				asyncID = new NameID("acc_async_noval");
 			} else if( obj instanceof Expression ) {
 				asyncID = (Expression)obj;
 			}
@@ -1127,11 +1145,17 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								}
 							}*/
 							
-							if( (memtrT == MemTrType.CopyIn) && (dimension == 0) && sharedROSet.contains(sym) &&
-									(at.containsAnnotation(ACCAnnotation.class, "kernels") 
-											|| at.containsAnnotation(ACCAnnotation.class, "parallel")) ) {
-								//We don't have allocate memory/copy data using HI_memcpy() for R/O shared scalar
-								//variable that is in both copyin clause and sharedRO clause of a compute region.
+							if( (dimension == 0) && 
+									(((memtrT == MemTrType.CopyIn) && ((sharedROSet.contains(sym) &&
+											(at.containsAnnotation(ACCAnnotation.class, "kernels") || at.containsAnnotation(ACCAnnotation.class, "parallel"))) 
+													|| (sharedROSet.contains(sym) && at.containsAnnotation(ACCAnnotation.class, "data"))))
+									|| ((memtrT == MemTrType.NoCopy) && (dataClauseT == DataClauseType.CheckOnly) && psharedROSet.contains(sym)) 
+									) ) {
+								//We don't have to allocate memory/copy data using HI_memcpy() for R/O shared scalar
+								//variable that is in both copyin clause and either 1) sharedRO clause of a compute region 
+								//or 2) sharedRO clause of a data region.
+								//We also don't have to check its presence for R/O shared scalar variables in the present clause 
+								//if they are in the psharedRO clause too.
 								//[FIXME] If memtrVerification is on, set_status() function should be added here.
 								//==> Better solution is not to insert check_read() function for this variable.
 /*								if( memtrVerification ) {
@@ -1166,6 +1190,25 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 									cStmt.addStatementBefore((Statement)at, new ExpressionStatement(setStatusCall));
 								}*/
 								continue;
+							} else if( (dRegionType == DataRegionType.ComputeRegion) && (memtrT == MemTrType.NoCopy) 
+									&& (dataClauseT == DataClauseType.CheckOnly) && (!expSharedSymSet.contains(sym)) ) { 
+								//If a present clause in a compute region is not what the user explicitly inserted,
+								//it is safe to skip the present table lookup code generation if the program is correct.
+								Traversable t = at.getParent();
+								boolean foundEnclosedDataRegion = false;
+								while( t != null ) {
+									if( t instanceof Annotatable ) {
+										Annotatable tAn = (Annotatable)t;
+										if( tAn.containsAnnotation(ACCAnnotation.class, "data") ) {
+											foundEnclosedDataRegion = true;
+											break;
+										}
+									}
+									t = t.getParent();
+								}
+								if( foundEnclosedDataRegion ) {
+									continue;
+								}
 							} else {
 								boolean ROSymbol = false;
 								if( ROSymSet.contains(IRSym) ) {
@@ -2965,7 +3008,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			Object obj = tAnnot.get("async");
 			if( obj instanceof String ) {
 //				asyncID = new NameID("INT_MAX");
-				asyncID = new NameID("DEFAULT_ASYNC_QUEUE");
+				asyncID = new NameID("acc_async_noval");
 			} else if( obj instanceof Expression ) {
 				asyncID = (Expression)obj;
 			}
@@ -3113,6 +3156,21 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		Map<Symbol, Set<SubArray>> shrdArryOnRegMap = new HashMap<Symbol, Set<SubArray>>();
 		Set<SubArray> ROShrdArryOnRegSet = new HashSet<SubArray>();
 		Set<Symbol> accPresentSet = new HashSet<Symbol>();
+
+		List<ACCAnnotation> atomicList = IRTools.collectPragmas(cProc.getBody(), ACCAnnotation.class, "atomic_var");
+		for(ACCAnnotation atomicAnnot: atomicList)
+		{
+			HashSet<Identifier> idSet = (HashSet<Identifier>)atomicAnnot.get("atomic_var");
+			if(idSet != null)
+			{
+				for(Identifier id : idSet)
+				{
+					cudaNoRegisterSet.add(id.getSymbol());
+					cudaNoSharedSet.add(id.getSymbol());
+				}
+				atomicAnnot.remove("atomic_var");
+			}
+		}
 		
 		////////////////////////////////////////////////////////////////
 		// Extract OpenCL directives attached to this compute region. //
@@ -3346,7 +3404,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			Object obj = tAnnot.get("async");
 			if( obj instanceof String ) {
 //				asyncID = new NameID("INT_MAX");
-				asyncID = new NameID("DEFAULT_ASYNC_QUEUE");
+				asyncID = new NameID("acc_async_noval");
 			} else if( obj instanceof Expression ) {
 				asyncID = (Expression)obj;
 			}
@@ -3558,6 +3616,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			//a host if the condition fails.
 			Statement clonedRegion = region.clone();
 			AnalysisTools.removePragmas(clonedRegion, ACCAnnotation.class);
+			AnalysisTools.removePragmas(clonedRegion, ARCAnnotation.class);
 			AnalysisTools.removePragmas(clonedRegion, CetusAnnotation.class);
 			Statement dummyStmt = new AnnotationStatement();
 			IfStatement ifStmt = new IfStatement(ifCond.clone(), dummyStmt,  clonedRegion);
@@ -5771,7 +5830,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                             else if(op == UnaryOperator.PRE_INCREMENT)
                                 val = 1;
 
-                            FunctionCall atomicCall = new FunctionCall(new NameID("atomicAdd"),
+                            FunctionCall atomicCall = new FunctionCall(new NameID("atomic_add"),
                                     new UnaryExpression(UnaryOperator.ADDRESS_OF, expr.getExpression().clone()),
                                     new IntegerLiteral(val));
                             CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
@@ -5796,22 +5855,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                 else if(atomicExpr instanceof AssignmentExpression)
                 {
                     AssignmentExpression assignExpr = (AssignmentExpression)atomicExpr;
+                    Identifier atomicVar = (Identifier)assignExpr.getLHS();
 
-                    List<Identifier> idList = IRTools.getExpressionsOfType(assignExpr,Identifier.class);
-                    //PrintTools.println(idList.toString(), 0);
-/*
-						if(annot.containsKey("atomic_var"))
-						{
-							Set<Identifier> atomicVar = annot.get("atomic_var");
-							atomicVar.addAll(idList);
-						}
-						else
-						{
-							Set<Identifier> atomicVar = new HashSet<Identifier>();
-							atomicVar.addAll(idList);
-							annot.put("atomic_var", atomicVar);
-						}
-*/
                     // x = ...
                     if(assignExpr.getOperator() == AssignmentOperator.NORMAL)
                     {
@@ -5825,7 +5870,6 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                             }
 
                             BinaryExpression rhsExpr = (BinaryExpression)assignExpr.getRHS();
-                            Identifier atomicVar = (Identifier)assignExpr.getLHS();
                             BinaryOperator atomicOp = rhsExpr.getOperator();
                             Expression valExpr = null;
 
@@ -5842,29 +5886,58 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                                 Tools.exit("Invalid atomic operation: " + assignExpr);
                             }
 
+                            if(annot.containsKey("atomic_var"))
+                            {
+                            	Set<Identifier> atomicVarSet = annot.get("atomic_var");
+                            	atomicVarSet.add(atomicVar);
+                            }
+                            else
+                            {
+                            	Set<Identifier> atomicVarSet = new HashSet<Identifier>();
+                            	atomicVarSet.add(atomicVar);
+                            	annot.put("atomic_var", atomicVarSet);
+                            }
+
                             NameID atomicFunc = null;
 
                             if(atomicOp == BinaryOperator.ADD)
                             {
-                                atomicFunc = new NameID("atomicAdd");
+                                atomicFunc = new NameID("atomic_add");
                             }
                             else if(atomicOp == BinaryOperator.SUBTRACT)
                             {
                                 // x = expr - x;
                                 if(valExpr.equals(rhsExpr.getLHS()))
                                 {
-                                    atomicFunc = new NameID("atomicSubRHS");
+                                	atomicFunc = new NameID("atomicSubRHS");
+                                	Tools.exit("Atomic RHS-subtracion operation is not supported\nAtomic annotation: " 
+                                			+ annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
                                 }
                                 // x = x - expr
                                 else
                                 {
-                                    atomicFunc = new NameID("atomicAdd");
-                                    valExpr = new UnaryExpression(UnaryOperator.MINUS, valExpr.clone());
+                                    //atomicFunc = new NameID("atomicAdd");
+                                    //valExpr = new UnaryExpression(UnaryOperator.MINUS, valExpr.clone());
+                                    atomicFunc = new NameID("atomic_sub");
                                 }
+                            }
+                            else if(atomicOp == BinaryOperator.BITWISE_AND)
+                            {
+                                atomicFunc = new NameID("atomic_and");
+                            }
+                            else if(atomicOp == BinaryOperator.BITWISE_INCLUSIVE_OR)
+                            {
+                                atomicFunc = new NameID("atomic_or");
+                            }
+                            else if(atomicOp == BinaryOperator.BITWISE_EXCLUSIVE_OR)
+                            {
+                                atomicFunc = new NameID("atomic_xor");
                             }
                             else if(atomicOp == BinaryOperator.MULTIPLY)
                             {
-                                atomicFunc = new NameID("atomicMul");
+                                atomicFunc = new NameID("atomic_mul");
+                                Tools.exit("Atomic multiplication operation is not supported\nAtomic annotation: " 
+                                		+ annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
                             }
                             else if(atomicOp == BinaryOperator.DIVIDE)
                             {
@@ -5876,8 +5949,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                                 // x = x / expr
                                 else
                                 {
-                                    atomicFunc = new NameID("atomicDiv");
+                                    atomicFunc = new NameID("atomic_div");
                                 }
+                                Tools.exit("Atomic division operation is not supported\nAtomic annotation: " 
+                                		+ annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
                             }
 
                             FunctionCall atomicCall = new FunctionCall(atomicFunc,
@@ -5893,8 +5968,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                         // x = expr
                         else
                         {
-                            FunctionCall atomicCall = new FunctionCall(new NameID("atomicExch"),
-                                    new UnaryExpression(UnaryOperator.ADDRESS_OF, assignExpr.getLHS().clone()),
+                            FunctionCall atomicCall = new FunctionCall(new NameID("atomic_xchg"),
+                                    new UnaryExpression(UnaryOperator.ADDRESS_OF, atomicVar.clone()),
                                     assignExpr.getRHS().clone());
                             CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
                             ExpressionStatement atomicCallStmt =  new ExpressionStatement(atomicCall);
@@ -5902,6 +5977,18 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                             //PrintTools.println(atomicCallStmt.toString(),0);
                             parentStmt.addStatementAfter(atomicStmt, atomicCallStmt);
                             parentStmt.removeStatement(atomicStmt);
+
+                            if(annot.containsKey("atomic_var"))
+                            {
+                            	Set<Identifier> atomicVarSet = annot.get("atomic_var");
+                            	atomicVarSet.add(atomicVar);
+                            }
+                            else
+                            {
+                            	Set<Identifier> atomicVarSet = new HashSet<Identifier>();
+                            	atomicVarSet.add(atomicVar);
+                            	annot.put("atomic_var", atomicVarSet);
+                            }
                         }
                     }
                     //x binop= expr
@@ -5911,20 +5998,49 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                         Expression valExpr = assignExpr.getRHS();
                         if(assignExpr.getOperator() == AssignmentOperator.ADD)
                         {
-                            atomicFunc = new NameID("atomicAdd");
+                            atomicFunc = new NameID("atomic_add");
                         }
                         else if(assignExpr.getOperator() == AssignmentOperator.SUBTRACT)
                         {
-                            atomicFunc = new NameID("atomicAdd");
-                            valExpr = new UnaryExpression(UnaryOperator.MINUS, valExpr.clone());
+                            //atomicFunc = new NameID("atomicAdd");
+                            //valExpr = new UnaryExpression(UnaryOperator.MINUS, valExpr.clone());
+                            atomicFunc = new NameID("atomic_sub");
+                        }
+                        else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_AND)
+                        {
+                            atomicFunc = new NameID("atomic_and");
+                        }
+                        else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_INCLUSIVE_OR)
+                        {
+                            atomicFunc = new NameID("atomic_or");
+                        }
+                        else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_EXCLUSIVE_OR)
+                        {
+                            atomicFunc = new NameID("atomic_xor");
                         }
                         else if(assignExpr.getOperator() == AssignmentOperator.MULTIPLY)
                         {
-                            atomicFunc = new NameID("atomicMul");
+                        	atomicFunc = new NameID("atomic_mul");
+                        	Tools.exit("Atomic multiplication operation is not supported\nAtomic annotation: " 
+                        			+ annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
                         }
                         else if(assignExpr.getOperator() == AssignmentOperator.DIVIDE)
                         {
-                            atomicFunc = new NameID("atomicDiv");
+                        	atomicFunc = new NameID("atomic_div");
+                        	Tools.exit("Atomic division operation is not supported\nAtomic annotation: " 
+                        			+ annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
+                        }
+
+                        if(annot.containsKey("atomic_var"))
+                        {
+                        	Set<Identifier> atomicVarSet = annot.get("atomic_var");
+                        	atomicVarSet.add(atomicVar);
+                        }
+                        else
+                        {
+                        	Set<Identifier> atomicVarSet = new HashSet<Identifier>();
+                        	atomicVarSet.add(atomicVar);
+                        	annot.put("atomic_var", atomicVarSet);
                         }
 
                         FunctionCall atomicCall = new FunctionCall(atomicFunc,
@@ -5943,11 +6059,13 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
             }
             else if(at instanceof CompoundStatement)
             {
-
+            	Tools.exit("Atomic operation is not supported\nAtomic annotation: " 
+            			+ annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
             }
             else
             {
-                Tools.exit("Atomic operation is not supported.");
+            	Tools.exit("Atomic operation is not supported\nAtomic annotation: " 
+            			+ annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
             }
         }
     }

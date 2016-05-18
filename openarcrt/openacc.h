@@ -25,6 +25,10 @@ typedef enum {
 
 #define h_void void
 #define d_void void
+//acc_async_noval should have the same value as DEFAULT_ASYNC_QUEUE
+//in openaccrt.h
+#define acc_async_noval -1
+#define acc_async_sync -3
 
 ///////////////////////////////////////////
 // OpenACC V1.0 Runtime Library Routines //
@@ -94,5 +98,13 @@ extern void* acc_present_or_copyin_const(h_void* hostPtr, size_t size);
 extern void* acc_create_const(h_void* hostPtr, size_t size);
 extern void* acc_pcreate_const(h_void* hostPtr, size_t size);
 extern void* acc_present_or_create_const(h_void* hostPtr, size_t size);
+extern void* acc_copyin_async_wait(h_void* hostPtr, size_t size, int async, int arg);
+extern void* acc_pcopyin_async_wait(h_void* hostPtr, size_t size, int async, int arg);
+extern void* acc_present_or_copyin_async_wait(h_void* hostPtr, size_t size, int async, int arg);
+extern void* acc_create_async_wait(h_void* hostPtr, size_t size, int async, int arg);
+extern void* acc_pcreate_async_wait(h_void* hostPtr, size_t size, int async, int arg);
+extern void* acc_present_or_create_async_wait(h_void* hostPtr, size_t size, int async, int arg);
+extern void acc_copyout_async_wait(h_void* hostPtr, size_t size, int async, int arg);
+extern void acc_delete_async_wait(h_void* hostPtr, size_t size, int async, int arg);
 
 #endif

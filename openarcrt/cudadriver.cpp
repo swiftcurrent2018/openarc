@@ -259,6 +259,7 @@ HI_error_t CudaDriver::init() {
 		masterHandleTable[i] = new addressmap_t();
 		postponedFreeTableMap[i] = new asyncfreetable_t();
 		memPoolMap[i] = new memPool_t();
+		tempMallocSizeMap[i] = new sizemap_t();
 	}
 
 
@@ -735,7 +736,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 		}
     } else {
         CUresult cuResult = CUDA_SUCCESS;
-#if VICTIM_CACHE_MODE == 0
+#if VICTIM_CACHE_MODE <= 1
 		memPool_t *memPool = memPoolMap[tconf->threadID];
         std::multimap<size_t, void *>::iterator it = memPool->find(count);
         if (it != memPool->end()) {
@@ -793,7 +794,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
         }
 #else
 		///////////////////////////
-		// VICTIM_CACHE_MODE = 1 //
+		// VICTIM_CACHE_MODE = 2 //
 		///////////////////////////
     	if(HI_get_device_address_from_victim_cache(hostPtr, devPtr, NULL, NULL, asyncID, tconf->threadID) == HI_success ) {
 			result = HI_success;
@@ -1068,7 +1069,7 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
 		//HI_free_unified().
 		if( hostPtr != devPtr ) {
             //CUresult cuResult = CUDA_SUCCESS;
-#if VICTIM_CACHE_MODE == 0
+#if VICTIM_CACHE_MODE <= 1
 			//We do not free the device memory; instead put it in the memory pool 
 			//and remove host-pointer-to-device-pointer mapping.
 			memPool_t *memPool = memPoolMap[tconf->threadID];
@@ -1078,7 +1079,7 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
 			HI_unpin_host_memory(hostPtr);
 #else
 			///////////////////////////
-			// VICTIM_CACHE_MODE = 1 //
+			// VICTIM_CACHE_MODE = 2 //
 			///////////////////////////
 			HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
 			HI_set_device_address_in_victim_cache(hostPtr, devPtr, size, asyncID, tconf->threadID);
@@ -1165,7 +1166,7 @@ HI_error_t CudaDriver::HI_free_unified( const void *hostPtr, int asyncID) {
 }
 
 
-
+#if VICTIM_CACHE_MODE == 0
 
 //malloc used for allocating temporary data.
 //If the method is called for a pointer to existing memory, the existing memory
@@ -1278,6 +1279,146 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 	}
 #endif
 }
+
+#else
+
+///////////////////////////
+// VICTIM_CACHE_MODE > 0 //
+///////////////////////////
+
+//malloc used for allocating temporary data.
+void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempMalloc1D()\n");
+	}
+#endif
+    HostConf_t * tconf = getHostConf();
+
+#ifdef _OPENARC_PROFILE_
+    double ltime = HI_get_localtime();
+#endif
+    if( devType == acc_device_gpu || devType == acc_device_nvidia || 
+		devType == acc_device_radeon || devType == acc_device_current) {
+    	CUresult cuResult = CUDA_SUCCESS;
+        memPool_t *memPool = memPoolMap[tconf->threadID];
+		sizemap_t *tempMallocSize = tempMallocSizeMap[tconf->threadID];
+        std::multimap<size_t, void *>::iterator it = memPool->find(count);
+        if (it != memPool->end()) {
+#ifdef _OPENARC_PROFILE_
+            if( HI_openarcrt_verbosity > 2 ) {
+                fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_tempMalloc1D(%lu) reuses memories in the memPool\n", count);
+            }
+#endif           
+            *tempPtr = it->second;
+            memPool->erase(it);
+			(*tempMallocSize)[(const void *)*tempPtr] = count;
+        } else { 
+            cuResult = cuMemAlloc((CUdeviceptr*)tempPtr, count);
+            if (cuResult != CUDA_SUCCESS) {
+#ifdef _OPENARC_PROFILE_
+                if( HI_openarcrt_verbosity > 2 ) {
+                    fprintf(stderr, "[OPENARCRT-INFO]\t\tCudaDriver::HI_malloc1D(%lu) releases memories in the memPool\n", count);
+                }
+#endif               
+                for (it = memPool->begin(); it != memPool->end(); ++it) {
+                    *tempPtr = it->second;
+                    cuResult = cuMemFree((CUdeviceptr)(*tempPtr));
+#ifdef _OPENARC_PROFILE_ 
+                    tconf->IDFreeCnt++;
+#endif                   
+                    if(cuResult != CUDA_SUCCESS) {
+                        fprintf(stderr, "[ERROR in CudaDriver::HI_tempMalloc1D()] failed to free on CUDA with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
+                    }
+                }        
+                memPool->clear();
+                cuResult = cuMemAlloc((CUdeviceptr*)tempPtr, count);
+            }        
+    		if(cuResult == CUDA_SUCCESS) {
+				//New temporary device memory is allocated.
+				(*tempMallocSize)[(const void *)*tempPtr] = count;
+#ifdef _OPENARC_PROFILE_
+		        tconf->IDMallocCnt++;
+        		tconf->IDMallocSize += count;
+#endif
+			} else {
+        		fprintf(stderr, "[ERROR in CudaDriver::HI_tempMalloc1D()] failed to malloc on CUDA with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
+				exit(1);
+    		}
+        }        
+    } else {
+		if( tempMallocSet.count(*tempPtr) > 0 ) {
+			tempMallocSet.erase(*tempPtr);	
+            free(*tempPtr);
+#ifdef _OPENARC_PROFILE_
+            tconf->IHFreeCnt++;
+#endif
+        }
+        *tempPtr = malloc(count);
+		tempMallocSet.insert(*tempPtr);	
+#ifdef _OPENARC_PROFILE_
+        tconf->IHMallocCnt++;
+        tconf->IHMallocSize += count;
+#endif
+    }
+#ifdef _OPENARC_PROFILE_
+    tconf->totalMallocTime += HI_get_localtime() - ltime;
+#endif
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_tempMalloc1D()\n");
+	}
+#endif
+}
+
+//Used for de-allocating temporary data.
+void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempFree()\n");
+	}
+#endif
+    HostConf_t * tconf = getHostConf();
+
+#ifdef _OPENARC_PROFILE_
+    double ltime = HI_get_localtime();
+#endif
+    if( devType == acc_device_gpu || devType == acc_device_nvidia 
+    || devType == acc_device_radeon || devType == acc_device_current ) {
+        if( *tempPtr != 0 ) {
+            //We do not free the device memory; instead put it in the memory pool 
+            //and remove host-pointer-to-device-pointer mapping.
+            memPool_t *memPool = memPoolMap[tconf->threadID];
+			sizemap_t *tempMallocSize = tempMallocSizeMap[tconf->threadID];
+			size_t size = tempMallocSize->at((const void *)*tempPtr);
+            memPool->insert(std::pair<size_t, void *>(size, *tempPtr));
+			tempMallocSize->erase((const void *)*tempPtr);
+        }
+    } else {
+        if( *tempPtr != 0 ) {
+			tempMallocSet.erase(*tempPtr);	
+            free(*tempPtr);
+            if( tconf->prepin_host_memory == 1 ) {
+    			// Unpin host memory if already pinned.
+    			HI_unpin_host_memory(*tempPtr);
+			}
+#ifdef _OPENARC_PROFILE_
+            tconf->IHFreeCnt++;
+#endif
+        }
+    }
+    *tempPtr = 0;
+#ifdef _OPENARC_PROFILE_
+    tconf->totalFreeTime += HI_get_localtime() - ltime;
+#endif
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_tempFree()\n");
+	}
+#endif
+}
+
+#endif
 
 
 //////////////////////

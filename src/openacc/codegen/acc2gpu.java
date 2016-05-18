@@ -39,6 +39,7 @@ public class acc2gpu extends CodeGenPass
 	private boolean addSafetyCheckingCode = false;
 	private boolean disableStatic2GlobalConversion = false;
 	private boolean assumeNoAliasingAmongKernelArgs = false;
+	private boolean opt_GenDistOpenACC = false;
 	private int cloneKernelCallingProcedures = 1;
 	private int doNotRemoveUnusedSymbols = 0;
 	//private boolean kernelCallingProcCloning = false;
@@ -114,6 +115,12 @@ public class acc2gpu extends CodeGenPass
 			if( env.containsKey("OPENARC_ARCH") ) {
 				value = env.get("OPENARC_ARCH");
 				OPENARC_ARCH = Integer.valueOf(value).intValue();
+			}
+		}
+		value = Driver.getOptionValue("acc2gpu");
+		if( value != null ) {
+			if( Integer.valueOf(value).intValue() == 2) {
+				opt_GenDistOpenACC = true;
 			}
 		}
         value = Driver.getOptionValue("omp2acc");
@@ -277,6 +284,13 @@ public class acc2gpu extends CodeGenPass
 		if( value != null ) {
 			applyInlining = true;
 		}*/
+
+        if(convertOpenMPtoOpenACC)
+        {
+            OMP2ACCTranslator omp2ACCTranslator = new OMP2ACCTranslator(program);
+            TransformPass.run(omp2ACCTranslator);
+        }
+
 		/*****************************************************************/
 		/* cetus.transforms.AnnotationParser stores a OpenACC annotation */
 		/* as stand-alone PragmaAnnotation in an AnnotationStatement or  */
@@ -285,18 +299,6 @@ public class acc2gpu extends CodeGenPass
 		/*****************************************************************/
 		TransformPass.run(new ACCAnnotationParser(program));
 
-
-        if(convertOpenMPtoOpenACC)
-        {
-            PrintTools.println("[OpenMP2OpenACCTranslator] begin", 0);
-            OMP2ACCTranslator omp2ACCTranslator = new OMP2ACCTranslator(program);
-            TransformPass.run(omp2ACCTranslator);
-            PrintTools.println("[OpenMP2OpenACCTranslator] end", 0);
-            //return;
-        }
-
-
-		
 		if( AccAnalysisOnly == 1 ) {
 			cleanAnnotations();
 			return;
@@ -338,7 +340,7 @@ public class acc2gpu extends CodeGenPass
 		// Convert static variables in a procedure into global one.     //
 		// This conversion is necessary for the next procedure cloning. //
 		//////////////////////////////////////////////////////////////////
-		if( !disableStatic2GlobalConversion ) {
+		if( opt_GenDistOpenACC || !disableStatic2GlobalConversion ) {
 			TransformPass.run(new ConvertStatic2Global(program));
 		}
 
@@ -497,7 +499,8 @@ public class acc2gpu extends CodeGenPass
 		//to a data region, and enclosed gang loops become kernels loops with
 		//present data clauses.
 		//All internal annotations should be moved to each kernel loops if necessary.
-		TransformPass.run(new KernelsSplitting(program, IRSymbolOnly));
+		KernelsSplitting KSPass = new KernelsSplitting(program, IRSymbolOnly);
+		TransformPass.run(KSPass);
 		
 		//////////////////////////////////////////////////////////////
 		// Annotate each kernel region with parent procedure name   //
@@ -514,6 +517,7 @@ public class acc2gpu extends CodeGenPass
 		//such as fault injection directives, the analysis should be modified
 		//not to delete that.
 		AnalysisPass.run(new LocalityAnalysis(program, true, programAnnot, programCudaAnnot));
+		KSPass.updateDataClauses();
 		
 		//DEBUG: don't put any pass between LoacalityAnalysis pass and the following
 		//tuning-parameter-extracting pass, since internal tuningparameters annotation

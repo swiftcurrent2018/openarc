@@ -128,6 +128,11 @@ public class ARCAnnotation extends PragmaAnnotation
  * induction(induction-expression) 
  * profcond(expression) 
  * label(name)
+ * <p>
+ * #pragma openarc impacc [clause [[,] clause] ...]
+ * <p>
+ * where clause is one of the following
+ * ignoreglobal(list) //a list of global variables to be ignored by IMPACC.
  * 
  * 
  */
@@ -137,19 +142,23 @@ public class ARCAnnotation extends PragmaAnnotation
 		new HashSet<String>(Arrays.asList("ainfo", 
 				"noploopswap", "noloopcollapse", "transform",
 				"resilience", "ftinject", "ftregion",
-				"enter", "exit", "profile", "region", "measure", "track"));
+				"enter", "exit", "profile", "region", "measure", "track",
+				"impacc"));
+	
 
 	// Pragmas used with collection of values
 	private static final Set<String> collection_values =
 		new HashSet<String>(Arrays.asList(
-		"registerRO", "registerRW", "sharedRO", "sharedRW", "global", 
+		"registerRO", "registerRW", "sharedRO", "psharedRO", "sharedRW", "global", 
 		"texture", "constant", "noconstant", "noreductionunroll",
 		"procname", "kernelid", "unroll",
 		"noregister", "noshared", "notexture", "enclosingloops",
 		"multisrccg", "multisrcgc", "conditionalsrc", "permute", 
 		"ftdata", "ftkind", "mode", "event", 
 		"transpose", "redim", "expand", "redim_transpose", "expand_transpose",
-		"transpose_expand", "num_simd_work_items", "num_compute_units"));
+		"transpose_expand", "num_simd_work_items", "num_compute_units",
+		"ignoreglobal"));
+	
 
 	// Pragmas used with optional value
 	private static final Set<String> optional_values = 
@@ -158,17 +167,18 @@ public class ARCAnnotation extends PragmaAnnotation
 	//List used to set print orders.
 	//Clauses not listed here may be printed in a random order.
 	private static final List<String> print_order =
-			new ArrayList<String>(Arrays.asList( "ainfo", "enter", "exit",  "cuda", "opencl",
+			new ArrayList<String>(Arrays.asList( "ainfo", "enter", "exit",  "cuda", "opencl", "impacc",
 					"transform", "transpose", "redim", "expand", "redim_transpose", "expand_transpose",
 					"transpose_expand",
 					"profile", "region", "measure", "track", "if", "resilience", 
 					"ftregion", "ftinject", "ftcond", "ftthread", "ftdata", "ftkind", "num_faults", 
-					"num_ftbits", "repeat", "label", "mode", "event", "induction", "verbosity"));
+					"num_ftbits", "repeat", "label", "mode", "event", "induction", "verbosity",
+					"ignoreglobal"));
 	
 	// List of OpenARC directives.
 	public static final Set<String> OpenARCDirectiveSet = new HashSet(Arrays.asList(
 			"ainfo", "cuda", "opencl", "enter", "exit", "profile", "datalayout", 
-			"ftregion", "ftinject", "resilience", "transform"));
+			"ftregion", "ftinject", "resilience", "transform", "impacc"));
 	
 	// Directives attached to structured blocks
 	public static final Set<String> directivesForStructuredBlock = new HashSet(Arrays.asList(

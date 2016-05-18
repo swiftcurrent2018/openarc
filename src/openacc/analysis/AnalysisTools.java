@@ -3876,5 +3876,95 @@ public abstract class AnalysisTools {
     	return retList;
     }
 
+    /**
+     * Find a pointer that is assigned with the address of memory 
+     * allocated by the input memory allocation function, fCall.
+     * 
+     * @param fCall
+     * @return
+     */
+    public static Expression findAllocatedPointer (FunctionCall fCall, List<FunctionCall> fCallList, boolean isMallocCall) {
+    	Expression pointerExp = null;
+    	String fName = fCall.getName().toString();
+    	Symbol pointerSym = null;
+    	Procedure parentProc = IRTools.getParentProcedure(fCall);
+    	Expression parentProcName = parentProc.getName();
+    	Traversable tt = fCall.getParent();
+    	while( (tt != null) && !(tt instanceof ReturnStatement)  && !(tt instanceof AssignmentExpression) 
+    			&& !(tt instanceof Initializer) ) {
+    		tt = tt.getParent();
+    	}
+    	if( tt instanceof Initializer ) {
+    		while( (tt != null) && !(tt instanceof Declarator) ) {
+    			tt = tt.getParent();
+    		}
+    		if( tt instanceof Declarator ) {
+    			pointerExp = ((Declarator)tt).getID().clone();
+    		}
+    	} else if( tt instanceof AssignmentExpression ) {
+    		Expression LHS = ((AssignmentExpression)tt).getLHS();
+    		pointerSym = SymbolTools.getSymbolOf(LHS);
+    		if( pointerSym instanceof PseudoSymbol ) {
+    			pointerSym = ((PseudoSymbol)pointerSym).getIRSymbol();
+    		}
+    		if( SymbolTools.isGlobal(pointerSym) ) {
+    			pointerExp = LHS.clone();
+    		} else {
+    			if( parentProc == null ) {
+    				return null;
+    			}
+    			List<ReturnStatement> retStmts = IRTools.getStatementsOfType(parentProc.getBody(), ReturnStatement.class);
+    			boolean isReturned = false;
+    			for( ReturnStatement rStmt : retStmts ) {
+    				Expression rExp = rStmt.getExpression();
+    				if( (rExp != null) && (rExp.equals(LHS)) ) {
+    					//We have to find the assinged pointer in the caller context!
+    					isReturned = true;
+    					if( fCallList == null ) {
+    						Traversable t = fCall.getParent();
+    						while( (t != null) && !(t instanceof Program) ) {
+    							t = t.getParent();
+    						}
+    						if( t instanceof Program ) {
+    							fCallList = IRTools.getFunctionCalls(t);
+    						} else {
+    							return null;
+    						}
+    					}
+    					//We can return the pointer
+    					//only if it is visible to the original malloc function.
+    					Expression tempExp1 = null;
+    					Expression tempExp2 = null;
+    					for( FunctionCall tFCall : fCallList ) {
+    						if( tFCall.getName().equals(parentProcName) ) {
+    							tempExp1 = findAllocatedPointer(tFCall, fCallList, false);
+    							if( tempExp1 == null ) {
+    								return null;
+    							} else if( tempExp2 == null ) {
+    								tempExp2 = tempExp1;
+    							} else if( !tempExp2.equals(tempExp1) ) {
+    								return null;
+    							}
+    						}
+    					}
+    					if( tempExp1 != null ) {
+    						Symbol tttSym = SymbolTools.getSymbolOf(tempExp1);
+    						if( ( tttSym != null ) && SymbolTools.isGlobal(tttSym) ) {
+    							pointerExp = tempExp1;
+    						} else {
+    							pointerExp = null;
+    						}
+    						break;
+    					}
+    				}
+    			}
+    			if( !isReturned ) {
+    				pointerExp = LHS.clone();
+    			}
+    		}
+    	}
+    	return pointerExp;
+    }
+
 
 }

@@ -460,7 +460,7 @@ public class DataLayoutTransform extends TransformPass {
 					FunctionCall getGpuVarAddressFuncCall = new FunctionCall(getGpuVarAddressName);
 					getGpuVarAddressFuncCall.addArgument(hostVar.clone());
 					getGpuVarAddressFuncCall.addArgument(gpuVar.clone());
-					Expression asyncID = new NameID("DEFAULT_ASYNC_QUEUE");
+					Expression asyncID = new NameID("acc_async_noval");
 					getGpuVarAddressFuncCall.addArgument(asyncID.clone());
 					Expression getGpuVarAddressExp = new BinaryExpression(getGpuVarAddressFuncCall, BinaryOperator.COMPARE_NE, new NameID("HI_success"));
 					IfStatement getGpuVarAddressIfStmt = new IfStatement(getGpuVarAddressExp.clone(), presentErrorCode.clone());
@@ -2161,7 +2161,7 @@ public class DataLayoutTransform extends TransformPass {
 					FunctionCall getGpuVarAddressFuncCall = new FunctionCall(getGpuVarAddressName);
 					getGpuVarAddressFuncCall.addArgument(hostVar.clone());
 					getGpuVarAddressFuncCall.addArgument(gpuVar.clone());
-					Expression asyncID = new NameID("DEFAULT_ASYNC_QUEUE");
+					Expression asyncID = new NameID("acc_async_noval");
 					getGpuVarAddressFuncCall.addArgument(asyncID.clone());
 
 					Expression getGpuVarAddressExp = new BinaryExpression(getGpuVarAddressFuncCall, BinaryOperator.COMPARE_NE, new NameID("HI_success"));
@@ -3140,7 +3140,7 @@ public class DataLayoutTransform extends TransformPass {
 						FunctionCall getGpuVarAddressFuncCall = new FunctionCall(getGpuVarAddressName);
 						getGpuVarAddressFuncCall.addArgument(hostVar.clone());
 						getGpuVarAddressFuncCall.addArgument(gpuVar.clone());
-						Expression asyncID = new NameID("DEFAULT_ASYNC_QUEUE");
+						Expression asyncID = new NameID("acc_async_noval");
 						getGpuVarAddressFuncCall.addArgument(asyncID.clone());
 						Expression getGpuVarAddressExp = new BinaryExpression(getGpuVarAddressFuncCall, BinaryOperator.COMPARE_NE, new NameID("HI_success"));
 						IfStatement getGpuVarAddressIfStmt = new IfStatement(getGpuVarAddressExp.clone(), presentErrorCode.clone());

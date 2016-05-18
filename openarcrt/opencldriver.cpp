@@ -359,6 +359,7 @@ HI_error_t OpenCLDriver::init() {
 		masterHandleTable[i] = new addressmap_t();
 		postponedFreeTableMap[i] = new asyncfreetable_t();
 		memPoolMap[i] = new memPool_t();
+		tempMallocSizeMap[i] = new sizemap_t();
 	}
 
 
@@ -936,7 +937,7 @@ HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
 
 }
 
-
+#if VICTIM_CACHE_MODE == 0
 
 //malloc used for allocating temporary data.
 //If the method is called for a pointer to existing memory, the existing memory
@@ -1064,6 +1065,158 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 #endif
 
 }
+
+#else
+
+///////////////////////////
+// VICTIM_CACHE_MODE > 0 //
+///////////////////////////
+
+//malloc used for allocating temporary data.
+void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_tempMalloc1D()\n");
+	}
+#endif
+    HostConf_t * tconf = getHostConf();
+#ifdef _OPENARC_PROFILE_
+    double ltime = HI_get_localtime();
+#endif
+    if(  devType == acc_device_gpu || devType == acc_device_nvidia || 
+    devType == acc_device_radeon || devType == acc_device_xeonphi || 
+	devType == acc_device_altera || devType == acc_device_current) {
+        cl_int err;
+		cl_mem_flags mem_flags = convert2CLMemFlags(flags);
+        void * memHandle;
+        memPool_t *memPool = memPoolMap[tconf->threadID];
+        std::multimap<size_t, void *>::iterator it = memPool->find(count);
+        if( it != memPool->end()) {
+#ifdef _OPENARC_PROFILE_
+            if( HI_openarcrt_verbosity > 2 ) {
+                fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_tempMalloc1D(%lu, %d) reuses memories in the memPool\n", count, flags);
+            }    
+#endif
+            *tempPtr = it->second;
+            memPool->erase(it);
+        } else {
+            memHandle = (void*) clCreateBuffer(clContext, mem_flags, count, NULL, &err);
+            if(err != CL_SUCCESS) {
+#ifdef _OPENARC_PROFILE_
+                if( HI_openarcrt_verbosity > 2 ) {
+                    fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_tempMalloc1D(%lu, %d) releases memories in the memPool\n", count, flags);
+                }
+#endif               
+                HI_device_mem_handle_t tHandle;
+                void * tDevPtr;
+                for (it = memPool->begin(); it != memPool->end(); ++it) {
+                    tDevPtr = it->second;
+                    if( HI_get_device_mem_handle(tDevPtr, &tHandle, tconf->threadID) == HI_success ) {             
+                        err = clReleaseMemObject((cl_mem)(tHandle.basePtr));
+#ifdef _OPENARC_PROFILE_     
+                        tconf->IDFreeCnt++;
+#endif                       
+                        if(err != CL_SUCCESS) {
+                            fprintf(stderr, "[ERROR in OpenCLDriver::HI_tempMalloc1D()] : failed to free on OpenCL\n");        
+                        }
+                        free(tDevPtr);
+                        HI_remove_device_mem_handle(tDevPtr, tconf->threadID);
+                    }        
+                }        
+                memPool->clear();
+                memHandle = (void*) clCreateBuffer(clContext, mem_flags, count, NULL, &err);
+            }
+            if(err == CL_SUCCESS) {
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+				posix_memalign(tempPtr, AOCL_ALIGNMENT, count);
+#else
+				*tempPtr = malloc(count);
+#endif
+        		HI_set_device_mem_handle(*tempPtr, memHandle, count, tconf->threadID);
+#ifdef _OPENARC_PROFILE_
+        		tconf->IDMallocCnt++;
+        		tconf->IDMallocSize += count;
+#endif
+			} else {
+            	fprintf(stderr, "[ERROR in OpenCLDriver::HI_tempMalloc1D()] : Malloc failed\n");
+				exit(1);
+        	}
+		}
+    } else {
+		if( tempMallocSet.count(*tempPtr) > 0 ) {
+			tempMallocSet.erase(*tempPtr);
+            free(*tempPtr);
+#ifdef _OPENARC_PROFILE_
+            tconf->IHFreeCnt++;
+#endif
+        }
+#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+		posix_memalign(tempPtr, AOCL_ALIGNMENT, count);
+#else
+		*tempPtr = malloc(count);
+#endif
+		tempMallocSet.insert(*tempPtr);
+#ifdef _OPENARC_PROFILE_
+        tconf->IHMallocCnt++;
+        tconf->IHMallocSize += count;
+#endif
+    }
+#ifdef _OPENARC_PROFILE_
+    tconf->totalMallocTime += HI_get_localtime() - ltime;
+#endif
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_tempMalloc1D()\n");
+	}
+#endif
+
+}
+
+//Used for de-allocating temporary data.
+void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_tempFree()\n");
+	}
+#endif
+    HostConf_t * tconf = getHostConf();
+#ifdef _OPENARC_PROFILE_
+    double ltime = HI_get_localtime();
+#endif
+    if(  devType == acc_device_gpu || devType == acc_device_nvidia || 
+    devType == acc_device_radeon || devType == acc_device_xeonphi || 
+	devType == acc_device_altera || devType == acc_device_current) {
+        if( *tempPtr != 0 ) {
+			//We do not free the device memory; instead put it in the memory pool
+			HI_device_mem_handle_t tHandle;
+			size_t size;
+			if( HI_get_device_mem_handle(*tempPtr, &tHandle, &size, tconf->threadID) == HI_success ) { 
+        		memPool_t *memPool = memPoolMap[tconf->threadID];
+        		memPool->insert(std::pair<size_t, void *>(size, *tempPtr));
+			}
+		}
+    } else {
+        if( *tempPtr != 0 ) {
+			tempMallocSet.erase(*tempPtr);
+            free(*tempPtr);
+#ifdef _OPENARC_PROFILE_
+            tconf->IHFreeCnt++;
+#endif
+        }
+    }
+    *tempPtr = 0;
+#ifdef _OPENARC_PROFILE_
+    tconf->totalFreeTime += HI_get_localtime() - ltime;
+#endif
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_tempFree()\n");
+	}
+#endif
+
+}
+
+#endif
 
 
 //////////////////////

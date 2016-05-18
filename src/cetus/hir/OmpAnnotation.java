@@ -85,6 +85,7 @@ public class OmpAnnotation extends PragmaAnnotation {
         str.append(super.toString());
         str.append("omp");
         Set<String> my_keys = new HashSet<String>(this.keySet());
+        boolean foundTargetUpdate = false;
         // Prints the directives.
         for (String key : keywords) {
             if (my_keys.contains(key)) {
@@ -94,14 +95,24 @@ public class OmpAnnotation extends PragmaAnnotation {
                     printValue(key, str);
                 }
                 my_keys.remove(key);
+                if( key.equals("update") ) {
+                	foundTargetUpdate = true;
+                }
             }
         }
         // Remaining directives/clauses.
         for (String key : my_keys) {
-        	if( key.equals("to") || key.equals("from") || key.equals("tofrom") || key.equals("alloc") ) {
-        		str.append(" map(");
-        		str.append(key);
-        		str.append(": ");
+        	if( key.equals("to") || key.equals("from") || key.equals("tofrom") || key.equals("alloc") ||
+        			key.equals("release") || key.equals("delete") ) {
+        		if( foundTargetUpdate ) {
+        			str.append(" ");
+        			str.append(key);
+        			str.append("(");
+        		} else {
+        			str.append(" map(");
+        			str.append(key);
+        			str.append(": ");
+        		}
         		str.append(PrintTools.collectionToString((Collection) get(key), ", "));
         		str.append(")");
         	} else {

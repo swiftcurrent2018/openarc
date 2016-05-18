@@ -1804,7 +1804,7 @@ public abstract class OpenCLTranslationTools {
                     ArrayAccess aAccess = iter.next();
 	                Expression arrayID = aAccess.getArrayName();
                     if( arrayID.equals(cloned_ID) ) {
-						PrintTools.println(aAccess.toString(),0);
+						//PrintTools.println(aAccess.toString(),0);
 						List<Expression> indices = aAccess.getIndices();
                         Expression index = indices.get(0);
                         ArrayAccess newAccess = new ArrayAccess(new NameID(symName), new BinaryExpression(index.clone(), BinaryOperator.ADD, new BinaryExpression(leftmostIndex.clone(),

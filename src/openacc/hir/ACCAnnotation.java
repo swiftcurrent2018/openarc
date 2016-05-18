@@ -146,6 +146,25 @@ public class ACCAnnotation extends PragmaAnnotation
  *      if( condition )
  *      async [( scalar-integer-expression )]
  * <p>     
+ * #pragma acc enter data clause[[,] clause]...
+ * <p>     
+ * where clause is one of the following:
+ *      if( condition )
+ *      async [( scalar-integer-expression )]
+ *      wait [( scalar-integer-expression )]
+ *      copyin( list )
+ *      create( list )
+ * <p>     
+ * #pragma acc exit data clause[[,] clause]...
+ * <p>     
+ * where clause is one of the following:
+ *      if( condition )
+ *      async [( scalar-integer-expression )]
+ *      wait [( scalar-integer-expression )]
+ *      copyout( list )
+ *      delete( list )
+ *      finalize
+ * <p>     
  * #pragma acc wait [( scalar-integer-expression )]
  * <p>     
  * #pragma acc routine [clause[[,] clause]...]
@@ -154,6 +173,21 @@ public class ACCAnnotation extends PragmaAnnotation
  *     bind(name)
  *     nohost
  *     type(workshare type)     
+ * <p>     
+ * #pragma acc set [clause[[,] clause]...]
+ * <p>     
+ * where clause is one of the following
+ *     default_async ( scalar-integer-expression )
+ *     device_num ( scalar-integer-expression )
+ *     device_type ( device-type )
+ * <p>
+ * #pragma acc mpi [clause[[,] clause]...]
+ * <p>
+ * where clause is one of the following
+ *     sendbuf ( [device] [,] [readonly] )
+ *     recvbuf ( [device] [,] [readonly] )
+ *     async [(int-expr)]    
+ * 
  *     
  */
 
@@ -162,7 +196,7 @@ public class ACCAnnotation extends PragmaAnnotation
 		new HashSet<String>(Arrays.asList("parallel", "kernels", 
 				"data", "loop", "declare", "update", "host_data",
 				"seq", "independent", "internal", "routine", 
-				"enter", "exit", "set"));
+				"enter", "exit", "set", "finalize", "atomic"));
 
 	// Pragmas used with collection of values
 	private static final Set<String> collection_values =
@@ -174,10 +208,11 @@ public class ACCAnnotation extends PragmaAnnotation
 		"use_device", "collapse", "cache", "device_resident", "host",
 		"device", 
 		"accglobal", "accshared", "accprivate", "accreduction", "accdeviceptr",
-		"accexplicitshared", "accreadonly",
+		"accexplicitshared", "accreadonly", "accpreadonly",
 		"iterspace", "rcreate", "gangdim", "workerdim", "gangconf", "workerconf",
 		"totalnumgangs", "totalnumworkers", "tile", "pipe", "pipein", "pipeout",
-		"default_async", "device_num", "device_type"));
+		"default_async", "device_num", "device_type", "delete",
+		"sendbuf", "recvbuf"));
 
 	// Pragmas used with optional value
 	private static final Set<String> optional_values = 
@@ -187,13 +222,13 @@ public class ACCAnnotation extends PragmaAnnotation
 	//List used to set print orders.
 	//Clauses not listed here may be printed in a random order.
 	private static final List<String> print_order =
-			new ArrayList<String>(Arrays.asList( "parallel", "kernels", "enter", "exit", 
-					"data", "loop", "declare", "update", "host_data", "cuda", "internal", "tempinternal",
+			new ArrayList<String>(Arrays.asList( "parallel", "kernels", "enter", "exit", "mpi",
+					"data", "loop", "declare", "update", "atomic", "host_data", "cuda", "internal", "tempinternal",
 					"routine", "if", "async", "refname", "num_gang", "num_workers", "vector_length", 
 					"collapse", "gang", "worker", "vector", "seq", "independent", "tile",
 					"reduction", "copy", "copyin", "copyout", "create", "present", "pcopy", "pcopyin",
 					"pcopyout", "pcreate", "pipe", "pipein", "pipeout", "deviceptr", "device_resident", 
-					"private", "firstprivate"
+					"private", "firstprivate", "finalize", "sendbuf", "recvbuf"
 					));
 	
 	// List of OpenACC directives.
@@ -227,7 +262,7 @@ public class ACCAnnotation extends PragmaAnnotation
 	"pcopyout", "present_or_create", "pcreate", "deviceptr", "device_resident", "host", "device", "private",
 	"pipe", "pipein", "pipeout",
 	"firstprivate", "use_device", "collapse", "gang", "worker", "vector", "seq", "independent", "bind",
-	"nohost", "nowait", "type", "tile", "default_async", "device_num", "device_type"
+	"nohost", "nowait", "type", "tile", "default_async", "device_num", "device_type", "finalize", "delete"
 	));
 	
 	// Clauses that specify worksharing loops
@@ -248,10 +283,10 @@ public class ACCAnnotation extends PragmaAnnotation
 	// Data clauses
 	public static final Set<String> dataClauses = new HashSet(Arrays.asList("copy", "copyin", "copyout",
 			"create", "present", "pcopy", "pcopyin", "pcopyout", "pcreate", "deviceptr", "device_resident",
-			"pipe", "pipein", "pipeout"));
+			"pipe", "pipein", "pipeout", "delete"));
 	
 	public static final Set<String> noMemTrDataClauses = new HashSet(Arrays.asList("create", "present", "pcreate",
-			"deviceptr", "device_resident", "pipe", "pipein", "pipeout"));
+			"deviceptr", "device_resident", "pipe", "pipein", "pipeout", "delete"));
 	
 	public static final Set<String> memTrDataClauses = new HashSet(Arrays.asList("copy", "copyin", "copyout",
 			"pcopy", "pcopyin", "pcopyout" ));

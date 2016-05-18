@@ -118,7 +118,7 @@ public abstract class ACC2GPUTranslator {
                     if( obj instanceof String ) 
                     {
                         //asyncID = new NameID("INT_MAX");
-                        return new NameID("DEFAULT_ASYNC_QUEUE");
+                        return new NameID("acc_async_noval");
                     } 
                     else if( obj instanceof Expression ) 
                     {
@@ -173,7 +173,104 @@ public abstract class ACC2GPUTranslator {
 			}
 		}
 		handleDeclareDirectives(declareAnnots);
+
+		if( opt_GenDistOpenACC ) {
+			for(Traversable tChild : program.getChildren() ) {
+				TranslationUnit trUnt = (TranslationUnit)tChild;
+				Set<Symbol> accessedSymbols = AnalysisTools.getAccessedVariables(trUnt, true);
+				Set<String> accessedSymStrings = new HashSet<String>();
+				for( Symbol tSym : accessedSymbols ) {
+					accessedSymStrings.add(tSym.getSymbolName());
+				}
+				List<Traversable> childList = trUnt.getChildren();
+				Declaration firstDecl = trUnt.getFirstDeclaration();
+				boolean isInHeader = true;
+				//Find user-declared threadprivate symbols.
+				Set<String> threadPrivateSet = new HashSet<String>();
+				//Find ignoreglobal set 
+				Set<String> ignoreGlobalSet = new HashSet<String>();
+				for( Traversable child : childList ) {
+					if( child instanceof AnnotationDeclaration ) {
+						OmpAnnotation ompAnnot = ((AnnotationDeclaration)child).getAnnotation(OmpAnnotation.class, "threadprivate");
+						if(ompAnnot != null) {
+							threadPrivateSet.addAll((Set<String>)ompAnnot.get("threadprivate"));
+						}
+						ARCAnnotation arcAnnot = ((AnnotationDeclaration)child).getAnnotation(ARCAnnotation.class, "ignoreglobal");
+						if( arcAnnot != null) {
+							ignoreGlobalSet.addAll((Set<String>)arcAnnot.get("ignoreglobal"));
+							//PrintTools.println("Found ignoreglobal clause: " + ignoreGlobalSet, 0);
+						}
+					}
+				}
+				Set<String> threadPrivateInHeaderSet = new HashSet<String>();
+				Map<Declaration, Declaration> insertMap = new HashMap<Declaration, Declaration>();
+				for( Traversable child : childList ) {
+					if( isInHeader ) {
+						if( child == firstDecl ) {
+							isInHeader = false;
+						}
+					}
+					if( child instanceof VariableDeclaration ) {
+						VariableDeclaration vDecl = (VariableDeclaration)child;
+						List vDeclSpecs = vDecl.getSpecifiers();
+						if( (vDeclSpecs != null) && vDeclSpecs.contains(Specifier.TYPEDEF) ) {
+							continue;
+						}
+						if( vDecl.getDeclarator(0) instanceof ProcedureDeclarator ) {
+							continue;
+						}
+						List<IDExpression> declIDs = vDecl.getDeclaredIDs();
+						if( (declIDs == null) || declIDs.isEmpty() ) {
+							continue;
+						}
+						Set<String> tSet = new HashSet<String>();
+						for( IDExpression dID : declIDs ) {
+							String dIDStr = dID.toString();
+							if( !threadPrivateSet.contains(dIDStr) && !ignoreGlobalSet.contains(dIDStr) ) {
+								tSet.add(dIDStr);
+							}
+						}
+						if( !tSet.isEmpty() ) {
+							if( isInHeader ) {
+								threadPrivateInHeaderSet.addAll(tSet);
+							} else {
+								threadPrivateInHeaderSet.retainAll(accessedSymStrings);
+								if( !threadPrivateInHeaderSet.isEmpty() ) {
+									tSet.addAll(threadPrivateInHeaderSet);
+									threadPrivateInHeaderSet.clear();
+								}
+								OmpAnnotation ompAnnot = new OmpAnnotation();
+								ompAnnot.put("threadprivate", tSet);
+								threadPrivateSet.addAll(tSet);
+								AnnotationDeclaration annotDecl = new AnnotationDeclaration(ompAnnot);
+								insertMap.put((Declaration)child, annotDecl);
+							}
+						}
+					}
+				}
+				if( !insertMap.isEmpty() ) {
+					for( Declaration dKey : insertMap.keySet() ) {
+						Declaration dValue = insertMap.get(dKey);
+						trUnt.addDeclarationAfter(dKey, dValue);
+					}
+				} else {
+					threadPrivateInHeaderSet.retainAll(accessedSymStrings);
+					if( !threadPrivateInHeaderSet.isEmpty() ) {
+						OmpAnnotation ompAnnot = new OmpAnnotation();
+						ompAnnot.put("threadprivate", threadPrivateInHeaderSet);
+						AnnotationDeclaration annotDecl = new AnnotationDeclaration(ompAnnot);
+						if( firstDecl == null ) {
+							trUnt.addDeclaration(annotDecl);
+						} else {
+							trUnt.addDeclarationBefore(firstDecl, annotDecl);
+						}
+					}
+
+				}
+			}
+		}
 		
+		List<FunctionCall> allFuncCalls = IRTools.getFunctionCalls(program);
 		List<Procedure> procedureList = IRTools.getProcedureList(program);
 		for( Procedure cProc : procedureList ) {
 			List<ACCAnnotation> dataAnnots = 
@@ -183,6 +280,9 @@ public abstract class ACC2GPUTranslator {
                                         AnalysisTools.collectPragmas(cProc, ACCAnnotation.class, new HashSet(Arrays.asList("atomic")), false);
 			
 			List<FunctionCall> fCallList = IRTools.getFunctionCalls(cProc);
+			if( opt_GenDistOpenACC ) {
+				ImpaccRuntimeTransformation(cProc, fCallList, allFuncCalls);
+			}
 			List<FunctionCall> memoryAPIList = new LinkedList<FunctionCall>();
 			for( FunctionCall fCall : fCallList ) {
 				if(OpenACCRuntimeLibrary.isMemoryAPI(fCall)) {
@@ -196,6 +296,7 @@ public abstract class ACC2GPUTranslator {
 			List<ACCAnnotation> parallelRegionAnnots = new LinkedList<ACCAnnotation>();
 			List<ACCAnnotation> kernelsRegionAnnots = new LinkedList<ACCAnnotation>();
 			List<ACCAnnotation> dataRegionAnnots = new LinkedList<ACCAnnotation>();
+			List<ACCAnnotation> enterExitDataAnnots = new LinkedList<ACCAnnotation>();
 
             handleAtomicAnnots(atomicAnnots);
 
@@ -210,13 +311,18 @@ public abstract class ACC2GPUTranslator {
 				}
 				for( ACCAnnotation annot : dataAnnots ) {
 					if( annot.containsKey("data") ) {
-						dataRegionAnnots.add(annot);
+						if( annot.containsKey("enter") || annot.containsKey("exit") ) {
+							enterExitDataAnnots.add(annot);
+						} else {
+							dataRegionAnnots.add(annot);
+						}
 					} else if( annot.containsKey("parallel") ) {
 						parallelRegionAnnots.add(annot);
 					} else if( annot.containsKey("kernels") ) {
 						kernelsRegionAnnots.add(annot);
 					}
 				}
+				handleEnterExitData(cProc, enterExitDataAnnots);
 				handleDataRegions(cProc, dataRegionAnnots);
 				convComputeRegionsToGPUKernels(cProc, parallelRegionAnnots, kernelsRegionAnnots);
 				//Postprocessing for pipe clauses.
@@ -731,6 +837,61 @@ public abstract class ACC2GPUTranslator {
 		}
 		
 	}
+
+	protected void handleEnterExitData(Procedure cProc, List<ACCAnnotation> dataRegionAnnots) {
+		for(ACCAnnotation dAnnot : dataRegionAnnots ) {
+			Annotatable at = dAnnot.getAnnotatable();
+			Expression asyncID = new NameID("acc_async_sync");
+			Expression waitID = new NameID("acc_async_sync");
+			Expression ifCond = null;
+			Set<SubArray> copyinSet = null;
+			Set<SubArray> pcopyinSet = null;
+			Set<SubArray> copyoutSet = null;
+			Set<SubArray> createSet = null;
+			Set<SubArray> pcreateSet = null;
+			Set<SubArray> deleteSet = null;
+			if( dAnnot.containsKey("async") ) {
+				Object obj = dAnnot.get("async");
+				if( obj instanceof String ) {
+					asyncID = new NameID("acc_async_noval");
+				} else if( obj instanceof Expression ) {
+					asyncID = (Expression)obj;
+				}
+			}
+			if( dAnnot.containsKey("wait") ) {
+				Object obj = dAnnot.get("wait");
+				if( obj instanceof String ) {
+					waitID = new NameID("acc_async_noval");
+				} else if( obj instanceof Expression ) {
+					waitID = (Expression)obj;
+				}
+			}
+			if( dAnnot.containsKey("if") ) {
+				ifCond = (Expression)dAnnot.get("if");
+			}
+			if( dAnnot.containsKey("enter") ) {
+				if( dAnnot.containsKey("create") ) {
+					createSet = (Set<SubArray>)dAnnot.get("create");
+				}
+				if( dAnnot.containsKey("pcreate") ) {
+					pcreateSet = (Set<SubArray>)dAnnot.get("pcreate");
+				}
+				if( dAnnot.containsKey("copyin") ) {
+					copyinSet = (Set<SubArray>)dAnnot.get("copyin");
+				}
+				if( dAnnot.containsKey("pcopyin") ) {
+					pcopyinSet = (Set<SubArray>)dAnnot.get("pcopyin");
+				}
+			} else if( dAnnot.containsKey("exit") ) {
+				if( dAnnot.containsKey("copyout") ) {
+					copyoutSet = (Set<SubArray>)dAnnot.get("copyout");
+				}
+				if( dAnnot.containsKey("delete") ) {
+					deleteSet = (Set<SubArray>)dAnnot.get("delete");
+				}
+			}
+		}
+	}
 	
 	protected void handleDataRegions(Procedure cProc, List<ACCAnnotation> dataRegionAnnots) {
 		DataRegionType regionT = DataRegionType.ExplicitDataRegion;
@@ -751,6 +912,160 @@ public abstract class ACC2GPUTranslator {
 		//Transform OpenACC runtime library APIs to allocate data on constant memory.
 		runtimeTransformationForConstMemory(cProc, fCallList);
 		//Transform OpenACC runtime library APIs to allocate data on texture memory.
+	}
+	
+	protected void ImpaccRuntimeTransformation(Procedure cProc, List<FunctionCall> fCallList, List<FunctionCall> allFuncCalls) {
+		for(FunctionCall fCall : fCallList) {
+			Statement fStmt = fCall.getStatement();
+			if( fStmt != null ) {
+				Expression optionFlag = null;
+				Expression asyncID = null;
+				Expression tPointer = null;
+				ACCAnnotation mAnnot = fStmt.getAnnotation(ACCAnnotation.class, "mpi");
+				if( mAnnot != null ) {
+					Expression SROFlag = null;
+					Expression SDFlag = null;
+					Expression RROFlag = null;
+					Expression RDFlag = null;
+					Set<Expression> optionSet = mAnnot.get("sendbuf");
+					if( optionSet != null ) {
+						for( Expression tExp : optionSet ) {
+							if( tExp.toString().equals("readonly") ) {
+								SROFlag = new NameID("IMPACC_MEM_S_RO");
+							} else if( tExp.toString().equals("device") ) {
+								SDFlag = new NameID("IMPACC_MEM_S_DEV");
+							} else {
+								Tools.exit("[ERROR in ACC2GPUTranslator.ImpactRuntimeTransformation()] unexpected argument (" 
+										+ tExp.toString() + ") is found for the sendbuf clause in the following annotation; exit!\nACCAnnotation: " 
+										+ mAnnot + "\n" + AnalysisTools.getEnclosingAnnotationContext(mAnnot));
+							}
+						}
+					}
+					optionSet = mAnnot.get("recvbuf");
+					if( optionSet != null ) {
+						for( Expression tExp : optionSet ) {
+							if( tExp.toString().equals("readonly") ) {
+								RROFlag = new NameID("IMPACC_MEM_R_RO");
+							} else if( tExp.toString().equals("device") ) {
+								RDFlag = new NameID("IMPACC_MEM_R_DEV");
+							} else {
+								Tools.exit("[ERROR in ACC2GPUTranslator.ImpactRuntimeTransformation()] unexpected argument (" 
+										+ tExp.toString() + ") is found for the sendbuf clause in the following annotation; exit!\nACCAnnotation: " 
+										+ mAnnot + "\n" + AnalysisTools.getEnclosingAnnotationContext(mAnnot));
+							}
+						}
+					}
+					if( SROFlag != null ) {
+						if( optionFlag == null ) {
+							optionFlag = SROFlag;
+						} else {
+							optionFlag = new BinaryExpression(optionFlag, BinaryOperator.LOGICAL_OR, SROFlag);
+						}
+					}
+					if( SDFlag != null ) {
+						if( optionFlag == null ) {
+							optionFlag = SDFlag;
+						} else {
+							optionFlag = new BinaryExpression(optionFlag, BinaryOperator.LOGICAL_OR, SDFlag);
+						}
+					}
+					if( RROFlag != null ) {
+						if( optionFlag == null ) {
+							optionFlag = RROFlag;
+						} else {
+							optionFlag = new BinaryExpression(optionFlag, BinaryOperator.LOGICAL_OR, RROFlag);
+						}
+					}
+					if( RDFlag != null ) {
+						if( optionFlag == null ) {
+							optionFlag = RDFlag;
+						} else {
+							optionFlag = new BinaryExpression(optionFlag, BinaryOperator.LOGICAL_OR, RDFlag);
+						}
+					}
+					Object obj = mAnnot.get("async");
+					if( obj instanceof String ) { //async ID is not specified by a user; use default async queue.
+						asyncID = new NameID("acc_async_noval");
+					} else if( obj instanceof Expression ) {
+						asyncID = (Expression)obj;
+					} else { //async clause is not specified; use default sync queue.
+						asyncID = new NameID("DEFAULT_QUEUE");
+					}
+				}
+				if( optionFlag == null ) {
+					optionFlag = new IntegerLiteral(0);
+				}
+				if( asyncID == null ) {
+					asyncID = new NameID("DEFAULT_QUEUE");
+				}
+				String fName = fCall.getName().toString();
+				switch(fName) {
+				case "MPI_Init": fCall.setFunction(new NameID("IMPACC_MPI_Init"));
+				break;
+				case "MPI_Finalize": fCall.setFunction(new NameID("IMPACC_MPI_Finalize"));
+				break;
+				case "MPI_Comm_size": fCall.setFunction(new NameID("IMPACC_MPI_Comm_size"));
+				break;
+				case "MPI_Comm_rank": fCall.setFunction(new NameID("IMPACC_MPI_Comm_rank"));
+				break;
+				case "MPI_Send": fCall.setFunction(new NameID("IMPACC_MPI_Send"));
+				fCall.addArgument(optionFlag);
+				break;
+				case "MPI_Recv": fCall.setFunction(new NameID("IMPACC_MPI_Recv"));
+				fCall.addArgument(optionFlag);
+				break;
+				case "MPI_Isend": fCall.setFunction(new NameID("IMPACC_MPI_Isend"));
+				fCall.addArgument(optionFlag);
+				fCall.addArgument(asyncID);
+				break;
+				case "MPI_Irecv": fCall.setFunction(new NameID("IMPACC_MPI_Irecv"));
+				fCall.addArgument(optionFlag);
+				fCall.addArgument(asyncID);
+				break;
+				case "MPI_Wait": fCall.setFunction(new NameID("IMPACC_MPI_Wait"));
+				break;
+				case "MPI_Waitall": fCall.setFunction(new NameID("IMPACC_MPI_Waitall"));
+				break;
+				case "MPI_Barrier": fCall.setFunction(new NameID("IMPACC_MPI_Barrier"));
+				break;
+				case "MPI_Bcast": fCall.setFunction(new NameID("IMPACC_MPI_Bcast"));
+				fCall.addArgument(optionFlag);
+				break;
+				case "MPI_Reduce": fCall.setFunction(new NameID("IMPACC_MPI_Reduce"));
+				fCall.addArgument(optionFlag);
+				break;
+				case "MPI_Allreduce": fCall.setFunction(new NameID("IMPACC_MPI_Allreduce"));
+				fCall.addArgument(optionFlag);
+				break;
+				case "free": fCall.setFunction(new NameID("IMPACC_free"));
+				break;
+				case "malloc": fCall.setFunction(new NameID("IMPACC_malloc"));
+				tPointer = AnalysisTools.findAllocatedPointer(fCall, allFuncCalls, true);
+				if( tPointer != null ) {
+					Expression addExp = new UnaryExpression(UnaryOperator.ADDRESS_OF, tPointer.clone());
+					List<Specifier> specs = new ArrayList<Specifier>(4);
+					specs.add(Specifier.VOID);
+					specs.add(PointerSpecifier.UNQUALIFIED);
+					specs.add(PointerSpecifier.UNQUALIFIED);
+					addExp = new Typecast(specs, addExp);
+					fCall.addArgument(addExp);
+				}
+				break;
+				case "calloc": fCall.setFunction(new NameID("IMPACC_calloc"));
+				tPointer = AnalysisTools.findAllocatedPointer(fCall, allFuncCalls, true);
+				if( tPointer != null ) {
+					Expression addExp = new UnaryExpression(UnaryOperator.ADDRESS_OF, tPointer.clone());
+					List<Specifier> specs = new ArrayList<Specifier>(4);
+					specs.add(Specifier.VOID);
+					specs.add(PointerSpecifier.UNQUALIFIED);
+					specs.add(PointerSpecifier.UNQUALIFIED);
+					addExp = new Typecast(specs, addExp);
+					fCall.addArgument(addExp);
+				}
+				break;
+				}
+			}
+		}
 	}
 	
 	protected void convComputeRegionsToGPUKernels(Procedure cProc, List<ACCAnnotation> parallelRegionAnnots,
@@ -914,7 +1229,7 @@ public abstract class ACC2GPUTranslator {
                 }
                 else
                 {
-                    setAsyncCall.addArgument(new NameID("DEFAULT_ASYNC_QUEUE"));
+                    setAsyncCall.addArgument(new NameID("acc_async_noval"));
                 }
                 TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall));
             }*/
@@ -946,7 +1261,7 @@ public abstract class ACC2GPUTranslator {
                 }
                 else
                 {
-                    setAsyncCall.addArgument(new NameID("DEFAULT_ASYNC_QUEUE"));
+                    setAsyncCall.addArgument(new NameID("acc_async_noval"));
                 }
                 TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall));
             }*/
