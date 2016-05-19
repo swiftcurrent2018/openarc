@@ -585,7 +585,9 @@ public class ACCParser {
 	 *      async [( scalar-integer-expression )]
 	 *      wait [( scalar-integer-expression )]
 	 *      copyin( list )
+	 *      present_or_copyin( list )
 	 *      create( list )
+	 *      present_or_create( list )
 	 * <p>     
 	 * #pragma acc exit data clause[[,] clause]...
 	 * <p>     
@@ -1695,7 +1697,6 @@ public class ACCParser {
 				case acc_pcopyin		:	parse_acc_dataclause(tok); break;
 				case acc_present_or_create	:	parse_acc_dataclause("pcreate"); break;
 				case acc_pcreate	:	parse_acc_dataclause(tok); break;
-				case acc_pipe 		:	parse_acc_dataclause(tok); break;
 				case acc_async	:	parse_acc_optionalconfclause(tok); break;
 				case acc_wait	:	parse_acc_optionalconfclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);

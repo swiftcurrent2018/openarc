@@ -1481,6 +1481,7 @@ int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_getninc_prtcounter(%d)\n", asyncID);
 	}
+	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
 
@@ -1514,6 +1515,8 @@ int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
         result = 0;
     }
 #ifdef _OPENARC_PROFILE_
+	tconf->PresentTableCnt++;
+	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_getninc_prtcounter(%d)\n", asyncID);
 	}
@@ -1526,6 +1529,7 @@ int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_decnget_prtcounter(%d)\n", asyncID);
 	}
+	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
 
@@ -1559,6 +1563,8 @@ int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
         result = -1; //error!!
     }
 #ifdef _OPENARC_PROFILE_
+	tconf->PresentTableCnt++;
+	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
 	if( HI_openarcrt_verbosity > 1 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_decnget_prtcounter(%d)\n", asyncID);
 	}

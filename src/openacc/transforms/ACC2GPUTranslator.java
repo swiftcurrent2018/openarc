@@ -322,7 +322,7 @@ public abstract class ACC2GPUTranslator {
 						kernelsRegionAnnots.add(annot);
 					}
 				}
-				handleEnterExitData(cProc, enterExitDataAnnots);
+				handleEnterExitData(cProc, enterExitDataAnnots, IRSymbolOnly);
 				handleDataRegions(cProc, dataRegionAnnots);
 				convComputeRegionsToGPUKernels(cProc, parallelRegionAnnots, kernelsRegionAnnots);
 				//Postprocessing for pipe clauses.
@@ -838,18 +838,29 @@ public abstract class ACC2GPUTranslator {
 		
 	}
 
-	protected void handleEnterExitData(Procedure cProc, List<ACCAnnotation> dataRegionAnnots) {
+	protected void handleEnterExitData(Procedure cProc, List<ACCAnnotation> dataRegionAnnots, boolean IRSymOnly) {
 		for(ACCAnnotation dAnnot : dataRegionAnnots ) {
 			Annotatable at = dAnnot.getAnnotatable();
+			Statement atStmt = null;
+			CompoundStatement cStmt = null;
 			Expression asyncID = new NameID("acc_async_sync");
 			Expression waitID = new NameID("acc_async_sync");
 			Expression ifCond = null;
-			Set<SubArray> copyinSet = null;
-			Set<SubArray> pcopyinSet = null;
-			Set<SubArray> copyoutSet = null;
-			Set<SubArray> createSet = null;
-			Set<SubArray> pcreateSet = null;
-			Set<SubArray> deleteSet = null;
+			Set<SubArray> dataSet = null;
+			if( at instanceof Statement ) {
+				atStmt = (Statement)at;
+			} else {
+				Traversable  t = at.getParent();
+				while( (t != null) && !(t instanceof Statement) ) {
+					t = t.getParent();
+				}
+				if( t instanceof Statement ) {
+					atStmt = (Statement)t;
+				}
+			}
+			if( (atStmt != null) && (atStmt.getParent() !=null) && (atStmt.getParent() instanceof CompoundStatement) ) {
+				cStmt = (CompoundStatement)atStmt.getParent();
+			}
 			if( dAnnot.containsKey("async") ) {
 				Object obj = dAnnot.get("async");
 				if( obj instanceof String ) {
@@ -869,27 +880,95 @@ public abstract class ACC2GPUTranslator {
 			if( dAnnot.containsKey("if") ) {
 				ifCond = (Expression)dAnnot.get("if");
 			}
-			if( dAnnot.containsKey("enter") ) {
-				if( dAnnot.containsKey("create") ) {
-					createSet = (Set<SubArray>)dAnnot.get("create");
-				}
-				if( dAnnot.containsKey("pcreate") ) {
-					pcreateSet = (Set<SubArray>)dAnnot.get("pcreate");
-				}
-				if( dAnnot.containsKey("copyin") ) {
-					copyinSet = (Set<SubArray>)dAnnot.get("copyin");
-				}
-				if( dAnnot.containsKey("pcopyin") ) {
-					pcopyinSet = (Set<SubArray>)dAnnot.get("pcopyin");
-				}
-			} else if( dAnnot.containsKey("exit") ) {
-				if( dAnnot.containsKey("copyout") ) {
-					copyoutSet = (Set<SubArray>)dAnnot.get("copyout");
-				}
-				if( dAnnot.containsKey("delete") ) {
-					deleteSet = (Set<SubArray>)dAnnot.get("delete");
+			for( String dClause : ACCAnnotation.unstructuredDataClauses ) {
+				if( dAnnot.containsKey(dClause) ) {
+					dataSet = (Set<SubArray>)dAnnot.get(dClause);
+					if( (dataSet != null) && (!dataSet.isEmpty()) ) {
+						FunctionCall fCall = null;
+						switch(dClause) {
+						case "copyin": fCall = new FunctionCall(new NameID("acc_copyin_async_wait"));
+						break;
+						case "pcopyin": fCall = new FunctionCall(new NameID("acc_pcopyin_async_wait"));
+						break;
+						case "create": fCall = new FunctionCall(new NameID("acc_create_async_wait"));
+						break;
+						case "pcreate": fCall = new FunctionCall(new NameID("acc_pcreate_async_wait"));
+						break;
+						case "copyout": fCall = new FunctionCall(new NameID("acc_copyout_async_wait"));
+						break;
+						case "pcopyout": fCall = new FunctionCall(new NameID("acc_pcopyout_async_wait"));
+						break;
+						default: Tools.exit("[ERROR in ACC2GPUTranslator.handleEnterExitData()] unexpected data clause (" 
+										+ dClause + ") is found for the following annotation; exit!\nACCAnnotation: " 
+										+ dAnnot + "\n" + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
+						break;
+						}
+						for( SubArray sArray : dataSet ) {
+							Expression varName = sArray.getArrayName();
+							Symbol sym = SymbolTools.getSymbolOf(varName);
+							List<Expression> startList = new LinkedList<Expression>();
+							List<Expression> lengthList = new LinkedList<Expression>();
+							boolean foundDimensions = AnalysisTools.extractDimensionInfo(sArray, startList, lengthList, IRSymbolOnly, at);
+							if( !foundDimensions ) {
+								Tools.exit("[ERROR in ACC2GPUTranslator.handleEnterExitData()] Dimension information " +
+										"of the following variable is unknown; exit.\n" + 
+										"Variable: " + sArray.getArrayName() + "\n" +
+										"ACCAnnotation: " + dAnnot + "\n" +
+										"Enclosing Procedure: " + cProc.getSymbolName() + "\n");
+							}
+							List<Specifier> typeSpecs = new ArrayList<Specifier>();
+							Symbol IRSym = sym;
+							if( sym instanceof PseudoSymbol ) {
+								IRSym = ((PseudoSymbol)sym).getIRSymbol();
+							}
+							if( IRSymbolOnly ) {
+								sym = IRSym;
+								varName = new Identifier(sym);
+								typeSpecs.addAll(((VariableDeclaration)sym.getDeclaration()).getSpecifiers());
+							} else {
+								Symbol tSym = sym;
+								while( tSym instanceof AccessSymbol ) {
+									tSym = ((AccessSymbol)tSym).getMemberSymbol();
+								}
+								typeSpecs.addAll(((VariableDeclaration)tSym.getDeclaration()).getSpecifiers());
+							}
+							typeSpecs.remove(Specifier.STATIC);
+							typeSpecs.remove(Specifier.EXTERN);
+							typeSpecs.remove(Specifier.CONST);
+							SizeofExpression sizeof_expr = new SizeofExpression(typeSpecs);
+							Expression sizeExp = sizeof_expr.clone();
+							for( int i=0; i<lengthList.size(); i++ )
+							{
+								sizeExp = new BinaryExpression(sizeExp, BinaryOperator.MULTIPLY, lengthList.get(i).clone());
+							}
+							List<Expression> arg_list = new ArrayList<Expression>();
+							if( lengthList.size() == 0 ) { //hostVar is scalar.
+								arg_list.add( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
+										varName.clone()));
+							} else {
+								arg_list.add(varName.clone());
+							}
+							arg_list.add(sizeExp);
+							arg_list.add(asyncID.clone());
+							arg_list.add(waitID.clone());
+							fCall.setArguments(arg_list);
+							Statement fCallStmt = new ExpressionStatement(fCall);
+							if(ifCond != null) {
+								fCallStmt = new IfStatement(ifCond.clone(), fCallStmt);
+							}
+							if( (cStmt != null) && (atStmt != null) ) {
+								cStmt.addStatementAfter(atStmt, fCallStmt);
+							} else {
+								Tools.exit("[ERROR in ACC2GPUTranslator.handleEnterExitData()] Cannot find " +
+										"the parent compoundstatement of the following annotation; exit.\n" + 
+										"ACCAnnotation: " + dAnnot + "\n" +
+										"Enclosing Procedure: " + cProc.getSymbolName() + "\n");
+							}
+						}
+					}
 				}
 			}
+			cStmt.removeChild(atStmt);
 		}
 	}
 	

@@ -47,7 +47,6 @@ extern void acc_shutdown( acc_device_t devtype );
 extern int acc_on_device( acc_device_t devtype );
 extern d_void* acc_malloc(size_t);
 extern void acc_free(d_void* devPtr);
-extern int get_thread_id();
 
 /////////////////////////////////////////////////////////// 
 // OpenACC Runtime Library Routines added in Version 2.0 //
@@ -106,5 +105,10 @@ extern void* acc_pcreate_async_wait(h_void* hostPtr, size_t size, int async, int
 extern void* acc_present_or_create_async_wait(h_void* hostPtr, size_t size, int async, int arg);
 extern void acc_copyout_async_wait(h_void* hostPtr, size_t size, int async, int arg);
 extern void acc_delete_async_wait(h_void* hostPtr, size_t size, int async, int arg);
+
+///////////////////////////////////////////////
+// Internal OpenARC Runtime Library Routines //
+///////////////////////////////////////////////
+extern int get_thread_id();
 
 #endif

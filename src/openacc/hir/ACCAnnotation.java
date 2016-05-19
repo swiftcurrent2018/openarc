@@ -153,7 +153,8 @@ public class ACCAnnotation extends PragmaAnnotation
  *      async [( scalar-integer-expression )]
  *      wait [( scalar-integer-expression )]
  *      copyin( list )
- *      create( list )
+ *      present_or_copyin( list )
+ *      present_or_create( list )
  * <p>     
  * #pragma acc exit data clause[[,] clause]...
  * <p>     
@@ -284,6 +285,14 @@ public class ACCAnnotation extends PragmaAnnotation
 	public static final Set<String> dataClauses = new HashSet(Arrays.asList("copy", "copyin", "copyout",
 			"create", "present", "pcopy", "pcopyin", "pcopyout", "pcreate", "deviceptr", "device_resident",
 			"pipe", "pipein", "pipeout", "delete"));
+
+	public static final Set<String> unstructuredDataClauses = new HashSet(Arrays.asList("copyin", "pcopyin", "create",
+			"pcreate", "copyoput", "delete"));
+
+	public static final Set<String> enterDataClauses = new HashSet(Arrays.asList("copyin", "pcopyin", "create",
+			"pcreate"));
+
+	public static final Set<String> exitDataClauses = new HashSet(Arrays.asList("copyoput", "delete"));
 	
 	public static final Set<String> noMemTrDataClauses = new HashSet(Arrays.asList("create", "present", "pcreate",
 			"deviceptr", "device_resident", "pipe", "pipein", "pipeout", "delete"));

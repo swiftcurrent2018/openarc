@@ -146,7 +146,9 @@ if( condition )
 async [( scalar-integer-expression )]
 wait [( scalar-integer-expression )]
 copyin( list )
+present_or_copyin( list )
 create( list )
+present_or_create( list )
 
 #pragma acc exit data clause[[,] clause]...
 
