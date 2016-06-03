@@ -2585,7 +2585,7 @@ public class ASPENModelAnalysis extends AnalysisPass {
 						}
 					}
 				} else if( OpenACCRuntimeLibrary.isMemoryAPI(fCall) ) { 
-					PrintTools.println("current fCall: " + fCallName, 0);
+					//PrintTools.println("current fCall: " + fCallName, 0);
 					boolean copyin = OpenACCRuntimeLibrary.isCopyInAPI(fCall);
 					boolean copyout = OpenACCRuntimeLibrary.isCopyOutAPI(fCall);
 					boolean presentCheck = OpenACCRuntimeLibrary.isPresentCheckAPI(fCall);
@@ -2607,7 +2607,7 @@ public class ASPENModelAnalysis extends AnalysisPass {
 						}
 					}
 					if( isIntraComm ) {
-						PrintTools.println("intracomm fCall: " + fCallName, 0);
+						//PrintTools.println("intracomm fCall: " + fCallName, 0);
 						Expression sizeExp = null;
 						Expression hostVar = null;
 						Expression devVar = null;
