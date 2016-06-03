@@ -34,6 +34,7 @@ import openacc.hir.ASPENParamDeclaration;
 import openacc.hir.ASPENResource;
 import openacc.hir.ASPENStatement;
 import openacc.hir.ASPENTrait;
+import openacc.hir.OpenACCRuntimeLibrary;
 import openacc.transforms.ASPENModelGen;
 import openacc.transforms.TransformTools;
 import cetus.analysis.AnalysisPass;
@@ -812,8 +813,15 @@ public class ASPENModelAnalysis extends AnalysisPass {
 				}
 				
 				//Handle OpenACC data clauses.
-				List<ACCAnnotation> dataAnnots = AnalysisTools.collectPragmas(at, ACCAnnotation.class, ACCAnnotation.memTrDataClauses, false);
-				dataAnnots.addAll(IRTools.collectPragmas(at, ACCAnnotation.class, "update"));
+				//[DEBUG] collectPragmas() will collect all  OpenACC annotations existing any annotatable attached to the current IR, at.
+				//We need OpenACC annotations only in the current IR.
+/*				List<ACCAnnotation> dataAnnots = AnalysisTools.collectPragmas(at, ACCAnnotation.class, ACCAnnotation.memTrDataClauses, false);
+				dataAnnots.addAll(IRTools.collectPragmas(at, ACCAnnotation.class, "update"));*/
+				List<ACCAnnotation> dataAnnots = AnalysisTools.getAnnotations(at, ACCAnnotation.class, ACCAnnotation.memTrDataClauses, false);
+				ACCAnnotation tttAnnot = at.getAnnotation(ACCAnnotation.class, "update");
+				if( tttAnnot != null ) {
+					dataAnnots.add(tttAnnot);
+				}
 				if( inASPENModelRegion && (dataAnnots != null) && !dataAnnots.isEmpty() ) {
 					boolean newControlAnnot = false;
 					ASPENAnnotation aspenAnnot = at.getAnnotation(ASPENAnnotation.class, "intracomm");
@@ -929,10 +937,12 @@ public class ASPENModelAnalysis extends AnalysisPass {
 		                - Add "execute" clause to the ASPEN directive if the enclosing annotatable is ExpressionStatement.
 		            - Else
 		                - For each function call
-		                    - If the function is C library calls, 
+		                    - If the function is a C library call, 
 		                        - Memory-related calls (malloc, free, memset, etc.) will 
 		                        be recognized and necessary ASPEN directive will be added. 
 		                        - Other calls will be considered for flops/loads/stores.
+		                    - Else if the function is an OpenACC memory transfer call,
+		                    	- add intracomm ASPEN directive.
 		                    - Else if the function is user-function,
 		                        - Set the function as the current function.
 		 */
@@ -1196,6 +1206,41 @@ public class ASPENModelAnalysis extends AnalysisPass {
 								}
 							}
 						}
+					}
+				}
+			}
+			if( lExpressionAnalyzer.intracommSize != null ) {
+				Set<ASPENResource> intracommSet = null;
+				ASPENAnnotation aspenAnnot = at.getAnnotation(ASPENAnnotation.class, "intracomm");
+				if( aspenAnnot == null ) {
+					aspenAnnot = controlAnnot;
+					intracommSet = new HashSet<ASPENResource>();
+					aspenAnnot.put("intracomm", intracommSet);
+				} else {
+					intracommSet = aspenAnnot.get("intracomm");
+				}
+				ASPENResource intraCommData;
+				Expression dID = lExpressionAnalyzer.dstData.clone();
+				if( dID != null ) {
+					intraCommData = new ASPENResource(lExpressionAnalyzer.intracommSize.clone(), null, "to", dID);
+				} else {
+					intraCommData = new ASPENResource(lExpressionAnalyzer.intracommSize.clone(), null);
+				}
+				if( lExpressionAnalyzer.commType != null ) {
+					intraCommData.addTrait(new ASPENTrait(lExpressionAnalyzer.commType));
+				}
+				if( dID == null ) {
+					intracommSet.add(intraCommData);
+				} else {
+					boolean rscExist = false;
+					for( ASPENResource tRSC : intracommSet ) {
+						if( tRSC.getID().equals(dID) ) {
+							rscExist = true;
+							break;
+						}
+					}
+					if( !rscExist ) {
+						intracommSet.add(intraCommData);
 					}
 				}
 			}
@@ -1888,6 +1933,11 @@ public class ASPENModelAnalysis extends AnalysisPass {
 		protected Map<Symbol, Map<Expression, Expression>> STORES = new HashMap<Symbol, Map<Expression, Expression>>();
 		protected Expression allocatedElems = null;
 		protected Expression allocatedUnit = null;
+		protected Expression intracommSize = null;
+		protected Expression intercommSize = null;
+		protected String commType = null; //copy, pcopy, copyin, pcopyin, copyout, pcopyout, p2p, allToAll, reduction, copied, etc.
+		protected Expression dstData = null;
+		protected Expression srcData = null;
 		boolean containsUserFunction = false;
 		Specifier dataTypes = null;
 		boolean containsFloats = false;
@@ -1931,6 +1981,11 @@ public class ASPENModelAnalysis extends AnalysisPass {
 			STORES.clear();
 			allocatedElems = null;
 			allocatedUnit = null;
+			intracommSize = null;
+			intercommSize = null;
+			commType = null;
+			dstData = null;
+			srcData = null;
 			containsUserFunction = false;
 			dataTypes = null;
 			containsFloats = false;
@@ -2418,7 +2473,8 @@ public class ASPENModelAnalysis extends AnalysisPass {
 			} else if( inExp instanceof FunctionCall ) {
 				FunctionCall fCall = (FunctionCall)inExp;
 				String fCallName = fCall.getName().toString();
-				if( !StandardLibrary.contains(fCall) && !pseudoStandardLibrary.contains(fCallName) ) {
+				if( !StandardLibrary.contains(fCall) && !pseudoStandardLibrary.contains(fCallName) &&
+						!OpenACCRuntimeLibrary.contains(fCall)) {
 					containsUserFunction = true;
 				}
 				if( fCallName.equals("malloc") || fCallName.equals("_mm_malloc") ) {
@@ -2525,6 +2581,99 @@ public class ASPENModelAnalysis extends AnalysisPass {
 										statusMap.put(cstatus.clone(), tInt);
 									}
 								}
+							}
+						}
+					}
+				} else if( OpenACCRuntimeLibrary.isMemoryAPI(fCall) ) { 
+					PrintTools.println("current fCall: " + fCallName, 0);
+					boolean copyin = OpenACCRuntimeLibrary.isCopyInAPI(fCall);
+					boolean copyout = OpenACCRuntimeLibrary.isCopyOutAPI(fCall);
+					boolean presentCheck = OpenACCRuntimeLibrary.isPresentCheckAPI(fCall);
+					boolean isIntraComm = false;
+					int numArgs = fCall.getNumArguments();
+					if( copyin ) {
+						isIntraComm = true;
+						if( presentCheck ) {
+							commType = "pcopyin";
+						} else {
+							commType = "copyin";
+						}
+					} else if( copyout ) {
+						isIntraComm = true;
+						if( presentCheck ) {
+							commType = "pcopyout";
+						} else {
+							commType = "copyout";
+						}
+					}
+					if( isIntraComm ) {
+						PrintTools.println("intracomm fCall: " + fCallName, 0);
+						Expression sizeExp = null;
+						Expression hostVar = null;
+						Expression devVar = null;
+						if( (numArgs == 2) || (numArgs == 4) ) {
+							hostVar = fCall.getArgument(0).clone();
+							sizeExp = fCall.getArgument(1).clone();
+						} else if( numArgs == 3 ) {
+							sizeExp = fCall.getArgument(2).clone();
+							if( fCallName.equals("acc_memcpy_to_device") ) {
+								hostVar = fCall.getArgument(1).clone();
+								devVar = fCall.getArgument(0).clone();
+							} else if( fCallName.equals("acc_memcpy_from_device") ) {
+								hostVar = fCall.getArgument(0).clone();
+								devVar = fCall.getArgument(1).clone();
+							}
+						}
+						if( sizeExp != null ) { 
+							List<SizeofExpression> sizeofExps = 
+									IRTools.getExpressionsOfType(sizeExp, SizeofExpression.class);
+							if( (sizeofExps != null) && !sizeofExps.isEmpty() ) {
+								SizeofExpression sizeofExp = sizeofExps.get(0);
+								if( intracommSize == null ) {
+									NameID nParamID = getBuiltInParamForTypes(sizeofExp.getTypes(), 
+											internalParamMap, mainTrUnt);
+									if( nParamID != null ) {
+										sizeofExp.swapWith(nParamID.clone());
+										if( sizeofExp.equals(sizeExp) ) {
+											sizeExp = nParamID.clone();
+										}
+										intracommSize = Symbolic.simplify(sizeExp);
+									}
+								} else {
+									Statement expStmt = inExp.getStatement();
+									Procedure cProc = expStmt.getProcedure();
+									Tools.exit("[ERROR in ASPENModelAnalysis.ExpressionAnalyzer] multiple memory transfer calls " +
+											"exist in the current expression statement; not analyzable; exit! \n" +
+											"Current Expression Statement: " + inExp.getStatement() + "\n" +
+											"Enclosing Procedure: " + cProc.getSymbolName() +"\nEnclosing Translation Unit: " + 
+											((TranslationUnit)cProc.getParent()).getOutputFilename() + "\n");
+								}
+							} else {
+								intracommSize = Symbolic.simplify(sizeExp.clone());
+							}
+						}
+						if( hostVar != null ) {
+							if( hostVar instanceof Typecast ) {
+								hostVar = ((Typecast)hostVar).getExpression().clone();
+							}
+							Symbol tSym = SymbolTools.getSymbolOf(hostVar);
+							boolean isDataSymbol = false;
+							if( tSym != null ) {
+								if( orgDataSymMap.containsKey(tSym) ) {
+									isDataSymbol = true;
+								} else {
+									osymList.clear();
+									if( AnalysisTools.SymbolStatus.OrgSymbolFound(
+											AnalysisTools.findOrgSymbol(tSym, inExp, true, null, osymList, gFuncCallList)) ) {
+										Symbol otSym = (Symbol)osymList.get(0);
+										if( orgDataSymMap.containsValue(otSym) ) {
+											isDataSymbol = true;
+										}
+									}
+								}
+							}
+							if( isDataSymbol ) {
+								dstData = hostVar.clone();
 							}
 						}
 					}

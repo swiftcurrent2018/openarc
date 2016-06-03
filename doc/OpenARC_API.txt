@@ -510,10 +510,10 @@ loads (loads-arg-list)
 stores (stores-arg-list)
 		//contains a list of memory stores, in the form of 
 		//expression[:to(ID)][:traits(trait-list)]
-messages (messages-arg-list)
+messages (message-arg-list)
 		//contains a list of internode communications, 
 		//in the form of expression [:traits(trait-list)]
-intracomm (messages-arg-list)
+intracomm (message-arg-list)
 		//contains a list of intranode transfers, 
 		//in the form of expression[:traits(trait-list)]
 allocates (memory-arg-list)

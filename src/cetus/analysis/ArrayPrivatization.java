@@ -161,7 +161,24 @@ public class ArrayPrivatization extends AnalysisPass {
     public String getPassName() {
         return tag;
     }
-
+    
+    /**
+     * Set the privatization level.
+     * [Added by Seyong Lee]
+     * 
+     * @param opt
+     */
+    public void setOption(int opt) {
+    	if( (opt < PRIV_SCALAR) || (opt > PRIV_ARRAY) ) {
+    		opt = PRIV_ARRAY;
+    	}
+    	option = opt;
+    }
+    
+    public int getAliasResult() {
+    	return alias_result;
+    }
+    
     /**
     * Starts array privatization by calling the procedure-level driver for each
     * procedure within the program.

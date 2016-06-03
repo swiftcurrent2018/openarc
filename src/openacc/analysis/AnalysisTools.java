@@ -1037,6 +1037,48 @@ public abstract class AnalysisTools {
         }
         return ret;
     }
+    
+    /**
+    * Returns a list of pragma annotations that contain the specified string
+    * keys and are attached to the input annotatable object {@code at}.
+    * This provides complementary functionality to Annotatable.getAnnotations() method; 
+	* if {@code includeAll} is true, check whether all keys in the {@code searchKeys} are included,
+	* and otherwise, check whether any key in the {@code searchKeys} is included. 
+    *
+    * @param at the annotatable object to be searched.
+    * @param pragma_cls the type of pragmas to be searched for.
+    * @param searchKeys the keywords to be searched for.
+	 * @param includeAll if true, search pragmas containing all keywords; otherwise search pragma containing any keywords
+	 * in the {@code searchKeys} set.
+    * @return the list of matching pragma annotations.
+    */
+    public static <T extends PragmaAnnotation> List<T> getAnnotations(
+    		Annotatable at, Class<T> pragma_cls, Set<String> searchKeys, boolean includeAll) {
+    	List<T> ret = new ArrayList<T>();
+    	List<T> pragmas = at.getAnnotations(pragma_cls);
+    	for (int i = 0; i < pragmas.size(); i++) {
+    		T pragma = pragmas.get(i);
+    		boolean found = false;
+    		for( String key: searchKeys ) {
+    			if ( pragma.containsKey(key) ) {
+    				found = true;
+    			} else {
+    				found = false;
+    			}
+    			if( includeAll ) {
+    				if( !found ) {
+    					break;
+    				}
+    			} else if( found ) {
+    				break;
+    			}
+    		}
+    		if( found ) {
+    			ret.add(pragma);
+    		}
+    	}
+    	return ret;
+    }
 
 	/**
 	 * Returns true if a pragma annotation exists that contain the specified string key
