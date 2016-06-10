@@ -356,11 +356,11 @@ public class ACC2GPUDriver extends Driver
 		//Add Cuda-Specific command-line options. //
 		////////////////////////////////////////////
 
-		options.add(options.UTILITY, "cudaGlobalMemSize", "size in bytes",
+		options.add(options.UTILITY, "cudaGlobalMemSize", "size-in-bytes",
 		"Size of CUDA global memory in bytes (default value = 1600000000); used for debugging");
 		optionsWithIntArgument.add("cudaGlobalMemSize");
 		
-		options.add(options.UTILITY, "cudaSharedMemSize", "size in bytes",
+		options.add(options.UTILITY, "cudaSharedMemSize", "size-in-bytes",
 		"Size of CUDA shared memory in bytes (default value = 16384); used for debugging");
 		optionsWithIntArgument.add("cudaSharedMemSize");
 
