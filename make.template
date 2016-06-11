@@ -181,7 +181,7 @@ $(BENCHMARK)_ACC: COMPILE_HOST COMPILE_KERNEL
 	$(POSTCMD)
 
 COMPILE_HOST: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
-	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); if [ -f "$(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX)" ]; then cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
+	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); if [ -f "$(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX)" ]; then cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); fi; cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
 	cd $(CETUS_OUTPUT); grep resilience $(KERNEL_FILE) > /dev/null && cp $(OPENARCLIB)/$(RESILIENCE_FILE) $(OPENARCLIB)/resilience.h ../$(TARGET); cd ../
 
 COMPILE_KERNEL: $($(CETUS_OUTPUT)/$(KERNLE_FILE)) makedirectories

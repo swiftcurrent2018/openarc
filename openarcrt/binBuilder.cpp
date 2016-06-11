@@ -1,8 +1,3 @@
-#ifdef __APPLE__
-#include <OpenCL/opencl.h>
-#else
-#include <CL/cl.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -10,6 +5,12 @@
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
 #include <cuda.h>
 #include <cuda_runtime.h>
+#else
+#ifdef __APPLE__
+#include <OpenCL/opencl.h>
+#else
+#include <CL/cl.h>
+#endif
 #endif
 
 #ifndef PRINT_LOG
@@ -32,6 +33,40 @@ char * deblank(char *str) {
 }   
 
 int main (){
+#if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
+	//Generate ptx files for .cu, only if nvcc is found on the system
+	if (system("which nvcc")==0){
+		CUresult err;
+		int major, minor;
+		CUdevice cuDevice;
+		CUcontext cuContext;
+		CUmodule cuModule;
+		int numDevices;
+		cudaGetDeviceCount(&numDevices);
+		
+		for(int i=0 ; i < numDevices; i++) {
+			cuDeviceGet(&cuDevice, i);
+			#if CUDA_VERSION >= 5000
+			cuDeviceGetAttribute (&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, cuDevice);
+			cuDeviceGetAttribute (&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, cuDevice);
+			#else
+				cuDeviceComputeCapability(&major, &minor, cuDevice);
+			#endif
+
+			std::stringstream ss;
+			ss << major;
+			ss << minor;
+			std::string version = ss.str();
+			std::string ptxName = std::string("openarc_kernel_") + version + std::string(".ptx");
+			std::string command = std::string("nvcc $OPENARC_JITOPTION -arch=sm_") + version + std::string(" openarc_kernel.cu -ptx -o ") + ptxName;
+			system(command.c_str());
+		}
+	} else {
+		fprintf(stderr, "[ERROR in CUDA binary creation] cannot find the NVIDIA CUDA compiler (nvcc) \n");
+	}
+
+#else
+
 	cl_platform_id clPlatform;
 	cl_device_id clDevice;
 	cl_context clContext;
@@ -137,8 +172,6 @@ int main (){
 		// Print the log
 		printf("%s\n", log);
 #endif
-		
-		
 		size_t size;
 		err = clGetProgramInfo( clProgram, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &size, NULL );
 		if(err != CL_SUCCESS) {
@@ -162,36 +195,7 @@ int main (){
 		fclose(fpbin);
 		delete[] binary;
 	}	
-	
-	#if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
-	//Generate ptx files for .cu, only if nvcc is found on the system
-	if (system("which nvcc")==0){
-		CUresult err;
-		int major, minor;
-		CUdevice cuDevice;
-		CUcontext cuContext;
-		CUmodule cuModule;
-		int numDevices;
-		cudaGetDeviceCount(&numDevices);
-		
-		for(int i=0 ; i < numDevices; i++) {
-			cuDeviceGet(&cuDevice, i);
-			#if CUDA_VERSION >= 5000
-			cuDeviceGetAttribute (&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, cuDevice);
-			cuDeviceGetAttribute (&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, cuDevice);
-			#else
-				cuDeviceComputeCapability(&major, &minor, cuDevice);
-			#endif
 
-			std::stringstream ss;
-			ss << major;
-			ss << minor;
-			std::string version = ss.str();
-			std::string ptxName = std::string("openarc_kernel_") + version + std::string(".ptx");
-			std::string command = std::string("nvcc $OPENARC_JITOPTION -arch=sm_") + version + std::string(" openarc_kernel.cu -ptx -o ") + ptxName;
-			system(command.c_str());
-		}
-	}
-	#endif
+#endif
 
 }
