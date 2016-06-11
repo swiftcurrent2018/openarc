@@ -768,10 +768,10 @@
 #############################
 #acc2gpu=1
 #omp2acc=N
-#targetArch=0
+targetArch=0
 #AccAnalysisOnly=1
 #SkipGPUTranslation=N
-showInternalAnnotations=1
+#showInternalAnnotations=1
 #skipKernelLoopBoundChecking
 #SetAccEntryFunction=filename
 #addIncludePath=__openarcrt__

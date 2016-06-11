@@ -135,19 +135,28 @@ where this readme file resides).
 -------------------------------------------------------------------------------
 RUNNING OpenARC
 -------------------------------------------------------------------------------
-Users can run OpenARC in the following way:
+* Users can run OpenARC in the following way:
 
   $ java -classpath=[user_class_path] openacc.exec.ACC2GPUDriver [options] [C files]
 
-The "user_class_path" should include the class paths of Antlr and Cetus.
+* The "user_class_path" should include the class paths of Antlr and Cetus.
 "build.sh" and "build.xml" provides a target (bin) that generates a wrapper script
 for OpenARC users; if [openarc-path]/bin/openarc exists, the above command can be shortened as following:
 
   $ [openarc-path]/bin/openarc [options] [C files]
 
-Available OpenARC commandline options can be found either in [openarc-path]/test/openarcConf.sample or by running the following command:
+* Available OpenARC commandline options can be found either in [openarc-path]/test/openarcConf.sample or by running the following command:
 
   $ [openarc-path]/bin/openarc -dump-options
+
+* A recommended way to pass commandline options to OpenARC is to use the sample configuration file ([openarc-path]/test/openarcConf.sample)
+
+	- Copy the openarcConf.sample file to your working directory, modify it as necessary. 
+
+	- Run OpenARC using the -gpuConfFile option.
+
+	$ [openarc-path]/bin/openarc -gpuConfFile=openarcConf.sample [C files]
+
 
 -------------------------------------------------------------------------------
 TESTING
