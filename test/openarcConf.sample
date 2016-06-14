@@ -5,6 +5,7 @@
 #     - Add  "-gpuConfFile=thisfilename" to the commandline input.  #
 ############################################################################
 # Avaliable OpenARC configuration parameters                               #
+# (Use the list at the end to selectively apply configuration parameters)  # 
 ############################################################################
 ########################################
 #Option: ASPENModelGen
@@ -763,7 +764,10 @@
 #Print the version information
 #
 #NOPTIONDESC#
-############################################################################
+##################################################################################
+# Uncomment and modify below list as necessary to apply configuration parameters #
+##################################################################################
+#############################
 # Translation configuration #
 #############################
 #acc2gpu=1

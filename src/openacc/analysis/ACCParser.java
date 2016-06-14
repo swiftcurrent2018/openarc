@@ -2274,6 +2274,7 @@ public class ACCParser {
 		{
 			String tok = get_token();
 			if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+			if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
 			clause = "token_" + tok;
 			PrintTools.println("clause=" + clause, 3);
 			try {
@@ -2417,6 +2418,7 @@ public class ACCParser {
 		{
 			String tok = get_token();
 			if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+			if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
 			clause = "conf_" + tok;
 			PrintTools.println("clause=" + clause, 3);
 			try {

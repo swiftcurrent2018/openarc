@@ -142,7 +142,10 @@ public class OmpParser {
             parse_omp_parallel_sections();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 PrintTools.println("clause=" + clause, 2);
                 switch (omp_clause.valueOf(clause)) {
                     case token_if           : parse_omp_if();           break;
@@ -188,7 +191,10 @@ public class OmpParser {
             parse_omp_for_simd();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_private      : parse_omp_private();      break;
                     case token_shared       : parse_omp_shared();       break;
@@ -226,7 +232,10 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [sections] clause", 2);
         addToMap("sections", "true");
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_private      : parse_omp_private();      break;
                 case token_firstprivate : parse_omp_firstprivate(); break;
@@ -259,7 +268,10 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [single] clause", 2);
         addToMap("single", "true");
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_private      : parse_omp_private();      break;
                 case token_firstprivate : parse_omp_firstprivate(); break;
@@ -290,7 +302,10 @@ public class OmpParser {
             parse_omp_parallel_for_simd();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_if           : parse_omp_if();           break;
                     case token_num_threads  : parse_omp_num_threads();  break;
@@ -315,7 +330,10 @@ public class OmpParser {
         addToMap("simd", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_if           : parse_omp_if();           break;
                 case token_num_threads  : parse_omp_num_threads();  break;
@@ -356,7 +374,10 @@ public class OmpParser {
     private static void parse_omp_parallel_sections() {
         PrintTools.println("OmpParser is parsing [parallel sections] clause",2);
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             addToMap("sections", "true");
             switch (omp_clause.valueOf(clause)) {
                 case token_if           : parse_omp_if();           break;
@@ -390,7 +411,10 @@ public class OmpParser {
     private static void parse_omp_task() {
         PrintTools.println("OmpParser is parsing [task] clause", 2);
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok; 
             addToMap("task", "true");
             switch (omp_clause.valueOf(clause)) {
                 case token_if           : parse_omp_if();           break;
@@ -528,6 +552,11 @@ public class OmpParser {
      *        2.4 declare Construct
      *
      *        #pragma omp declare simd
+     *        #pragma omp declare target
+     *        #pragma omp declare target (extended-list)
+     *        #pragma omp declare target to (extended-list)
+     *        #pragma omp declare target link (list)
+     *        
      * --------------------------------------------------------------- */
     private static void parse_omp_declare() {
         PrintTools.println("OmpParser is parsing [declare] clause", 2);
@@ -538,6 +567,7 @@ public class OmpParser {
         } else if (check("target")) {
             addToMap("declare", "target");
             eat();
+            parse_omp_declare_target();
         }else {
             OmpParserError("NoSuchParallelConstruct : ");
         }
@@ -561,6 +591,25 @@ public class OmpParser {
         }
     }
 
+    private static void parse_omp_declare_target() {
+        PrintTools.println("OmpParser is parsing [declare target] clause", 2);
+        if( check("(") ) {
+        	parse_omp_to();
+        }
+        while (end_of_token() == false) {
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
+            switch (omp_clause.valueOf(clause)) {
+                case token_to           : parse_omp_to();           break;
+                case token_link         : parse_omp_link();         break;
+                default : OmpParserError("NoSuchParallelConstruct");
+            }
+        }
+
+    }
+
     /** ---------------------------------------------------------------
       *        2.8 SIMD Constructs
 	  *           The simd construct can be applied to a loop to indicate 
@@ -582,7 +631,10 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [simd] clause", 2);
         addToMap("simd", "true");
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_safelen      : parse_omp_safelen();      break;
                 case token_linear       : parse_omp_linear();       break;
@@ -611,7 +663,10 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [simd] clause", 2);
         addToMap("simd", "true");
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_safelen      : parse_omp_safelen();      break;
                 case token_linear       : parse_omp_linear();       break;
@@ -635,7 +690,10 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [simd] clause", 2);
         addToMap("simd", "true");
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_safelen      : parse_omp_safelen();      break;
                 case token_linear       : parse_omp_linear();       break;
@@ -693,7 +751,10 @@ public class OmpParser {
             parse_omp_target_teams();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_device       : parse_omp_device();       break;
                     case token_map          : parse_omp_map();          break;
@@ -712,7 +773,10 @@ public class OmpParser {
         addToMap("update", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_device       : parse_omp_device();       break;
                 case token_if           : parse_omp_if();           break;
@@ -732,7 +796,10 @@ public class OmpParser {
             parse_omp_target_teams_distribute();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_device       : parse_omp_device();       break;
                     case token_map          : parse_omp_map();          break;
@@ -767,7 +834,10 @@ public class OmpParser {
             }
         }else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_device       : parse_omp_device();       break;
                     case token_map          : parse_omp_map();          break;
@@ -792,7 +862,10 @@ public class OmpParser {
         addToMap("simd", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
@@ -820,7 +893,10 @@ public class OmpParser {
             parse_omp_target_teams_distribute_parallel_for_simd();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_device       : parse_omp_device();       break;
                     case token_map          : parse_omp_map();          break;
@@ -845,7 +921,10 @@ public class OmpParser {
         addToMap("simd", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
@@ -878,7 +957,10 @@ public class OmpParser {
         addToMap("data", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+			String tok = get_token();
+			if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+			if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
@@ -903,7 +985,10 @@ public class OmpParser {
         addToMap("data", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
@@ -927,7 +1012,10 @@ public class OmpParser {
         addToMap("data", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
@@ -970,7 +1058,10 @@ public class OmpParser {
             }
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_num_teams    : parse_omp_num_teams();    break;
                     case token_thread_limit : parse_omp_thread_limit(); break;
@@ -1001,7 +1092,10 @@ public class OmpParser {
             }
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_num_teams    : parse_omp_num_teams();    break;
                     case token_thread_limit : parse_omp_thread_limit(); break;
@@ -1023,7 +1117,10 @@ public class OmpParser {
         addToMap("simd", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_num_teams    : parse_omp_num_teams();    break;
                 case token_thread_limit : parse_omp_thread_limit(); break;
@@ -1048,7 +1145,10 @@ public class OmpParser {
             parse_omp_teams_parallel_for_simd();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_num_teams    : parse_omp_num_teams();    break;
                     case token_thread_limit : parse_omp_thread_limit(); break;
@@ -1069,7 +1169,10 @@ public class OmpParser {
         addToMap("simd", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_num_teams    : parse_omp_num_teams();    break;
                 case token_thread_limit : parse_omp_thread_limit(); break;
@@ -1093,7 +1196,10 @@ public class OmpParser {
             parse_omp_teams_distribute_parallel_for_simd();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_num_teams    : parse_omp_num_teams();    break;
                     case token_thread_limit : parse_omp_thread_limit(); break;
@@ -1115,7 +1221,10 @@ public class OmpParser {
         addToMap("simd", "true");
 
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_num_teams    : parse_omp_num_teams();    break;
                 case token_thread_limit : parse_omp_thread_limit(); break;
@@ -1162,7 +1271,10 @@ public class OmpParser {
             }
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_private          : parse_omp_private();          break;
                     case token_firstprivate     : parse_omp_firstprivate();     break;
@@ -1178,7 +1290,10 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [simd] clause", 2);
         addToMap("simd", "true");
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_private          : parse_omp_private();          break;
                 case token_firstprivate     : parse_omp_firstprivate();     break;
@@ -1198,7 +1313,10 @@ public class OmpParser {
             parse_omp_distribute_parallel_for_simd();
         } else {
             while (end_of_token() == false) {
-                String clause = "token_" + get_token();
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_private          : parse_omp_private();          break;
                     case token_firstprivate     : parse_omp_firstprivate();     break;
@@ -1215,7 +1333,10 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [simd] clause", 2);
         addToMap("simd", "true");
         while (end_of_token() == false) {
-            String clause = "token_" + get_token();
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_private          : parse_omp_private();          break;
                 case token_firstprivate     : parse_omp_firstprivate();     break;
@@ -1633,6 +1754,15 @@ public class OmpParser {
         addToMap("from", set);
     }
 
+    private static void parse_omp_link() {
+        PrintTools.println("OmpParser is parsing [link] clause", 2);
+        match("(");
+        Set set = new HashSet<String>();
+        parse_commaSeparatedList(set);
+        match(")");
+        addToMap("link", set);
+    }
+
     public static enum omp_pragma {
         omp_parallel, 
         omp_for, 
@@ -1688,6 +1818,7 @@ public class OmpParser {
         token_dist_schedule,
         token_to,
         token_from,
+        token_link,
         token_use_device_ptr,
         token_is_device_ptr
     }
