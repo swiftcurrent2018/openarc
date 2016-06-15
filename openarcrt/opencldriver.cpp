@@ -150,6 +150,7 @@ HI_error_t OpenCLDriver::init() {
 	if( tconf->use_unifiedmemory > 0 ) {
 		//[FIXME] Need to check whether unified memory is supported or not.
 		unifiedMemSupported = 0;
+        fprintf(stderr, "[WARNING in OpenCLDriver::init()] the current OpenARC OpenCL driver does not support Unified Memory; all existing unified memory APIs will be ignored, and thus users have to explicitly manage device memory either through data clauses or though OpenACC runtime APIs.\n(To disable Unified Memory, reset environment variable, OPENARCRT_UNIFIEDMEM to 0.)\n");
 	} else {	
 		unifiedMemSupported = 0;
 	}
@@ -723,7 +724,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
     } else {
 		if( unifiedMemSupported == 0 ) {
 			result = HI_success;
-            fprintf(stderr, "[OPENARCRT-WARNING in OpenCLDriver::HI_malloc1D_unified(%d)] unified memory is either not supported or disabled in the current device; device memory should be explicitly managed either through data clauses or though runtime APIs.\n", asyncID);
+            fprintf(stderr, "[OPENARCRT-WARNING in OpenCLDriver::HI_malloc1D_unified(%d)] unified memory is either not supported or disabled in the current device; device memory should be explicitly managed either through data clauses or though runtime APIs.\n(To enable unified memory, environment variable, OPENARCRT_UNIFIEDMEM should be set to 1.)\n", asyncID);
 			if( hostPtr == NULL ) {
             	*devPtr = malloc(count);
 			} else {

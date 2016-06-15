@@ -10,6 +10,7 @@ import openacc.analysis.AnalysisTools;
 import openacc.analysis.SubArray;
 import openacc.hir.*;
 import cetus.transforms.TransformPass;
+
 import java.util.*;
 
 /**
@@ -51,7 +52,7 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 				if( cAnnot.containsKey("parallel") ) {
 					isParallelRegion = true;
 				}
-				if( at instanceof Loop ) {
+				if( at instanceof ForLoop ) {
 					if( !cAnnot.containsKey("loop") ) {
 						//If kernels loop has separate kernels annotation and loop annotaion, merge them together.
 						ACCAnnotation lAnnot = at.getAnnotation(ACCAnnotation.class, "loop");
@@ -79,7 +80,7 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 						if( isParallelRegion ) {
 							cAnnot.put("gang", "_clause");
 							if( !AnalysisTools.ipContainPragmas(at, ACCAnnotation.class, "worker", null) ) {
-								cAnnot.put("worker", "_clause");
+								NestedParallelLoopsPreprocessor((ForLoop)at, isParallelRegion);
 							}
 						} else {
 							boolean isIndependent = false;
@@ -94,19 +95,19 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 							if( isIndependent ) {
 								cAnnot.put("gang", "_clause");
 								if( !AnalysisTools.ipContainPragmas(at, ACCAnnotation.class, "worker", null) ) {
-									cAnnot.put("worker", "_clause");
+									NestedParallelLoopsPreprocessor((ForLoop)at, isParallelRegion);
 								}
 							} else {
-							Procedure cProc = IRTools.getParentProcedure(at);
-							PrintTools.println("\n[WARNING] the following kernels region does not have any loop directive with " +
-									"worksharing clause (gang or worker) or independent clause, which will be executed sequentially by default. " +
-									"To enable automatic parallelization, set AccParallelization to 1.\n" +
-									"Enclosing procedure: " + cProc.getSymbolName() + "\n" +
-									"Compute region: " + cAnnot + "\n", 0);
-							//For OpenACC V2.0 or higher, "auto" clause can be added too.
-							//cAnnot.put("auto", "_clause");
-							//[DEBUG] To enable auto-parallelization, below should be disabled.
-							cAnnot.put("seq", "_clause");
+								Procedure cProc = IRTools.getParentProcedure(at);
+								PrintTools.println("\n[WARNING] the following kernels region does not have any loop directive with " +
+										"worksharing clause (gang or worker) or independent clause, which will be executed sequentially by default. " +
+										"To enable automatic parallelization, set AccParallelization to 1.\n" +
+										"Enclosing procedure: " + cProc.getSymbolName() + "\n" +
+										"Compute region: " + cAnnot + "\n", 0);
+								//For OpenACC V2.0 or higher, "auto" clause can be added too.
+								//cAnnot.put("auto", "_clause");
+								//[DEBUG] To enable auto-parallelization, below should be disabled.
+								cAnnot.put("seq", "_clause");
 							}
 						}
 					}
@@ -891,6 +892,74 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 							}
 						}
 					}
+				}
+			}
+		}
+	}
+	
+	private void NestedParallelLoopsPreprocessor( ForLoop tLoop, boolean isParallelRegion) {
+		List<ForLoop> nestedLoops = AnalysisTools.findDirectlyNestedLoopsWithClause(tLoop, null); 	
+		List<ForLoop> nestedParallelLoops = new LinkedList<ForLoop>();
+		for( ForLoop cLoop : nestedLoops ) {
+			if( isParallelRegion ) { //parallel region
+				if( cLoop.containsAnnotation(ACCAnnotation.class, "seq") ) {
+					break;
+				} else {
+					nestedParallelLoops.add(cLoop);
+				}
+			} else if( !cLoop.containsAnnotation(ACCAnnotation.class, "seq") ) { //kernels region
+				if( cLoop.containsAnnotation(ACCAnnotation.class, "independent") ) {
+					nestedParallelLoops.add(cLoop);
+				} else if( cLoop.containsAnnotation(CetusAnnotation.class, "parallel") ) {
+					nestedParallelLoops.add(cLoop);
+					ACCAnnotation cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "loop");
+					if( cAnnot == null ) {
+						cAnnot = new ACCAnnotation("loop", "_directive");
+						cLoop.annotate(cAnnot);
+					}
+					cAnnot.put("independent", "_clause");
+				} else {
+					break;
+				}
+			}
+		}
+		int nLoopSize = nestedParallelLoops.size();
+		if( nLoopSize == 1 ) {
+			ACCAnnotation cAnnot = tLoop.getAnnotation(ACCAnnotation.class, "loop");
+			if( cAnnot == null ) {
+				cAnnot = new ACCAnnotation("loop", "_directive");
+				tLoop.annotate(cAnnot);
+			}
+			if( !cAnnot.containsKey("gang") ) {
+				cAnnot.put("gang", "_clause");
+			}
+			if( !cAnnot.containsKey("worker") ) {
+				cAnnot.put("worker", "_clause");
+			}
+		} else if( nLoopSize >= 2 ) {
+			ForLoop cLoop = nestedParallelLoops.get(0);
+			ACCAnnotation cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "loop");
+			if( cAnnot == null ) {
+				cAnnot = new ACCAnnotation("loop", "_directive");
+				cLoop.annotate(cAnnot);
+			}
+			if( !cAnnot.containsKey("gang") ) {
+				cAnnot.put("gang", "_clause");
+			}
+			cLoop = nestedParallelLoops.get(1);
+			cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "loop");
+			if( cAnnot == null ) {
+				cAnnot = new ACCAnnotation("loop", "_directive");
+				cLoop.annotate(cAnnot);
+			}
+			if( !cAnnot.containsKey("worker") ) {
+				cAnnot.put("worker", "_clause");
+			}
+			if( nLoopSize > 2 ) {
+				cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "collapse");
+				if( cAnnot == null ) {
+					IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize-1);
+					cAnnot.put("collapse", collapseLevel);
 				}
 			}
 		}

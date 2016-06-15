@@ -1749,6 +1749,7 @@ public abstract class AnalysisTools {
 	 * Find all loops containing the clause {@code clause} and directly nested from the input loop {@code tloop}
 	 * If the input loop {@code tloop} contains the clause {@code clause}, it is also included in the output list.
 	 * If a collapse clause exists, the search continues upto the collapse level. 
+	 * If null is passed to the clause {@code clause} argument, it will search all directly nested loops.
 	 * 
 	 * @param tloop loop to be searched
 	 * @param clause OpenACC clause to be searched
@@ -1760,7 +1761,9 @@ public abstract class AnalysisTools {
 		List<ForLoop> nestedLoops = new LinkedList<ForLoop>();
 
 		if( currLoop == null ) { return nestedLoops; }
-		else if( currLoop.containsAnnotation(ACCAnnotation.class, clause) ) {
+		else if( clause == null ) {
+			nestedLoops.add(currLoop);
+		} else if( currLoop.containsAnnotation(ACCAnnotation.class, clause) ) {
 			nestedLoops.add(currLoop);
 		} else if( currLoop.containsAnnotation(ARCAnnotation.class, clause) ) {
 			nestedLoops.add(currLoop);
@@ -1823,7 +1826,7 @@ public abstract class AnalysisTools {
 						collapseLevel = 1;
 					}
 				}
-				if( currLoop.containsAnnotation(ACCAnnotation.class, clause) ||
+				if( (clause == null) || currLoop.containsAnnotation(ACCAnnotation.class, clause) ||
 						currLoop.containsAnnotation(ARCAnnotation.class, clause) ){
 					nestedLoops.add(currLoop);
 					if( tAnnot == null ) {

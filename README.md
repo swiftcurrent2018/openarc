@@ -109,6 +109,13 @@ kernel compilation or clBuildProgram options for JIT OpenCL kernel compilation).
 
         export OPENARC_JITOPTION="-I . -I $openarc/openarcrt"
 
+* Environment variable, OPENARCRT_UNIFIEDMEM, sets whether to use unified
+memory if the underlying device supports.
+
+	if 0, unified memory is disabled.
+
+	if 1, use unified memory if the device supports it and appropriate APIs are called.
+
 * Environment variable, OPENARCRT_VERBOSITY, is used to set the verbosity
 level of profiling by the OpenARC runtime.
 
@@ -120,13 +127,6 @@ level of profiling by the OpenARC runtime.
 
 	if 3, OpenARC runtime profiler prints the entry/exit of OpenACC API + HeteroIR API + underlying driver API calls.
 
-* Environment variable, OPENARCRT_UNIFIEDMEM, sets whether to use unified
-memory if the underlying device supports.
-
-	if 0, unified memory is disabled.
-
-	if 1, use unified memory if the device supports it and appropriate APIs are called.
-
 * To run some examples in "test" directory, environment variable, openarc,
 should be set to the root directory of this OpenARC package (the directory
 where this readme file resides).
@@ -137,23 +137,29 @@ RUNNING OpenARC
 -------------------------------------------------------------------------------
 * Users can run OpenARC in the following way:
 
-  $ java -classpath=[user_class_path] openacc.exec.ACC2GPUDriver [options] [C files]
+	$ java -classpath=[user_class_path] openacc.exec.ACC2GPUDriver [options] [C files]
 
 * The "user_class_path" should include the class paths of Antlr and Cetus.
 "build.sh" and "build.xml" provides a target (bin) that generates a wrapper script
 for OpenARC users; if [openarc-path]/bin/openarc exists, the above command can be shortened as following:
 
-  $ [openarc-path]/bin/openarc [options] [C files]
+	$ [openarc-path]/bin/openarc [options] [C files]
+
+* Use addIncludePath option to pass paths for non-standard header files:
+
+	$ [openarc-path]/bin/openarc -addIncludePath=[openarc-runtime-path] [C files]
+
+* Use either macro option or "#pragma openarc #define" directive to apply macro definitions to OpenACC/OpenARC annotations; see the LIMITATIONS section.
 
 * Available OpenARC commandline options can be found either in [openarc-path]/test/openarcConf.sample or by running the following command:
 
-  $ [openarc-path]/bin/openarc -dump-options
+	$ [openarc-path]/bin/openarc -dump-options
 
 * A recommended way to pass commandline options to OpenARC is to use the sample configuration file ([openarc-path]/test/openarcConf.sample)
 
 	- Copy the openarcConf.sample file to your working directory, modify it as necessary. 
 
-	- Run OpenARC using the -gpuConfFile option.
+	- Run OpenARC using the gpuConfFile option.
 
 	$ [openarc-path]/bin/openarc -gpuConfFile=openarcConf.sample [C files]
 
@@ -176,16 +182,21 @@ For example, to compile and run matmul.c in ./test/examples/openarc/matmul direc
 FEATURES/UPDATES
 -------------------------------------------------------------------------------
 * New features
-- Add Altera FPGAs as a new target device
-- Add a fake virtual device address space for OpenCL targets, which allows pointer-arithmetics on the virtual device address for both CUDA and OpenCL devices.
+
+	- Add Altera FPGAs as a new target device
+
+	- Add a fake virtual device address space for OpenCL targets, which allows pointer-arithmetics on the virtual device address for both CUDA and OpenCL devices.
 
 * Updates
 
 * Bug fixes and improvements
-- Fixes various bugs related to multi-threading and synchronizations.
-- OpenACC update directives allow subarrays with non-zero start index, which 
+
+	- Fixes various bugs related to multi-threading and synchronizations.
+
+	- OpenACC update directives allow subarrays with non-zero start index, which 
 offers partial-array transfers between the host and device.
-- Fix bugs in setting an OpenCL driver for MICs.
+
+	- Fix bugs in setting an OpenCL driver for MICs.
 
 * Updates in flags
 
@@ -223,13 +234,13 @@ C program, the program may contain unsuppported C99 features.
 in the memory. This means that double/triple pointers (e.g., float \*\*p) are not
 allowed. One way to allocate 2D array in a contiguous way is the following:
 
-	float (\*a)[N] = (float (\*)[N])malloc(sizeof(float) \* M \* N);
-
-	//Where N should be compile-time constant.
-
-	...
-
-	a[i][j] = c; //a can be accessed as if 2D array.
+		float (\*a)[N] = (float (\*)[N])malloc(sizeof(float) \* M \* N);
+			
+		//Where N should be compile-time constant.
+		
+		...
+		
+		a[i][j] = c; //a can be accessed as if 2D array.
 
 - C preprocessor in the current implementation does not expand macros 
 in pragma annotations. To enable this, either 1) use the OpenARC commandline option, macro (e.g., -macro=SIZE=1024) or 2) use "#pragma openarc #define macro value" 
@@ -271,6 +282,29 @@ intended to remain opaque within a translation unit.  So far, this bug does
 not appear to impact OpenARC's user-visible behavior, but it may impact code
 extending OpenARC.  A workaround is to forward-declare such a struct or
 union before referencing it.
+
+- In current implementation, C parser recognizes all directives as standalone 
+annotations, and then following OpenACC/OpenMP parsers will attach non-standalone 
+directives to structured blocks. Therefore, the following example will be parsed
+incorrectly:
+
+	//C parser will incorrectly parse the i-loop having the OpenACC directive as its body. 
+
+		for(i=0; i<N; i++)
+	
+		#pragma acc parallel loop
+	
+		for(j=0; j<M; j++) { ...//kernel loop body }
+
+	//C parser will parse the i-loop correctly.
+
+		for(i=0; i<N; i++) {
+	
+		#pragma acc parallel loop
+	
+		for(j=0; j<M; j++) { ...//kernel loop body }
+	
+		}
 
 
 The OpenARC Team

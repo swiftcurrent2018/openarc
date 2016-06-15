@@ -906,7 +906,7 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
     } else {
 #if CUDA_VERSION >= 6000
 		if( unifiedMemSupported == 0 ) {
-			fprintf(stderr, "[OPENARCRT-WARNING in CudaDriver::HI_malloc1D_unified(%d)] unified memory is either not supported or disabled in the current device; device memory should be explicitly managed either through data clauses or though runtime APIs.\n", asyncID);
+			fprintf(stderr, "[OPENARCRT-WARNING in CudaDriver::HI_malloc1D_unified(%d)] unified memory is either not supported or disabled in the current device; device memory should be explicitly managed either through data clauses or though runtime APIs.\n(To enable unified memory, environment variable, OPENARCRT_UNIFIEDMEM should be set to 1.)\n", asyncID);
 			if( hostPtr == NULL ) {
 				*devPtr = malloc(count);
 			} else {
