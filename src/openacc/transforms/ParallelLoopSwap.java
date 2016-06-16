@@ -26,9 +26,12 @@ import openacc.hir.ARCAnnotation;
 public class ParallelLoopSwap extends LoopInterchange {
 	
 	private int debug_level = 1;
+	private int loopSwapMode = 1; //1 => swap loops so that the innermost loop has the lowest rank.
+	                              //2 => swap loops so that the innermost loop has the highest rank.
 	
-	public ParallelLoopSwap( Program program ) {
+	public ParallelLoopSwap( Program program, int mode ) {
 		super(program);
+		loopSwapMode = mode;
 	}
 	
 	public String getPassName()
@@ -137,64 +140,117 @@ public class ParallelLoopSwap extends LoopInterchange {
 				List<Integer> rank;
 				int rankSize;
 				 
-				////////////////////////////////////////////////////
-				// loops2 contains nested loops in reverse order, //
-				// from the innermost to the outermost.           //
-				////////////////////////////////////////////////////
-				for( j= until-1; j>=0; j-- ) {
-					loops2.add(loops.get(j));
-				}
-				
-				while(icFlag)
-				{
-					Expression exp;
-					expList.clear();
-					for(j = 0; j < until; j++)
-					{
-						exp = LoopTools.getIndexVariable((ForLoop)loops2.get(j));
-						if(exp != null)
-							expList.add(exp);
-					}
-					rank = getRank(arrays, expList, target_index);
-					rankSize = rank.size();
-					for(j = 0; j < rankSize; j++) 
-					{
-						r = getRank2(rank, expList, loops2);
-						rank.remove(rank.indexOf(r));
-						int r1, r2;
-						r1 = r;
+				if( loopSwapMode == 1 ) {
+	                while(icFlag)
+	                {
+	                    Expression exp;
+	                    expList.clear();
+	                    for(j = 0; j < until; j++)
+	                    {
+	                        exp = LoopTools.getIndexVariable((ForLoop)loops.get(j));
+	                        if(exp != null)
+	                            expList.add(exp);
+	                    }
+	                    rank = getRank(arrays, expList, target_index);
+	                    rankSize = rank.size();
+	                    for(j = 0; j < rankSize; j++) 
+	                    {
+	                        r = getRank2(rank, expList, loops);
+	                        rank.remove(rank.indexOf(r));
+							int r1, r2;
+							r1 = r;
 
-						if(expList.size() < until) until = expList.size();
-						for(int k = r+1; k < until; k++)
-						{
-							if(isLegal(loops2, r, k))
-							{
-								swapLoop((ForLoop)loops2.get(r), (ForLoop)loops2.get(k));
-								//num_loop_interchange++;
-								Collections.swap(expList, r, k);
-								r = k;
-								LoopSwapped = true;
-
-							} else {
-								break;
+	                        if(expList.size() < until) until = expList.size();
+	                        for(int k = r+1; k < until; k++)
+	                        {
+	                            if(isLegal(loops, r, k))
+	                            {
+	                                swapLoop((ForLoop)loops.get(r), (ForLoop)loops.get(k));
+	                                num_loop_interchange++;
+	                                Collections.swap(expList, r, k);
+	                                r = k;
+	                                LoopSwapped = true;
+	                            } else {
+	                                break;
+	                            }
+	                        }        
+	                        until = r;
+	                        ///////////////////////////////////////////////////////////////////////////////////
+	                        // FIXME: requested by SY Lee                                                    //
+	                        // If the list "rank" consists of r1 and r2 (r1 < r2), and if getRank2() returns //
+	                        // r1 first, the loop pointed by r2 will be moved upward by 1. Thus r2 in the    //
+	                        // list "rank" should be changed with r2-1.                                      //
+	                        ///////////////////////////////////////////////////////////////////////////////////
+							for( int k = 0; k<rank.size()-1; k++) {
+								r2 = rank.get(k);
+								if( (r1 < r2) && (r2 <= r) ) {
+									rank.set(k, r2-1);
+								}
 							}
-						}		
-						until = r;
-						///////////////////////////////////////////////////////////////////////////////////
-						// FIXME: requested by SY Lee                                                    //
-						// If the list "rank" consists of r1 and r2 (r1 < r2), and if getRank2() returns //
-						// r1 first, the loop pointed by r2 will be moved downward by 1. Thus r2 in the  //
-						// list "rank" should be changed with r2-1.                                      //
-						///////////////////////////////////////////////////////////////////////////////////
-						for( int k = 0; k<rank.size()-1; k++) {
-							r2 = rank.get(k);
-							if( (r1 < r2) && (r2 <= r) ) {
-								rank.set(k, r2-1);
+	                    }
+	                    target_index++;
+	                    if(until == 0) icFlag = false;
+	                }
+				} else {
+					////////////////////////////////////////////////////
+					// loops2 contains nested loops in reverse order, //
+					// from the innermost to the outermost.           //
+					////////////////////////////////////////////////////
+					for( j= until-1; j>=0; j-- ) {
+						loops2.add(loops.get(j));
+					}
+
+					while(icFlag)
+					{
+						Expression exp;
+						expList.clear();
+						for(j = 0; j < until; j++)
+						{
+							exp = LoopTools.getIndexVariable((ForLoop)loops2.get(j));
+							if(exp != null)
+								expList.add(exp);
+						}
+						rank = getRank(arrays, expList, target_index);
+						rankSize = rank.size();
+						for(j = 0; j < rankSize; j++) 
+						{
+							r = getRank2(rank, expList, loops2);
+							rank.remove(rank.indexOf(r));
+							int r1, r2;
+							r1 = r;
+
+							if(expList.size() < until) until = expList.size();
+							for(int k = r+1; k < until; k++)
+							{
+								if(isLegal(loops2, r, k))
+								{
+									swapLoop((ForLoop)loops2.get(r), (ForLoop)loops2.get(k));
+									//num_loop_interchange++;
+									Collections.swap(expList, r, k);
+									r = k;
+									LoopSwapped = true;
+
+								} else {
+									break;
+								}
+							}		
+							until = r;
+							///////////////////////////////////////////////////////////////////////////////////
+							// FIXME: requested by SY Lee                                                    //
+							// If the list "rank" consists of r1 and r2 (r1 < r2), and if getRank2() returns //
+							// r1 first, the loop pointed by r2 will be moved downward by 1. Thus r2 in the  //
+							// list "rank" should be changed with r2-1.                                      //
+							///////////////////////////////////////////////////////////////////////////////////
+							for( int k = 0; k<rank.size()-1; k++) {
+								r2 = rank.get(k);
+								if( (r1 < r2) && (r2 <= r) ) {
+									rank.set(k, r2-1);
+								}
 							}
 						}
+						target_index++;
+						if(until == 0) icFlag = false;
 					}
-					target_index++;
-					if(until == 0) icFlag = false;
 				}
 				if( LoopSwapped ) {
 					num_loop_interchange++;
@@ -213,7 +269,7 @@ public class ParallelLoopSwap extends LoopInterchange {
 			}
 		}
 
-		PrintTools.println("# of omp-for Loops: " + outer_loops.size(), debug_level);
+		PrintTools.println("# of OpenACC Loops: " + outer_loops.size(), debug_level);
 		PrintTools.println("# of Not-in-parallel loops : " + num_not_in_parallel, debug_level);
 		PrintTools.println("# of Single loops : " + num_single, debug_level);
 		PrintTools.println("# of Non Perfect loops : " + num_non_perfect, debug_level);
@@ -221,7 +277,7 @@ public class ParallelLoopSwap extends LoopInterchange {
 		PrintTools.println("# of User-skipped Loops : " + num_skipped, debug_level);
 		//PrintTools.println("# of Candidate loops : " + target_loops, debug_level);
 		PrintTools.println("# of Interchanged loops : " + num_loop_interchange, debug_level);
-		PrintTools.println("# of Not-Interchangeable loops : " + num_not_interchangeable, debug_level);
+		PrintTools.println("# of Not-Interchanged loops : " + num_not_interchangeable, debug_level);
 
 		return;
 	}
@@ -255,12 +311,18 @@ public class ParallelLoopSwap extends LoopInterchange {
 		// Nested loops from the outermost to the innermost //
 		//////////////////////////////////////////////////////
 		LinkedList<Loop> nest = new LinkedList<Loop>();
-		j = reverseNest.size();
-		for(i=j-1; i>=0; i--) {
-			nest.add(reverseNest.get(i));
+		if( loopSwapMode == 1 ) {
+			nest.addAll(reverseNest);
+			src = rsrc;
+			target = rtarget;
+		} else {
+			j = reverseNest.size();
+			for(i=j-1; i>=0; i--) {
+				nest.add(reverseNest.get(i));
+			}
+			src = j-rsrc-1;
+			target = j-rtarget-1;
 		}
-		src = j-rsrc-1;
-		target = j-rtarget-1;
 		
 		ddg = program.getDDGraph();
 		dpv = ddg.getDirectionMatrix(nest);
@@ -276,12 +338,35 @@ public class ParallelLoopSwap extends LoopInterchange {
 			target = i;
 		}
 		
+		ForLoop srcLoop = (ForLoop)nest.get(src);
+		ForLoop targetLoop = (ForLoop)nest.get(src);
+		////////////////////////////////////////////////////////////////
+		// If both loops contain acc loop directive, both loop should //
+		// contain only independent clause, which is safe but maybe   //
+		// too conservative.                                          //
+		////////////////////////////////////////////////////////////////
+		if( !srcLoop.containsAnnotation(ACCAnnotation.class, "loop") || 
+				srcLoop.containsAnnotation(ACCAnnotation.class, "seq") ||
+				srcLoop.containsAnnotation(ACCAnnotation.class, "gang") ||
+				srcLoop.containsAnnotation(ACCAnnotation.class, "worker") ||
+				srcLoop.containsAnnotation(ACCAnnotation.class, "vector") ||
+				srcLoop.containsAnnotation(ACCAnnotation.class, "collapse") ) {
+			return false;
+		}
+		if( !targetLoop.containsAnnotation(ACCAnnotation.class, "loop") || 
+				targetLoop.containsAnnotation(ACCAnnotation.class, "seq") ||
+				targetLoop.containsAnnotation(ACCAnnotation.class, "gang") ||
+				targetLoop.containsAnnotation(ACCAnnotation.class, "worker") ||
+				targetLoop.containsAnnotation(ACCAnnotation.class, "vector") ||
+				targetLoop.containsAnnotation(ACCAnnotation.class, "collapse") ) {
+			return false;
+		}
+		
 		//////////////////////////////////////////////////////////////
 		// Check whether index variable for the outer loop (src) is //
 		// used in initial statements or condition expressions of   //
 		// the loops residing between src and target.               //
 		//////////////////////////////////////////////////////////////
-		ForLoop srcLoop = (ForLoop)nest.get(src);
 		Expression srcIndex = LoopTools.getIndexVariable(srcLoop);
 		if( srcIndex == null ) {
 			//Can't identify the index variable of the src loop; 

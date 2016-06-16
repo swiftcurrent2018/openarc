@@ -337,7 +337,7 @@ AccReduction=1
 #useLoopCollapse
 #useMallocPitch
 #useMatrixTranspose
-#useParallelLoopSwap
+useParallelLoopSwap
 #useUnrollingOnReduction
 ######################################
 # Caching optimization configuration #

@@ -365,6 +365,13 @@ public class acc2gpu extends CodeGenPass
         /////////////////////////////////////////////
         TransformPass.run(new LoopTilingTransform(program));
 
+		////////////////////////////////////////////
+		// Apply parallel loop swap optimization. //
+		////////////////////////////////////////////
+		if( ParallelLoopSwap ) {
+			TransformPass.run(new ParallelLoopSwap(program, 1));
+		}
+
 		//////////////////////////////////////////////////////////////////////////////////
 		// Preprocess OpenACC loop directives, which includes collapse clause handling, //
 		// work-share loop reordering, valid ordering checking, and independent clause  //
@@ -463,12 +470,6 @@ public class acc2gpu extends CodeGenPass
 			PrintTools.println("[removeUnusedProcedures] end", 0);
 		}
 		
-		////////////////////////////////////////////
-		// Apply parallel loop swap optimization. //
-		////////////////////////////////////////////
-		if( ParallelLoopSwap ) {
-			//TransformPass.run(new ParallelLoopSwap(program));
-		}
 		//////////////////////////////////////////////
 		// Intraprocedural Cuda Malloc optimization //
 		//////////////////////////////////////////////

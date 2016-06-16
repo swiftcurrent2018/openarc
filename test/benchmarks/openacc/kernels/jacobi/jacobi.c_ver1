@@ -115,20 +115,24 @@ int main (int argc, char *argv[])
 #pragma acc data copy(b[0:SIZE_2][0:SIZE_2]), create(a[0:SIZE_2][0:SIZE_2])
     for (k = 0; k < ITER; k++)
     {
-#pragma acc kernels loop independent
+#ifdef _OPENARC_
+#pragma openarc transform permute(j,i)
+#endif
+#pragma acc kernels loop gang, worker
         for (i = 1; i <= SIZE; i++)
         {
-#pragma acc loop independent
             for (j = 1; j <= SIZE; j++)
             {
                 a[i][j] = (b[i - 1][j] + b[i + 1][j] + b[i][j - 1] + b[i][j + 1]) / 4.0f;
             }
         }
 
-#pragma acc kernels loop independent
+#ifdef _OPENARC_
+#pragma openarc transform permute(j,i)
+#endif
+#pragma acc kernels loop gang worker
         for (i = 1; i <= SIZE; i++)
         {
-#pragma acc loop independent
             for (j = 1; j <= SIZE; j++)
             {
                 b[i][j] = a[i][j];
