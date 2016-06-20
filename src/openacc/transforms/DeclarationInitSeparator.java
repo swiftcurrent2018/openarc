@@ -48,6 +48,40 @@ public class DeclarationInitSeparator extends TransformPass {
 		if( lsm_init == null ) {
 			return;
 		}
+		//Add array dimension information if missing.
+		ArraySpecifier aspec = null;
+		int dimsize = 0;
+		List aspecs = declr.getArraySpecifiers();
+		if( (aspecs != null) && (!aspecs.isEmpty()) ) {
+			aspec = (ArraySpecifier)aspecs.get(0);
+			dimsize = aspec.getNumDimensions();
+		}
+		int listSize = lsm_init.getChildren().size();
+		if( dimsize == 1 ) { //1D array variable
+			Expression tdim = aspec.getDimension(0);
+			if( tdim == null ) {
+				aspec.setDimension(0, new IntegerLiteral(listSize));
+			}
+		} else if( dimsize > 1 ) { //multi-dimensional array
+			for(int i=0; i<dimsize; i++) {
+				Expression tdim = aspec.getDimension(i);
+				if( tdim == null ) {
+					if( i == 0 ) {
+						aspec.setDimension(i, new IntegerLiteral(listSize));
+					} else {
+						Object tobj = lsm_init.getChildren().get(0);
+						int t = 1;
+						while( (t<i) && (tobj != null) && (tobj instanceof Initializer) ) {
+							tobj = ((Initializer)tobj).getChildren().get(0);
+							t++;
+						}
+						if( (t==i) && (tobj != null) && (tobj instanceof Initializer) ) {
+							aspec.setDimension(i, new IntegerLiteral(((Initializer)tobj).getChildren().size()));
+						}
+					}
+				}
+			}
+		}
         PrintTools.printlnStatus(4, pass_name, "separating the initialization of declaration, ",decl);
         CompoundStatement cStmt = null;
         Statement declStmt = null;
@@ -73,7 +107,6 @@ public class DeclarationInitSeparator extends TransformPass {
 			//System.err.println("Found constant/static variable/pointer: " + decl);
 			return;
 		} else {
-			int listSize = lsm_init.getChildren().size();
 			if( listSize == 1 ) {
 				Object initObj = lsm_init.getChildren().get(0);
 				if( initObj instanceof Expression ) {

@@ -10,6 +10,7 @@
 static const char *omp_num_threads_env = "OMP_NUM_THREADS";
 static const char *acc_device_type_env = "ACC_DEVICE_TYPE";
 static const char *acc_device_num_env = "ACC_DEVICE_NUM";
+static const char *omp_device_num_env = "OMP_DEFAULT_DEVICE";
 static const char *outputType = "OPENARC_ARCH";
 static const char *openarcrt_verbosity_env = "OPENARCRT_VERBOSITY";
 static const char *openarcrt_unifiedmemory_env = "OPENARCRT_UNIFIEDMEM";
@@ -324,6 +325,9 @@ void HostConf::setDefaultDevNum() {
     //Set device number.
     acc_device_t devtype = acc_device_type_var;
     envVar = getenv(acc_device_num_env);
+    if( envVar == NULL ) {
+    	envVar = getenv(omp_device_num_env);
+	}
     if( envVar == NULL ) {
         //default device number (0) will be used.
         dev = 0;

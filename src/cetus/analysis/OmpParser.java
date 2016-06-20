@@ -25,6 +25,16 @@ public class OmpParser {
         return token_array[token_index++];
     }
 
+	// get one token but do not consume the token
+	private static String lookahead()
+	{
+		if( end_of_token() ) {
+			return "";
+		} else {
+			return token_array[token_index];
+		}
+	}
+
     // consume one token
     private static void eat() {
         token_index++;
@@ -34,8 +44,11 @@ public class OmpParser {
     private static boolean match(String istr) {
         boolean answer = check(istr);
         if (answer == false) {
-            System.out.println("OmpParser Syntax Error");
+            System.out.println("OmpParser Syntax Error: " + istr + " is expected");
+			System.out.println("    Current token: " + lookahead());
+			System.out.println("    Token index: " + token_index);
             System.out.println(display_tokens());
+            System.exit(0);
         }
         token_index++;
         return answer;
@@ -734,11 +747,11 @@ public class OmpParser {
         addToMap("target", "true");
         if (check("enter")) {
             eat();
-            eat();
+            match("data");
             parse_omp_target_enter_data();
         } else if (check("exit")) {
             eat();
-            eat();
+            match("data");
             parse_omp_target_exit_data();
         } else if (check("data")) {
             eat();
@@ -1683,6 +1696,14 @@ public class OmpParser {
     private static void parse_omp_map() {
     	PrintTools.println("OmpParser is parsing [map] clause", 2);
     	String mapType = "tofrom";
+    	String mapType_prefix = null;
+    	if( check("always") ) {
+    		mapType_prefix = "always";
+    		eat();
+    		if( check(",") ) {
+    			eat();
+    		}
+    	}
     	match("(");
     	if(check("to") || check("from") || check("alloc") || check("tofrom") || check("release") || check("delete"))
     	{
@@ -1692,7 +1713,11 @@ public class OmpParser {
         Set set = new HashSet<String>();
         parse_commaSeparatedList(set);
     	match(")");
-    	addToMap(mapType, set);
+    	if( mapType_prefix == null ) {
+    		addToMap(mapType, set);
+    	} else {
+    		addToMap(mapType_prefix + " " + mapType, set);
+    	}
     }
 
     private static void parse_omp_inbranch() {

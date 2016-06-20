@@ -144,10 +144,12 @@ public abstract class ACC2GPUTranslator {
 		searchKeys.add("update");
 		searchKeys.add("host_data");
 		searchKeys.add("wait");
+		searchKeys.add("set");
 		List<ACCAnnotation> declareAnnots = new LinkedList<ACCAnnotation>();
 		List<ACCAnnotation> updateAnnots = new LinkedList<ACCAnnotation>();
 		List<ACCAnnotation> hostDataAnnots = new LinkedList<ACCAnnotation>();
 		List<ACCAnnotation> waitAnnots = new LinkedList<ACCAnnotation>();
+		List<ACCAnnotation> setAnnots = new LinkedList<ACCAnnotation>();
 		List<ACCAnnotation> miscAnnots = 
 					AnalysisTools.collectPragmas(program, ACCAnnotation.class, searchKeys, false);
 		if( miscAnnots != null ) {
@@ -158,6 +160,8 @@ public abstract class ACC2GPUTranslator {
 					updateAnnots.add(mAnnot);
 				} else if( mAnnot.containsKey("host_data") ) {
 					hostDataAnnots.add(mAnnot);
+				} else if( mAnnot.containsKey("set") ) {
+					setAnnots.add(mAnnot);
 				} else if( mAnnot.containsKey("wait") ) {
 					boolean isWaitClause = false;
 					for( String tDir : ACCAnnotation.OpenACCDirectivesWithWait ) {
@@ -778,22 +782,30 @@ public abstract class ACC2GPUTranslator {
 				} else {
 					firstStmts.add(refStmt);
 				}
-				/*
-				 * Find return statements in the implicit function.
-				 */
-				BreadthFirstIterator riter = new BreadthFirstIterator(funcBody);
-				riter.pruneOn(Expression.class); /* optimization */
-				for (;;)
-				{
-					ReturnStatement stmt = null;
-
-					try {
-						stmt = (ReturnStatement)riter.next(ReturnStatement.class);
-					} catch (NoSuchElementException e) {
-						break;
+				for( FunctionCall acc_shutdown : acc_shutdown_list ) {
+					Procedure tProc = IRTools.getParentProcedure(acc_shutdown.getStatement());
+					if( (tProc != null) && tProc.getName().equals(cProc.getName()) ) {
+						lastStmts.add(acc_shutdown.getStatement());
 					}
+				}
+				if( lastStmts.isEmpty() ) {
+					/*
+					 * Find return statements in the implicit function.
+					 */
+					BreadthFirstIterator riter = new BreadthFirstIterator(funcBody);
+					riter.pruneOn(Expression.class); /* optimization */
+					for (;;)
+					{
+						ReturnStatement stmt = null;
 
-					lastStmts.add(stmt);
+						try {
+							stmt = (ReturnStatement)riter.next(ReturnStatement.class);
+						} catch (NoSuchElementException e) {
+							break;
+						}
+
+						lastStmts.add(stmt);
+					}
 				}
 			}
 			//Current implementation handles IR-symbols only (GPU memory allocation unit is a class object, but not each class member.) 
@@ -835,7 +847,15 @@ public abstract class ACC2GPUTranslator {
 						"ACCAnnotation: " + wAnnot + "\n");
 			}
 		}
-		
+	}
+
+	protected void handleSetDirectives(List<ACCAnnotation> setAnnots) {
+		for(ACCAnnotation sAnnot : setAnnots ) {
+			Annotatable at = sAnnot.getAnnotatable();
+			Expression default_async = sAnnot.get("default_async");
+			Expression device_num = sAnnot.get("device_num");
+			Expression device_type = sAnnot.get("device_type");
+		}
 	}
 
 	protected void handleEnterExitData(Procedure cProc, List<ACCAnnotation> dataRegionAnnots, boolean IRSymOnly) {

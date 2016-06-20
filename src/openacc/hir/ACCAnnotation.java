@@ -253,8 +253,11 @@ public class ACCAnnotation extends PragmaAnnotation
 	// Directives that specify explicit/implicit data regions
 	public static final Set<String> dataRegions = new HashSet(Arrays.asList("data", "parallel", "kernels"));
 	
-	// Directives that contains data clauses.
+	// Directives that contain data clauses.
 	public static final Set<String> dataDirectives = new HashSet(Arrays.asList("data", "declare", "parallel", "kernels"));
+
+	// Directives that are executable.
+	public static final Set<String> executableDirectives = new HashSet(Arrays.asList("init", "shutdown", "set", "update", "wait", "enter", "exit"));
 	
 	// List of OpenACC clauses
 	public static final Set<String> OpenACCClauseSet = new HashSet(Arrays.asList(

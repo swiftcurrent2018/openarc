@@ -468,17 +468,23 @@ public abstract class TransformTools {
 						if( checkOmpAnnots ) {
 							//Remove unused symbols from OpenMP clauses.
 							for( OmpAnnotation oAnnot : ompAnnots ) {
+								Set<String> removeKeySet = new HashSet<String>();
 								for( String key: oAnnot.keySet() ) {
 									Object obj = oAnnot.get(key);
 									if( (obj instanceof String) && ((String)obj).equals(symName) ) {
-										oAnnot.remove(key);
+										//oAnnot.remove(key);
+										removeKeySet.add(key);
 									} else if( obj instanceof Set ) {
 										Set<String> sSet = (Set<String>)obj;
 										sSet.remove(symName);
 										if( sSet.isEmpty() ) {
-											oAnnot.remove(key);
+											//oAnnot.remove(key);
+											removeKeySet.add(key);
 										}
 									}
+								}
+								for(String rKey : removeKeySet) {
+									oAnnot.remove(rKey);
 								}
 							}
 						}

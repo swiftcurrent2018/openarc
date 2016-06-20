@@ -15,7 +15,7 @@ public class OmpAnnotation extends PragmaAnnotation {
     // this list.
     private static final List<String> keywords = Arrays.asList(
             // directives
-    		"end", "declare", "target", "data", "update", "teams", "distribute",
+    		"end", "declare", "target", "enter", "exit", "data", "update", "teams", "distribute",
             "parallel", "for", "simd", "sections", "section", "single", "task",
             "master", "critical", "barrier", "taskwait", "atomic", "flush",
             "ordered", "threadprivate", 
@@ -93,6 +93,9 @@ public class OmpAnnotation extends PragmaAnnotation {
                 str.append(key);
                 if (key_needs_value.contains(key)) {
                     printValue(key, str);
+                } else if( key.equals("declare") ) {
+                	str.append(" ");
+                	str.append(get(key).toString());
                 }
                 my_keys.remove(key);
                 if( key.equals("update") ) {
@@ -103,7 +106,9 @@ public class OmpAnnotation extends PragmaAnnotation {
         // Remaining directives/clauses.
         for (String key : my_keys) {
         	if( key.equals("to") || key.equals("from") || key.equals("tofrom") || key.equals("alloc") ||
-        			key.equals("release") || key.equals("delete") ) {
+        			key.equals("release") || key.equals("delete") || key.equals("always to") || 
+        			key.equals("always from") || key.equals("always tofrom") || key.equals("always alloc") || 
+        			key.equals("always release") || key.equals("always delete") ) {
         		if( foundTargetUpdate ) {
         			str.append(" ");
         			str.append(key);

@@ -2728,6 +2728,97 @@ public abstract class AnalysisTools {
 		}
 		return (Statement)children.get(index+1);
 	}
+
+    /**
+    * Returns the last declaration statement before executable statements that belongs to the given
+    * traverable object. 
+    * This method is similar to IRTools.getLastDeclarationStatement(), but this method
+    * returns the last declaration statement before any executable statements including 
+    * executable directives.
+    * (This method ignores non-executable annotations.)
+    *
+    * @param t the traversable object to be searched.
+    * @return the last declaration statement or null if not found.
+    */
+    public static DeclarationStatement
+            getLastDeclarationStatement(Traversable t) {
+        DeclarationStatement decl_stmt = null;
+        List<Traversable> children = t.getChildren();
+        int children_size = children.size();
+        for (int i = 0; i < children_size; i++) {
+            Traversable child = children.get(i);
+            if (child instanceof DeclarationStatement) {
+                decl_stmt = (DeclarationStatement)child;
+            } else if (child instanceof AnnotationStatement) {
+            	boolean executableAnnot = false;
+            	List<ACCAnnotation> accAnnots = ((AnnotationStatement)child).getAnnotations(ACCAnnotation.class);
+            	if( (accAnnots != null) && !accAnnots.isEmpty() ) {
+            		for( ACCAnnotation aAnnot : accAnnots ) {
+            			for(String key : ACCAnnotation.executableDirectives) {
+            				if( aAnnot.containsKey(key) ) {
+            					executableAnnot = true;
+            					break;
+            				}
+            			}
+            			if( executableAnnot ) {
+            				break;
+            			}
+            		}
+            	}
+            	if( executableAnnot ) {
+            		break;
+            	}
+            } else {
+                break;
+            }
+        }
+        return decl_stmt;
+    }
+
+    /**
+    * Returns the first executable statement of the given traverable object.
+    * This method is similar to IRTools.getFirstNonDeclarationStatement(), but this method
+    * also checks executable directives. 
+    * (This method ignores non-executable annotations.)
+    *
+    * @param t the traversable object to be searched.
+    * @return the first non-declaration statement or null if not found.
+    */
+    public static Statement getFirstExecutableStatement(Traversable t) {
+        Statement exe_stmt = null;
+        List<Traversable> children = t.getChildren();
+        int children_size = children.size();
+        for (int i = 0; i < children_size; i++) {
+            Traversable child = children.get(i);
+            if ( !(child instanceof DeclarationStatement) ) {
+            	if (child instanceof AnnotationStatement) {
+            		boolean executableAnnot = false;
+            		List<ACCAnnotation> accAnnots = ((AnnotationStatement)child).getAnnotations(ACCAnnotation.class);
+            		if( (accAnnots != null) && !accAnnots.isEmpty() ) {
+            			for( ACCAnnotation aAnnot : accAnnots ) {
+            				for(String key : ACCAnnotation.executableDirectives) {
+            					if( aAnnot.containsKey(key) ) {
+            						executableAnnot = true;
+            						break;
+            					}
+            				}
+            				if( executableAnnot ) {
+            					break;
+            				}
+            			}
+            		}
+            		if( executableAnnot ) {
+            			exe_stmt = (Statement)child;
+            			break;
+            		}
+            	} else {
+            		exe_stmt = (Statement)child;
+            		break;
+            	}
+            }
+        }
+        return exe_stmt;
+    }
 	
 	public static boolean extractDimensionInfo(SubArray sArray, List<Expression> startList, 
 			List<Expression> lengthList, boolean checkIRSymDimensions, Annotatable tr) {

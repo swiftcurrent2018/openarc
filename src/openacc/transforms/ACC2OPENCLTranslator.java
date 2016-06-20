@@ -426,7 +426,6 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         	CompoundStatement mainBody = tmain.getBody();
         	ExpressionStatement flushStmt = null;
         	optPrintStmt = new ExpressionStatement(optPrintCall);
-        	Declaration last_decl = IRTools.getLastDeclaration(mainBody);
 
         	StringBuilder istr = new StringBuilder(256);
         	istr.append("\n//////////////////////////////////\n");
@@ -434,15 +433,18 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         	istr.append("//////////////////////////////////\n");
         	CodeAnnotation devInitAnnot = new CodeAnnotation(istr.toString());
         	AnnotationStatement devInitStmt = new AnnotationStatement(devInitAnnot);
-        	if( last_decl == null ) {
-        		firstMainStmt = IRTools.getFirstNonDeclarationStatement(mainBody);
+        	firstMainStmt = AnalysisTools.getFirstExecutableStatement(mainBody);
+        	if( firstMainStmt != null ) {
+        		mainBody.addStatementBefore(firstMainStmt, devInitStmt);
         	} else {
-        		firstMainStmt = AnalysisTools.getStatementAfter(mainBody, 
-        				(Statement)last_decl.getParent());
+        		mainBody.addStatement(devInitStmt);
         	}
-        	mainBody.addStatementBefore(firstMainStmt, devInitStmt);
         	if( !found_acc_init_call ) {
-        		mainBody.addStatementBefore(firstMainStmt, acc_init_stmt);
+        		if( firstMainStmt != null ) {
+        			mainBody.addStatementBefore(firstMainStmt, acc_init_stmt);
+        		} else {
+        			mainBody.addStatement(acc_init_stmt);
+        		}
         		accInitStmt = (ExpressionStatement)acc_init_stmt;
         		if( accInitStmt_List.size() > i) {
         			accInitStmt_List.set(i, accInitStmt);
@@ -457,7 +459,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         		int dot = iFileName.lastIndexOf(".");
         		String fNameStem = iFileName.substring(0, dot);
         		pfcall.addArgument(new StringLiteral(fNameStem + ".cprof"));
-        		mainBody.addStatementBefore(firstMainStmt, new ExpressionStatement(pfcall));
+        		if( firstMainStmt != null ) {
+        			mainBody.addStatementBefore(firstMainStmt, new ExpressionStatement(pfcall));
+        		} else {
+        			mainBody.addStatement(new ExpressionStatement(pfcall));
+        		}
         	}
 
         	//PrintTools.println("FirstMainStmt: "+firstMainStmt, 0);
@@ -2615,11 +2621,24 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 						}
 					}
 				} else {
+					boolean is_acc_init = false;
+					List<FunctionCall> fCallList = IRTools.getFunctionCalls(inPt);
+					if( (fCallList != null) && (fCallList.get(0).getName().toString().equals("acc_init")) ) {
+						is_acc_init = true;
+					}
 					if( ifCondExp == null ) {
-						pStmt.addStatementBefore(inPt, pIfStmt);
+						if( is_acc_init ) {
+							pStmt.addStatementAfter(inPt, pIfStmt);
+						} else {
+							pStmt.addStatementBefore(inPt, pIfStmt);
+						}
 					} else {
 						IfStatement IfStmt = new IfStatement(ifCondExp.clone(), pIfStmt);
-						pStmt.addStatementBefore(inPt, IfStmt);
+						if( is_acc_init ) {
+							pStmt.addStatementAfter(inPt, IfStmt);
+						} else {
+							pStmt.addStatementBefore(inPt, IfStmt);
+						}
 					}
 				}
 			}
@@ -2837,6 +2856,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				}
 			} else { //not implicit-program-level data region
 				if( preambleList.size() > 0 ) {
+					boolean is_acc_init = false;
+					List<FunctionCall> fCallList = IRTools.getFunctionCalls(inPt);
+					if( (fCallList != null) && !fCallList.isEmpty() && (fCallList.get(0).getName().toString().equals("acc_init")) ) {
+						is_acc_init = true;
+					}
 					if( ifCondExp == null ) {
 						if( checkPresent ) {
 							CompoundStatement cpStmt = new CompoundStatement();
@@ -2845,11 +2869,20 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							}
 							IfStatement cpIfStmt;
 							cpIfStmt = new IfStatement(presentCheckS_exp.clone(), cpStmt);
-							pStmt.addStatementBefore(inPt, cpIfStmt);
-
+							if( is_acc_init ) {
+								pStmt.addStatementAfter(inPt, cpIfStmt);
+							} else {
+								pStmt.addStatementBefore(inPt, cpIfStmt);
+							}
 						} else {
-							for( int k=0; k<preambleList.size(); k++ ) {
-								pStmt.addStatementBefore(inPt, preambleList.get(k));
+							if( is_acc_init ) {
+								for( int k=preambleList.size()-1; k>=0; k-- ) {
+									pStmt.addStatementAfter(inPt, preambleList.get(k));
+								}
+							} else {
+								for( int k=0; k<preambleList.size(); k++ ) {
+									pStmt.addStatementBefore(inPt, preambleList.get(k));
+								}
 							}
 						}
 					} else {
@@ -2862,7 +2895,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 							ifCondExp2 = new BinaryExpression(ifCondExp.clone(), BinaryOperator.LOGICAL_AND, presentCheckS_exp.clone());
 						}
 						IfStatement ifStmt = new IfStatement(ifCondExp2, cBody);
-						pStmt.addStatementBefore(inPt, ifStmt);
+						if( is_acc_init ) {
+							pStmt.addStatementAfter(inPt, ifStmt);
+						} else {
+							pStmt.addStatementBefore(inPt, ifStmt);
+						}
 					}
 				}
 				
