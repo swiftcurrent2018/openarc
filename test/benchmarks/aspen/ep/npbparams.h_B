@@ -1,0 +1,33 @@
+/* CLASS = B */
+/*
+c  This file is generated automatically by the setparams utility.
+c  It sets the number of processors and the class of the NPB
+c  in this directory. Do not modify it by hand.
+*/
+#define	CLASS	 'B'
+#define	M	30
+#define	CONVERTDOUBLE	FALSE
+#define COMPILETIME "21 Jul 2008"
+#define NPBVERSION "2.3"
+#define CS1 "cc"
+#define CS2 "cc"
+#define CS3 "(none)"
+#define CS4 "-I../common"
+#define CS5 "-O3 "
+#define CS6 "(none)"
+#define CS7 "randdp"
+//# of iteratins (NN) = 262144
+//Loops with 262144 iterations will be excuted in GPU
+//====> # of threads = 256 
+//====> # of blocks = 1024 
+//Org version: allocated memory for x = 8589934592
+//Unrolled version: allocated memory for x = 402653184
+//Unrolling factor = 22
+//#define BLOCK_SIZE      256
+//#define NBLOCKS 48
+#ifdef _OPENARC_
+#pragma openarc #define NN 262144
+#endif
+#ifndef _UNROLLFAC_
+#define _UNROLLFAC_ 32
+#endif

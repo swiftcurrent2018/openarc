@@ -1,0 +1,11 @@
+#! /bin/bash
+
+targetFile="npb-C.h"
+#cd cetus_output
+if [ -f ${targetFile} ]; then
+	mv ${targetFile} tmp1
+	cat tmp1 | sed 's/#define max(a,b) (((a) > (b)) ? (a) : (b))/\/\/&/1' > tmp2
+	rm -f tmp1
+	cat tmp2 | sed 's/#define min(a,b) (((a) < (b)) ? (a) : (b))/\/\/&/1' > ${targetFile}
+	rm -f tmp1 tmp2
+fi

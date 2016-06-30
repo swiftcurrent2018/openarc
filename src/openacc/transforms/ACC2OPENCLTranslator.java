@@ -1206,8 +1206,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 									if( t instanceof Annotatable ) {
 										Annotatable tAn = (Annotatable)t;
 										if( tAn.containsAnnotation(ACCAnnotation.class, "data") ) {
-											foundEnclosedDataRegion = true;
-											break;
+											ACCAnnotation tdAnnot = tAn.getAnnotation(ACCAnnotation.class, "data");
+											if( AnalysisTools.findSubArrayInDataClauses(tdAnnot, IRSym, IRSymbolOnly) != null ) {
+												foundEnclosedDataRegion = true;
+												break;
+											}
 										}
 									}
 									t = t.getParent();
@@ -1215,15 +1218,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								if( foundEnclosedDataRegion ) {
 									continue;
 								}
-							} else {
-								boolean ROSymbol = false;
-								if( ROSymSet.contains(IRSym) ) {
-									ROSymbol = true;
-								}
-								genOpenCLCodesForDataClause(dAnnot, IRSym, varName, startList, lengthList, typeSpecs, ifCond, asyncID, dataClauseT, 
-										mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, isFirstData, ROSymbol, isConstArray);
-								isFirstData = false;
+							} 
+							boolean ROSymbol = false;
+							if( ROSymSet.contains(IRSym) ) {
+								ROSymbol = true;
 							}
+							genOpenCLCodesForDataClause(dAnnot, IRSym, varName, startList, lengthList, typeSpecs, ifCond, asyncID, dataClauseT, 
+									mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, isFirstData, ROSymbol, isConstArray);
+							isFirstData = false;
 						} else {
 							break;
 						}
@@ -2623,7 +2625,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 				} else {
 					boolean is_acc_init = false;
 					List<FunctionCall> fCallList = IRTools.getFunctionCalls(inPt);
-					if( (fCallList != null) && (fCallList.get(0).getName().toString().equals("acc_init")) ) {
+					if( (fCallList != null) && !fCallList.isEmpty() && (fCallList.get(0).getName().toString().equals("acc_init")) ) {
 						is_acc_init = true;
 					}
 					if( ifCondExp == null ) {

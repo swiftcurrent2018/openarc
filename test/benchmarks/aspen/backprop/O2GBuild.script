@@ -1,0 +1,31 @@
+#! /bin/bash
+if [ $# -ge 1 ]; then
+    runMode=$1
+else
+    runMode=3
+fi
+
+if [ "$runMode" = "4" ]; then
+    aspenrt="aspenart.c"
+else
+    aspenrt=""
+fi
+
+openarcbenchlib="../../../../openarcrt"
+openarcbenchbin="../../../../test/bin"
+openarclib="../../../../lib"
+
+benchname="backprop"
+verLevel=0
+
+if [ ! -f "openarcConf.txt" ]; then
+    cp "openarcConf_NORMAL.txt" "openarcConf.txt"
+fi
+
+java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPUDriver -verbosity=${verLevel} -gpuConfFile=openarcConf.txt -ASPENModelGen=mode=${runMode}:modelname=${benchname} *.c ${aspenrt}
+cp *.h ./cetus_output/
+if [ -f "$openarcbenchbin/smallmodeltest" ]; then
+	cp $openarcbenchbin/smallmodeltest ./cetus_output/
+fi
+cp $openarcbenchbin/ASPENCheckGen.bash ./cetus_output/
+cp $openarcbenchbin/ASPENKernelMemUsage.bash ./cetus_output/

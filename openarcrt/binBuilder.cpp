@@ -84,7 +84,7 @@ int main (){
 		isMic = 1;
 	}
 	if (err != CL_SUCCESS) {
-		fprintf(stderr, "[ERROR in OpenCLDriver::HI_get_num_devices()] Failed to get device IDs  for type \n");
+		fprintf(stderr, "[ERROR in clGetDeviceIDs()] Failed to get device IDs  for type \n");
 	}
 	
 	
@@ -105,7 +105,7 @@ int main (){
 		fp = fopen(filename, "r");
 		if (!fp) {
 			fprintf(stderr, "[INFO: in OpenCL binary creation] Failed to read the kernel file %s, so skipping binary generation for OpenCL devices %d\n", filename, i);
-			break;
+			exit(1);
 		}
 		source_str = (char*)malloc(MAX_SOURCE_SIZE);
 		source_size = fread( source_str, 1, MAX_SOURCE_SIZE, fp);
@@ -115,11 +115,13 @@ int main (){
 		clContext = clCreateContext( NULL, 1, &clDevice, NULL, NULL, &err);
 		if(err != CL_SUCCESS) {
 				fprintf(stderr, "[ERROR in OpenCL binary creation] failed to create OPENCL context with error %d (OPENCL GPU)\n", err);
+			exit(1);
 		}
 
 		clQueue = clCreateCommandQueue(clContext, clDevice, 0, &err);
 		if(err != CL_SUCCESS) {
 				fprintf(stderr, "[ERROR in OpenCL binary creation] failed to create OPENCL queue with error %d (OPENCL GPU)\n", err);
+			exit(1);
 		}
 		
 		char cBuffer[1024];
@@ -132,6 +134,7 @@ int main (){
 		clProgram = clCreateProgramWithSource(clContext, 1, (const char **)&source_str, (const size_t *)&source_size, &err);
 		if(err != CL_SUCCESS) {
 				fprintf(stderr, "[ERROR in OpenCL binary creation] failed to create OPENCL program with error %d (OPENCL GPU)\n", err);
+			exit(1);
 		}
 		
 		char *envVar;
@@ -176,6 +179,7 @@ int main (){
 		err = clGetProgramInfo( clProgram, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &size, NULL );
 		if(err != CL_SUCCESS) {
 				fprintf(stderr, "[ERROR in OpenCL binary creation] failed to get OPENCL program info error %d (OPENCL GPU)\n", err);
+			exit(1);
 		}
 
 		unsigned char * binary = new unsigned char [size];
@@ -188,6 +192,7 @@ int main (){
 		
 		if(err != CL_SUCCESS) {
 				fprintf(stderr, "[ERROR in OpenCL binary creation] failed to dump OPENCL program binary error %d (OPENCL GPU)\n", err);
+			exit(1);
 		}
 		
 		FILE * fpbin = fopen(binaryName.c_str(), "wb" );

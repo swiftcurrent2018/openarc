@@ -88,7 +88,7 @@
 ###################
 # OpenARC Setting #
 ###################
-OPENARCLIB = ${HOME}/work/openarc/openarcrt
+OPENARCLIB = $(openarc)/openarcrt
 CETUS_OUTPUT = cetus_output
 #OPENARC_ARCH = 0
 
@@ -396,11 +396,11 @@ GPROFILEMACROS = -D_OPENARC_PROFILE_=1
 BACKENDCXX = icpc
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
-GBACKEND_INCLUDES = -I/global/opt/intel/opencl/include
+GBACKEND_INCLUDES = -I/nics/d/home/lees2/local/icd/include
 GBACKEND_LIBS = -L/nics/d/home/lees2/local/icd/bin -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB) -I/global/opt/intel/opencl/include
+GFRONTEND_INCLUDES = -I$(OPENARCLIB) -I/nics/d/home/lees2/local/icd/include
 GFRONTEND_LIBS = -L/nics/d/home/lees2/local/icd/bin -L$(OPENARCLIB) -lOpenCL
 GFRONTEND_DEBUG = -g
 
