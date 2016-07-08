@@ -124,10 +124,11 @@ public class OpenCLKernelTranslationTools extends TransformPass
     				if( eStmt.getExpression() instanceof AssignmentExpression ) {
     					AssignmentExpression aExp = (AssignmentExpression)eStmt.getExpression();
     					Expression lExp = aExp.getLHS();
+    					Expression rExp = aExp.getRHS();
     					if( lExp instanceof Identifier ) {
     						Symbol tSym = ((Identifier)lExp).getSymbol();
     						if( localPointers.contains(tSym) ) {
-    							Set<Symbol> accessedSyms = SymbolTools.getAccessedSymbols(aExp.getRHS());
+    							Set<Symbol> accessedSyms = SymbolTools.getAccessedSymbols(rExp);
     							for(Symbol ttSym : accessedSyms ) {
     								if( SymbolTools.isPointer(ttSym) || SymbolTools.isArray(ttSym) ) {
     									List ttSpec = ttSym.getTypeSpecifiers();
@@ -140,7 +141,7 @@ public class OpenCLKernelTranslationTools extends TransformPass
     										if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) || 
     												tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
     											DFIterator<Identifier> titer =
-    													new DFIterator<Identifier>(aExp.getRHS(), Identifier.class);
+    													new DFIterator<Identifier>(rExp, Identifier.class);
     											while( titer.hasNext() ) {
     												List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
     												if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
@@ -158,6 +159,13 @@ public class OpenCLKernelTranslationTools extends TransformPass
     												}
     											}
     										}
+    										if( rExp instanceof Typecast ) {
+    											Typecast rTCExp = (Typecast)rExp;
+    											List rTCSpecList = rTCExp.getSpecifiers();
+    											if( !rTCSpecList.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+    												rTCSpecList.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+    											}
+    										}
     										break;
     									} else if( ttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
     										if( !tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
@@ -168,7 +176,7 @@ public class OpenCLKernelTranslationTools extends TransformPass
     										if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) || 
     												tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
     											DFIterator<Identifier> titer =
-    													new DFIterator<Identifier>(aExp.getRHS(), Identifier.class);
+    													new DFIterator<Identifier>(rExp, Identifier.class);
     											while( titer.hasNext() ) {
     												List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
     												if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
@@ -184,6 +192,13 @@ public class OpenCLKernelTranslationTools extends TransformPass
     													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
     													break;
     												}
+    											}
+    										}
+    										if( rExp instanceof Typecast ) {
+    											Typecast rTCExp = (Typecast)rExp;
+    											List rTCSpecList = rTCExp.getSpecifiers();
+    											if( !rTCSpecList.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+    												rTCSpecList.add(0, OpenCLSpecifier.OPENCL_LOCAL);
     											}
     										}
     										break;
@@ -197,7 +212,7 @@ public class OpenCLKernelTranslationTools extends TransformPass
     										if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) || 
     												tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
     											DFIterator<Identifier> titer =
-    													new DFIterator<Identifier>(aExp.getRHS(), Identifier.class);
+    													new DFIterator<Identifier>(rExp, Identifier.class);
     											while( titer.hasNext() ) {
     												List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
     												if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
@@ -213,6 +228,13 @@ public class OpenCLKernelTranslationTools extends TransformPass
     													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
     													break;
     												}
+    											}
+    										}
+    										if( rExp instanceof Typecast ) {
+    											Typecast rTCExp = (Typecast)rExp;
+    											List rTCSpecList = rTCExp.getSpecifiers();
+    											if( !rTCSpecList.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+    												rTCSpecList.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
     											}
     										}
     										break;
@@ -228,6 +250,10 @@ public class OpenCLKernelTranslationTools extends TransformPass
     				Initializer tInit = tDecl.getDeclarator(0).getInitializer();
     				if( tInit != null ) {
     					if( localPointers.contains(tSym) ) {
+    						Typecast tInitTCExp = null;
+    						if( tInit.getChildren().get(0) instanceof Typecast ) {
+    							tInitTCExp = (Typecast)tInit.getChildren().get(0);
+    						}
     						Set<Symbol> accessedSyms = SymbolTools.getAccessedSymbols(tInit);
     						for(Symbol ttSym : accessedSyms ) {
     							if( SymbolTools.isPointer(ttSym) || SymbolTools.isArray(ttSym) ) {
@@ -258,6 +284,12 @@ public class OpenCLKernelTranslationTools extends TransformPass
     											}
     										}
     									}
+    									if( tInitTCExp != null ) {
+    										List rTCSpecList = tInitTCExp.getSpecifiers();
+    										if( !rTCSpecList.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+    											rTCSpecList.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+    										}
+    									}
     									break;
     								} else if( ttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
     									if( !tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
@@ -283,6 +315,12 @@ public class OpenCLKernelTranslationTools extends TransformPass
     												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
     												break;
     											}
+    										}
+    									}
+    									if( tInitTCExp != null ) {
+    										List rTCSpecList = tInitTCExp.getSpecifiers();
+    										if( !rTCSpecList.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+    											rTCSpecList.add(0, OpenCLSpecifier.OPENCL_LOCAL);
     										}
     									}
     									break;
@@ -311,6 +349,12 @@ public class OpenCLKernelTranslationTools extends TransformPass
     												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
     												break;
     											}
+    										}
+    									}
+    									if( tInitTCExp != null ) {
+    										List rTCSpecList = tInitTCExp.getSpecifiers();
+    										if( !rTCSpecList.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+    											rTCSpecList.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
     										}
     									}
     									break;
