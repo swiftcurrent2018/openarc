@@ -167,16 +167,21 @@ for OpenARC users; if [openarc-path]/bin/openarc exists, the above command can b
 -------------------------------------------------------------------------------
 TESTING
 -------------------------------------------------------------------------------
-"./test" directory contains examples showing how to use OpenARC.
+* "./test" directory contains examples showing how to use OpenARC.
 For example, to compile and run matmul.c in ./test/examples/openarc/matmul directory:
 
 	$ cd [openarc-path]/test/examples/openarc/matmul
 
-	$ O2Gbuild.script
+	$ O2Gbuild.script //translate OpenACC to output CUDA or OpenCL program.
 
-	$ make
+	$ make            //compile the generated output program.
 
-	$ cd bin; matmul_ACC
+	$ cd bin; matmul_ACC //run the output binary.
+	
+	//The output kernel file (openarc_kernel.cu or openarc_kernel.cl) can be either 
+pre-compiled by the built-in binBuilder tool (binBuilder_cuda or binBuilder_opencl) or JIT-compiled at runtime. 
+
+	//To JIT-compile the kernel file, be sure to delete any old kernel binary (openarc_kernel_*.ptx).
 
 -------------------------------------------------------------------------------
 FEATURES/UPDATES
