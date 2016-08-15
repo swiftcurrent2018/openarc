@@ -375,7 +375,7 @@ public class OpenCLKernelTranslationTools extends TransformPass
     			if( (tProc != null) && !StandardLibrary.contains(tCall) && !visitedProcedureSet.contains(tProc) ) {
     				List<Symbol> argSymList = new ArrayList<Symbol>(tCall.getArguments().size());
 					for( Expression argExp : tCall.getArguments() ) {
-						//Step1: find argument symbol which is a parameber symbol of the calling procedure.
+						//Step1: find argument symbol which is a parameter symbol of the calling procedure.
 						Symbol argSym = SymbolTools.getSymbolOf(argExp);
 						if( argSym == null ) {
 							if( argExp instanceof BinaryExpression ) {
@@ -415,6 +415,14 @@ public class OpenCLKernelTranslationTools extends TransformPass
 							List<Specifier> typeSpecs = param.getSpecifiers();
 							Symbol argSym = argSymList.get(i);
 							i++;
+							Declarator paramDeclr = param.getDeclarator(0);
+							if( paramDeclr instanceof VariableDeclarator ) {
+								if( !SymbolTools.isArray((VariableDeclarator)paramDeclr) &&
+										!SymbolTools.isPointer((VariableDeclarator)paramDeclr) ) {
+									//Scalar function argument belongs to __private space.
+									continue;
+								}
+							}
 							if( argSym != null ) {
 								if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
 									if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {

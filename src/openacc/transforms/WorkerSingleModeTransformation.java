@@ -108,7 +108,7 @@ public class WorkerSingleModeTransformation extends TransformPass {
 					//System.err.println("Following compute region will be skipped " + cAnnot);
 					continue;
 				}
-				if( target_arch == 3 ) {
+				//if( target_arch == 3 ) {
 					if( kernelType.equals("parallel") ) {
 						Expression num_gangs = cAnnot.get("num_gangs");
 						Expression num_workers = cAnnot.get("num_workers");
@@ -126,7 +126,7 @@ public class WorkerSingleModeTransformation extends TransformPass {
 							continue;
 						}
 					}
-				}
+				//}
 				Annotatable at = cAnnot.getAnnotatable();
 				if ( at instanceof ForLoop ) {
 					if( cAnnot.containsKey("worker") ) {

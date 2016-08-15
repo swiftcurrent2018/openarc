@@ -3892,6 +3892,7 @@ public class ACCParser {
 				case nvl_heap  : parse_acc_confclause(token); break;
 				case nvl_default : parse_acc_stringargclause(token); break;
 				case nvl_backup : parse_acc_dataclause(token); break;
+				case nvl_backup_writeFirst : parse_acc_dataclause(token); break;
 				case nvl_clobber : parse_acc_dataclause(token); break;
 				case nvl_readonly : parse_acc_dataclause(token); break;
 				default : ACCParserError("NoSuchNVLConstruct : " + clause);
@@ -4276,6 +4277,7 @@ public class ACCParser {
 		nvl_heap,
 		nvl_default,
 		nvl_backup,
+		nvl_backup_writeFirst,
 		nvl_clobber,
 		nvl_readonly,
 	}

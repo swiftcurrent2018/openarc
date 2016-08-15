@@ -29,8 +29,10 @@ public class NVLAnnotation extends PragmaAnnotation
  * The following user directives are supported:
  * <p>     
  * #pragma nvl atomic \
- *   [heap(heap-pointer)] [default(backup|clobber|readonly)] \
- *   [backup(NVM-pointer)] [clobber(NVM-pointer)] [readonly(NVM-pointer)]
+ *   [heap(heap-pointer)] \
+ *   [default(backup|backup_writeFirst|clobber|readonly)] \
+ *   [backup(NVM-pointer)] [backup_writeFirst(NVM-pointer)] \
+ *   [clobber(NVM-pointer)] [readonly(NVM-pointer)]
  */
 
   // NVL directives
@@ -43,7 +45,8 @@ public class NVLAnnotation extends PragmaAnnotation
 
   // Pragmas used with collection of values
   private static final Set<String> collection_values =
-    new HashSet<String>(Arrays.asList("heap", "default", "backup",
+    new HashSet<String>(Arrays.asList("heap", "default",
+                                      "backup", "backup_writeFirst",
                                       "clobber", "readonly"));
 
   // Pragmas used with optional value
@@ -54,7 +57,8 @@ public class NVLAnnotation extends PragmaAnnotation
   //Clauses not listed here may be printed in a random order.
   private static final List<String> print_order =
     new ArrayList<String>(Arrays.asList( "atomic", "heap", "default",
-                                         "backup", "clobber", "readonly" ));
+                                         "backup", "backup_writeFirst",
+                                         "clobber", "readonly" ));
 
   /**
    * Constructs an empty NVL annotation.
