@@ -102,8 +102,9 @@ public class LoopUnrollTransformation extends TransformPass {
 
         		if(factor > 1) {
         			Expression itrSize = Symbolic.simplify(Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1)));
+        			long nItr = 0;
 					if( itrSize instanceof IntegerLiteral ) {
-						long nItr = ((IntegerLiteral)itrSize).getValue();
+						nItr = ((IntegerLiteral)itrSize).getValue();
 						if( factor > nItr ) {
 							//Skip the unrolling.
 							PrintTools.println("[WARNING in LoopUnrollingTransformation] unrolling factor (" + factor + 
@@ -114,38 +115,48 @@ public class LoopUnrollTransformation extends TransformPass {
 							
 						}
 					}
-        			for(int i=1; i< factor; i++) {
-        				Statement newBody = loopBody.clone();
-        				BinaryExpression newIndex = new BinaryExpression(index.clone(), BinaryOperator.ADD,
-        						new IntegerLiteral(i));
-        				IRTools.replaceAll(newBody,index, newIndex);
-        				((CompoundStatement)f.getBody()).addStatement(newBody);
-        			}
-        			AssignmentExpression newStep = new AssignmentExpression( index.clone(),
-        					AssignmentOperator.NORMAL, new BinaryExpression(index.clone(), BinaryOperator.ADD,
-        							new IntegerLiteral(factor)) );
-        			f.setStep(newStep);
-        			boolean addTrailCode = true;
-        			boolean completeUnrolling = false;
-					if( itrSize instanceof IntegerLiteral ) {
-						long nItr = ((IntegerLiteral)itrSize).getValue();
-						if( nItr == factor ) {
-							completeUnrolling = true;
-							addTrailCode = false;
-						} else if( nItr%factor == 0 ) {
-							addTrailCode = false;
-						}
-					}
-					if( completeUnrolling ) {
+					if( nItr == factor ) {
 						PrintTools.println("complete unrolling!", 0);
-						loopBody = f.getBody();
-						f.setBody(null);
-						f.swapWith(loopBody);
+						CompoundStatement parent = (CompoundStatement) f.getParent();
+						for(long i=factor-1; i>= 0; i--) {
+							Statement newBody = loopBody.clone();
+							IRTools.replaceAll(newBody,index, new IntegerLiteral(i));
+							parent.addStatementAfter(f, newBody);
+						}
+						parent.removeStatement(f);
+					} else {
+						for(int i=1; i< factor; i++) {
+							Statement newBody = loopBody.clone();
+							BinaryExpression newIndex = new BinaryExpression(index.clone(), BinaryOperator.ADD,
+									new IntegerLiteral(i));
+							IRTools.replaceAll(newBody,index, newIndex);
+							((CompoundStatement)f.getBody()).addStatement(newBody);
+						}
+						AssignmentExpression newStep = new AssignmentExpression( index.clone(),
+								AssignmentOperator.NORMAL, new BinaryExpression(index.clone(), BinaryOperator.ADD,
+										new IntegerLiteral(factor)) );
+						f.setStep(newStep);
+						boolean addTrailCode = true;
+						boolean completeUnrolling = false;
+						if( itrSize instanceof IntegerLiteral ) {
+							if( nItr == factor ) {
+								completeUnrolling = true;
+								addTrailCode = false;
+							} else if( nItr%factor == 0 ) {
+								addTrailCode = false;
+							}
+						}
+						if( completeUnrolling ) {
+							PrintTools.println("complete unrolling!", 0);
+							loopBody = f.getBody();
+							f.setBody(null);
+							f.swapWith(loopBody);
 
-					} else if( addTrailCode ) {
-						newFor.setInitialStatement(null);
-						Statement parent = (Statement) f.getParent();
-						((CompoundStatement)parent).addStatementAfter(f, newFor);
+						} else if( addTrailCode ) {
+							newFor.setInitialStatement(null);
+							Statement parent = (Statement) f.getParent();
+							((CompoundStatement)parent).addStatementAfter(f, newFor);
+						}
 					}
         			//=================================================
         		}

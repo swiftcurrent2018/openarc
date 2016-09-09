@@ -501,6 +501,14 @@
 #Name of parser to be used for parsing source file
 #
 ########################################
+#Option: pipelineTransformation
+########################################
+#pipelineTransformation=N
+#Control the pipelining transformation, which exploits Altera-specific channel mechanism; 
+#N = 0 (Disable this pipelining transformation)
+#N = 1 (Enable this pipelining transformation when targeting Altera FPGAs) (default)
+#
+########################################
 #Option: preprocessor
 ########################################
 #preprocessor=command
@@ -633,6 +641,15 @@
 ########################################
 #skipKernelLoopBoundChecking
 #Skip kernel-loop-boundary-checking code when generating a device kernel; it is safe only if total number of workers equals to that of the kernel loop iterations
+#
+########################################
+#Option: slidingWindowTransformation
+########################################
+#slidingWindowTransformation=N
+#Control the sliding-window transformation; 
+#N = 0 (Disable this sliding-window transformation)
+#N = 1 (Enable this sliding-window transformation when targeting Altera FPGAs) (default)
+#N = 2 (Enable this sliding-window transformation for all devices)
 #
 ########################################
 #Option: targetArch
@@ -785,6 +802,8 @@ defaultNumWorkers=64
 #maxNumWorkers=N
 #outdir=cetus_output
 #loopUnrollFactor=N
+#pipelineTransformation=N
+#slidingWindowTransformation=N
 ##########################
 # Analysis configuration #
 ##########################

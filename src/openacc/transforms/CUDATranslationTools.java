@@ -3106,6 +3106,9 @@ public abstract class CUDATranslationTools {
 						// private variables in seq kernel loops are treated as worker-private variables.
 						workerpriv_regions.add(pannot);
 					}
+                } else if( isSingleTask ) {
+                	// private variables in single-task region are treated as worker-private variables.
+                	workerpriv_regions.add(pannot);
 				} else {
 					gangpriv_regions.add(pannot);
 				}
@@ -3157,19 +3160,37 @@ public abstract class CUDATranslationTools {
 				if( AnalysisTools.ipContainPragmas(at, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null) ) {
 					isWorkerPrivate = true;
 				}
+            } else if (isSingleTask) {
+                isWorkerPrivate = true;
 			}
 			boolean isGangPrivate = false;
-			if( at.containsAnnotation(ACCAnnotation.class, "gang") ) {
-				isGangPrivate = true;
-			}
-			if( at.containsAnnotation(ACCAnnotation.class, "parallel") ) {
-				isGangPrivate = true;
+			if( !isSingleTask ) {
+				if( at.containsAnnotation(ACCAnnotation.class, "gang") ) {
+					isGangPrivate = true;
+				}
+				if( at.containsAnnotation(ACCAnnotation.class, "parallel") ) {
+					isGangPrivate = true;
+				}
 			}
 			scope = null;
 			if( isWorkerPrivate ) {//A worker private variable is declared in the innermost worker loop body.
-				ACCAnnotation tAnnot = AnalysisTools.findInnermostPragma(at, ACCAnnotation.class, "worker");
-				ForLoop wLoop = (ForLoop)tAnnot.getAnnotatable();
-				scope = (CompoundStatement)(wLoop).getBody();
+				if( isSingleTask ) {
+					if( region instanceof ForLoop ) {
+						ACCAnnotation tAnnot = AnalysisTools.findInnermostPragma(region, ACCAnnotation.class, "gang");
+						if( tAnnot != null ) {
+							ForLoop gLoop = (ForLoop)tAnnot.getAnnotatable();
+							scope = (CompoundStatement)(gLoop).getBody();
+						} else {
+							scope = (CompoundStatement)((ForLoop)region).getBody();
+						}
+					} else if( region instanceof CompoundStatement ) {
+						scope = (CompoundStatement)region;
+					}
+				} else {
+					ACCAnnotation tAnnot = AnalysisTools.findInnermostPragma(at, ACCAnnotation.class, "worker");
+					ForLoop wLoop = (ForLoop)tAnnot.getAnnotatable();
+					scope = (CompoundStatement)(wLoop).getBody();
+				}
 			} else if( isGangPrivate ) {
 				///////////////////////////////////////////////////////////////////////////////////
 				//A gang private variable is declared either in the enclosing compound statement //

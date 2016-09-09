@@ -15,7 +15,7 @@ elif [ $# -eq 4 ]; then
 	aspenkernel=$2
 	aspenparam=$3
 	aspenmap=$4
-	memchecktool="singlemapmemusage"
+	memchecktool="singleregionmemusage"
 else
 	echo "Incorrect number of inputs; exit"
 	echo "==> Usage:"
@@ -34,14 +34,15 @@ fi
 
 #memchecktool="kernelmemusageexclusive"
 #memchecktool="kernelmemusageinclusive"
-#memchecktool="singlemapmemusage"
+#memchecktool="singleregionmemusage"
 
 checkfile="memcheck.c"
 
-if [ "${memchecktool}" = "singlemapmemusage" ]; then
-	${aspen}/test/${memchecktool} "${aspenmodel}" ${aspenkernel} "${aspenparam}" "${aspenmap}" > "$checkfile"
+if [ "${memchecktool}" = "singleregionmemusage" ]; then
+	${aspen}/tools/analysis/${memchecktool} "${aspenmodel}" ${aspenkernel} "${aspenparam} ${aspenmap}" > "$checkfile"
+
 else
-	${aspen}/test/${memchecktool} "${aspenmodel}" ${aspenkernel} "${aspenparam}" > "$checkfile"
+	${aspen}/tools/analysis/${memchecktool} "${aspenmodel}" ${aspenkernel} "${aspenparam}" > "$checkfile"
 fi
 mv "$checkfile" "${checkfile}_tmp"
 cat "${checkfile}_tmp" | sed "s|dssize|HI_aspenmempredict|g" > "${checkfile}_tmp2"

@@ -30,6 +30,8 @@ public class acc2gpu extends CodeGenPass
 	private int AccParallelization = 0;
 	private int programVerification = 0;
 	private int FaultInjectionOption = 1;
+	private int pipelineTransformation = 1;
+	private int slidingWindowTransformation = 1;
     private boolean convertOpenMPtoOpenACC = false;
 	private boolean enableFaultInjection = false;
 	private boolean enableCustomProfiling = false;
@@ -193,6 +195,17 @@ public class acc2gpu extends CodeGenPass
 		if( value != null ) {
 			ParallelLoopSwap = true;
 		}
+
+		value = Driver.getOptionValue("pipelineTransformation");
+		if( value != null ) {
+			pipelineTransformation = Integer.valueOf(value).intValue();
+		}
+
+		value = Driver.getOptionValue("slidingWindowTransformation");
+		if( value != null ) {
+			slidingWindowTransformation = Integer.valueOf(value).intValue();
+		}
+
 		value = Driver.getOptionValue("gpuMemTrOptLevel");
 		if( value != null ) {
 			MemTrOptLevel = Integer.valueOf(value).intValue();
@@ -383,7 +396,9 @@ public class acc2gpu extends CodeGenPass
 		//////////////////////////////////////////////////////////////////////////////////
 		TransformPass.run(new ACCLoopDirectivePreprocessor(program));
 
-		TransformPass.run(new PipeTransformation(program, OPENARC_ARCH==3));
+		if( pipelineTransformation > 0 ) {
+			TransformPass.run(new PipeTransformation(program, OPENARC_ARCH==3));
+		}
 		
 		if( AccAnalysisOnly == 3 ) {
 			cleanAnnotations();
@@ -439,7 +454,6 @@ public class acc2gpu extends CodeGenPass
 		if( AccReduction > 0 ) {
 			AnalysisPass.run(new AccReduction(program, AccReduction, IRSymbolOnly));
 		}
-		
 		
 		if( AccAnalysisOnly == 5 ) {
 			cleanAnnotations();

@@ -5,3 +5,4 @@
 /copyBinary.bash
 /make.header
 /*.log
+**/.DS_Store

@@ -824,16 +824,26 @@ public class ACCAnalysis extends AnalysisPass
 								annot.put(key, newExp);
 							}
 						} else if( value instanceof List ) {
-							//transform permute clauses have expression list as arguments.
-							//CAUTION: this assumes elements are expressions.
+							//transform permute and window clauses have argument lists.
+							//[CAUTION] this assumes that arguments are either subarray or expression.
 							List vList = (List)value;
-							List newList = new LinkedList<Expression>();
+							List newList = new LinkedList<Object>();
 							for( Object elm : vList ) {
-								Expression newExp = updateSymbolsInExpression((Expression)elm, inputTR, nameChangeMap, annot);
-								if( newExp == null ) {
+								if( elm instanceof Expression ) {
+									Expression newExp = updateSymbolsInExpression((Expression)elm, inputTR, nameChangeMap, annot);
+									if( newExp == null ) {
+										newList.add(elm);
+									} else {
+										newList.add(newExp);
+									}
+								} else if( elm instanceof SubArray ) {
+									updateSymbolsInSubArray((SubArray)elm, inputTR, nameChangeMap, annot);
 									newList.add(elm);
 								} else {
-									newList.add(newExp);
+									Tools.exit("[ERROR in ACCAnalysis.updateSymbolsInACCAnnotations()]: The value of key, " + key +
+											", in the  following ACCAnnotation should be either expression or SubArray.\n" + 
+											"ACCAnnotation: " + annot + 
+											AnalysisTools.getEnclosingAnnotationContext(annot));
 								}
 							}
 							annot.put(key, newList);

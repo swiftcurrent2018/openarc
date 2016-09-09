@@ -340,16 +340,19 @@ ifeq ($(TARGET_SYSTEM),MacBookPro)
 OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
-CC = gcc-apple-4.2
-CXX = g++-apple-4.2
-CPP = $(CC) -E -std=c99
-#CC = mpicc -std=c99
-#CXX = mpicxx
-#CPP = gcc -E -std=c99
+#CC = gcc-apple-4.2
+#CXX = g++-apple-4.2
+#CPP = $(CC) -E -std=c99
+CC = mpicc -std=c99
+CXX = mpicxx
+#CC = mpicc -cc=gcc -std=c99
+#CXX = mpicxx -cxx=g++
+CPP = gcc -E -std=c99
 GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
 GPROFILEMACROS = -D_OPENARC_PROFILE_=1
-BACKENDCXX = g++-apple-4.2
-#BACKENDCXX = mpicxx
+#BACKENDCXX = g++-apple-4.2
+BACKENDCXX = mpicxx
+#BACKENDCXX = mpicxx -cxx=g++
 CC_FLAGS_PREFIX = 
 #GBACKEND_FLAGS = -arch i386 -arch x86_64
 GBACKEND_FLAGS = -arch x86_64

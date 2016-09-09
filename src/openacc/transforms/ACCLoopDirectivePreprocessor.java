@@ -958,6 +958,7 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 			if( nLoopSize > 2 ) {
 				cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "collapse");
 				if( cAnnot == null ) {
+					cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "loop");
 					IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize-1);
 					cAnnot.put("collapse", collapseLevel);
 				}

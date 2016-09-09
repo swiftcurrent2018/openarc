@@ -985,7 +985,7 @@ public abstract class ACC2GPUTranslationTools {
 	
 	/**
 	 * Handle privatization and reduction transformation for a seq kernels/parallel loop.
-	 * [FIXME] this should be updated to handle kernel verificaiton and other special modes.
+	 * [FIXME] this should be updated to handle kernel verification and other special modes.
 	 * 
 	 * @param cProc
 	 * @param region

@@ -24,8 +24,8 @@ if [ "$aspen" = "" ] || [ ! -d "$aspen" ]; then
     exit
 fi
 
-#${aspen}/test/tradeoff "${aspenmodel}" "${aspen}/models/machine/1cpu1gpu.aspen" ${aspenkernel} nvidia_m2090 intel_xeon_x5660 "${aspenparam}" > "$checkfile"
-${aspen}/test/tradeoff "${aspenmodel}" "${aspen}/models/machine/2cpu1gpu.aspen" ${aspenkernel} nvidia_m2090 intel_xeon_x5660 "${aspenparam}" > "$checkfile"
+${aspen}/tools/prediction/tradeoff "${aspenmodel}" "${aspen}/models/machine/1cpu1gpu.aspen" ${aspenkernel} nvidia_m2090 intel_xeon_x5660 "${aspenparam}" > "$checkfile"
+#${aspen}/tools/prediction/tradeoff "${aspenmodel}" "${aspen}/models/machine/2cpu1gpu.aspen" ${aspenkernel} nvidia_m2090 intel_xeon_x5660 "${aspenparam}" > "$checkfile"
 mv "$checkfile" "${checkfile}_tmp"
 cat "${checkfile}_tmp" | sed "s|check|HI_aspenpredict|g" > "${checkfile}_tmp2"
 cat "${checkfile}_tmp2" | sed "s|cmath|math.h|g" > "${checkfile}_tmp"

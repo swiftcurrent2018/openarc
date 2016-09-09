@@ -771,7 +771,7 @@ public class ACCParser {
 		PrintTools.println(display_tokens(), 9);
 		match("(");
 		Set<SubArray> set = new HashSet<SubArray>();
-		parse_commaSeparatedSubArrayList(set);
+		parse_commaSeparatedSubArrayList(set, 0);
 		match(")");
 
 		return set;
@@ -2071,6 +2071,7 @@ public class ACCParser {
 	 *      multisrcgc(list)
 	 *      conditionalsrc(list)
 	 *      enclosingloops(list)
+	 *      window
 	 */
 	private static void parse_arc_transform()
 	{
@@ -2096,6 +2097,7 @@ public class ACCParser {
 				case token_expand_transpose	: parse_arc_clause_with_subarrayconf(tok); break;
 				case token_redim_transpose	: parse_arc_clause_with_subarrayconf(tok); break;
 				case token_transpose_expand	: parse_arc_clause_with_subarrayconf(tok); break;
+				case token_window	:	parse_arc_windowclause(tok); break;
 				case token_multisrccg	:	parse_acc_dataclause(tok); break;
 				case token_multisrcgc	:	parse_acc_dataclause(tok); break;
 				case token_conditionalsrc		: parse_acc_dataclause(tok); break;
@@ -2964,9 +2966,30 @@ public class ACCParser {
 		PrintTools.println("ACCParser is parsing ["+clause+"] clause", 3);
 		match("(");
 		Set<SubArray> set = new HashSet<SubArray>();
-		parse_commaSeparatedSubArrayList(set);
+		parse_commaSeparatedSubArrayList(set, 0);
 		match(")");
 		addToMap(clause, set);
+	}
+
+	private static void parse_arc_windowclause(String clause)
+	{
+		PrintTools.println("ACCParser is parsing ["+clause+"] clause", 3);
+		List<Object> wconflist = new ArrayList<Object>(4);
+		match("(");
+		List<SubArray> slist = new LinkedList<SubArray>();
+		parse_commaSeparatedSubArrayList(slist, 1);
+		wconflist.add(slist.get(0));
+		List<Expression> elist = new LinkedList<Expression>(); 
+		parse_commaSeparatedExpressionList(elist);
+		match(")");
+		if( elist.size() != 3 ) {
+			ACCParserError("incorrect number of arguments for an OpenARC window clause, which requires 4 arguments!");
+		} else {
+			wconflist.add(elist.get(0).clone());
+			wconflist.add(elist.get(1).clone());
+			wconflist.add(elist.get(2).clone());
+			addToMap(clause, wconflist);
+		}
 	}
 	
 	private static void parse_arc_clause_with_subarrayconf(String clause)
@@ -2990,7 +3013,7 @@ public class ACCParser {
 		//allowed in the declare directives too. (The subarray should be used only to give 
 		//dimension information (ex: a[0:SIZE]))
 		//parse_commaSeparatedVariableList(set);
-		parse_commaSeparatedSubArrayList(set);
+		parse_commaSeparatedSubArrayList(set, 0);
 		match(")");
 		addToMap(clause, set);
 	}
@@ -3034,7 +3057,7 @@ public class ACCParser {
         if (set == null) {
             set = new HashSet<SubArray>();
         }
-        parse_commaSeparatedSubArrayList(set);
+        parse_commaSeparatedSubArrayList(set, 0);
         match(")");
         reduction_map.put(redOp, set);
         //addToMap("reduction", reduction_map);		
@@ -3152,7 +3175,7 @@ public class ACCParser {
 		*	This function reads a list of comma-separated string variables
 		* It checks the right parenthesis to end the parsing, but does not consume it.
 		*/
-	private static void parse_commaSeparatedStringList(Set<String> set)
+	private static void parse_commaSeparatedStringList(Collection<String> set)
 	{
 		for (;;) {
 			set.add(get_token());
@@ -3307,9 +3330,10 @@ public class ACCParser {
 		* It checks the right parenthesis to end the parsing, but does not consume it.
 		* 
 		*/
-	private static void parse_commaSeparatedSubArrayList(Set<SubArray> set)
+	private static void parse_commaSeparatedSubArrayList(Collection<SubArray> collect, int limit)
 	{
 		String tok;
+		int counter = 0;
 //		try {
 			for (;;) {
 				tok = get_token();
@@ -3326,7 +3350,8 @@ public class ACCParser {
 				SubArray subArr = new SubArray(aName);
 				if ( check(")") )
 				{
-					set.add(subArr);
+					collect.add(subArr);
+					counter++;
 					break;
 				}
 				else if ( check("[") ) 
@@ -3383,19 +3408,28 @@ public class ACCParser {
 						tok = lookahead();
 					}
 					if( tok.equals(")") ) {
-						set.add(subArr);
+						collect.add(subArr);
+						counter++;
 						break;
 					} else if( tok.equals(",") ) {
-						set.add(subArr);
+						collect.add(subArr);
+						counter++;
 						eat();
+						if( (limit > 0) && (counter == limit) ) {
+							break;
+						}
 					} else {
 						ACCParserError("comma expected in comma separated list");
 					}
 				}
 				else if ( check(",") )
 				{
-					set.add(subArr);
+					collect.add(subArr);
+					counter++;
 					eat();
+					if( (limit > 0) && (counter == limit) ) {
+						break;
+					}
 				}
 				else 
 				{
@@ -4135,7 +4169,8 @@ public class ACCParser {
 		token_expand,
 		token_redim_transpose,
 		token_expand_transpose,
-		token_transpose_expand
+		token_transpose_expand,
+		token_window
 	}
 	
 	public static enum resilience_clause

@@ -246,6 +246,19 @@ public class ACC2GPUDriver extends Driver
 		"N = 1 (Enable this kernel-calling-procedure cloning) (default) \n" +
 		"N = 0 (Disable this kernel-calling-procedure cloning)");
 		optionsWithIntArgument.add("CloneKernelCallingProcedures");
+
+		options.add(options.TRANSFORM, "pipelineTransformation", "N",
+		"Control the pipelining transformation, which exploits Altera-specific channel mechanism; \n" + 
+		"N = 0 (Disable this pipelining transformation)\n" +
+		"N = 1 (Enable this pipelining transformation when targeting Altera FPGAs) (default)");
+		optionsWithIntArgument.add("pipelintTransformation");
+
+		options.add(options.TRANSFORM, "slidingWindowTransformation", "N",
+		"Control the sliding-window transformation; \n" + 
+		"N = 0 (Disable this sliding-window transformation)\n" +
+		"N = 1 (Enable this sliding-window transformation when targeting Altera FPGAs) (default)\n" + 
+		"N = 2 (Enable this sliding-window transformation for all devices)");
+		optionsWithIntArgument.add("pipelintTransformation");
 		
 		options.add(options.UTILITY, "assumeNonZeroTripLoops",
 		"Assume that all loops have non-zero iterations");
@@ -509,9 +522,20 @@ public class ACC2GPUDriver extends Driver
 		if( value == null ) {
 			setOptionValue("localRedVarConf", "1");
 		}
+
 		value = getOptionValue("showInternalAnnotations");
 		if( value == null ) {
 			setOptionValue("showInternalAnnotations", "1");
+		}
+
+		value = getOptionValue("pipelineTransformation");
+		if( value == null ) {
+			setOptionValue("pipelineTransformation", "1");
+		}
+
+		value = getOptionValue("slidingWindowTransformation");
+		if( value == null ) {
+			setOptionValue("slidingWindowTransformation", "1");
 		}
 
 		if(getOptionValue("disableDefaultCachingOpts") != null)

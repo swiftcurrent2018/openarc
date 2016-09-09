@@ -57,6 +57,7 @@ public class ARCAnnotation extends PragmaAnnotation
  *      transpose_expand(list-of-subarray-with-conflist)
  *      noploopswap
  *      noloopcollapse
+ *      window(subarray, exp, exp, exp)
  *      multisrccg(list)
  *      multisrcgc(list)
  *      conditionalsrc(list)
@@ -157,7 +158,7 @@ public class ARCAnnotation extends PragmaAnnotation
 		"ftdata", "ftkind", "mode", "event", 
 		"transpose", "redim", "expand", "redim_transpose", "expand_transpose",
 		"transpose_expand", "num_simd_work_items", "num_compute_units",
-		"ignoreglobal"));
+		"ignoreglobal", "window"));
 	
 
 	// Pragmas used with optional value
@@ -169,7 +170,7 @@ public class ARCAnnotation extends PragmaAnnotation
 	private static final List<String> print_order =
 			new ArrayList<String>(Arrays.asList( "ainfo", "enter", "exit",  "cuda", "opencl", "impacc",
 					"transform", "transpose", "redim", "expand", "redim_transpose", "expand_transpose",
-					"transpose_expand",
+					"transpose_expand", "window",
 					"profile", "region", "measure", "track", "if", "resilience", 
 					"ftregion", "ftinject", "ftcond", "ftthread", "ftdata", "ftkind", "num_faults", 
 					"num_ftbits", "repeat", "label", "mode", "event", "induction", "verbosity",
@@ -195,7 +196,7 @@ public class ARCAnnotation extends PragmaAnnotation
 	public static final Set<String> transformClauses = new HashSet(Arrays.asList(
 		"permute", "unroll", "noreductionunroll", "noploopswap", "noloopcollapse", 
 		"transpose", "redim", "expand", "redim_transpose", "expand_transpose", "transpose_expand",
-		"multisrccg", "multisrcgc", "conditionalsrc", "enclosingloops"
+		"multisrccg", "multisrcgc", "conditionalsrc", "enclosingloops", "window"
 		));
 	
 	// CUDA clauses
@@ -222,7 +223,7 @@ public class ARCAnnotation extends PragmaAnnotation
 	
 	// OpenARC clauses that should be printed in the order as specified in the input program.
 	private static final Set<String> inOrderClauses = new HashSet(Arrays.asList("enclosingloops", "permute", "gangconf",
-			"workerconf"));
+			"workerconf", "window"));
 	
 	// Resilience clauses 
 	private static final Set<String> resilienceClauses = new HashSet(Arrays.asList("ftregion", "ftcond",
