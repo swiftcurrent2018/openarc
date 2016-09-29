@@ -956,11 +956,21 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 				cAnnot.put("worker", "_clause");
 			}
 			if( nLoopSize > 2 ) {
-				cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "collapse");
-				if( cAnnot == null ) {
-					cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "loop");
-					IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize-1);
-					cAnnot.put("collapse", collapseLevel);
+				int OuterCollapseLevel = 0;
+				cAnnot = tLoop.getAnnotation(ACCAnnotation.class, "collapse");
+				if( cAnnot != null ) {
+					OuterCollapseLevel = (int)((IntegerLiteral)cAnnot.get("collapse")).getValue();
+					if( OuterCollapseLevel < nLoopSize ) {
+						IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize);
+						cAnnot.put("collapse", collapseLevel);
+					}
+				} else {
+					cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "collapse");
+					if( cAnnot == null ) {
+						cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "loop");
+						IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize-1);
+						cAnnot.put("collapse", collapseLevel);
+					}
 				}
 			}
 		}

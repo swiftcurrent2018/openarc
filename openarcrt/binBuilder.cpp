@@ -38,6 +38,7 @@ int main (){
 	if (system("which nvcc")==0){
 		CUresult err;
 		int major, minor;
+		int max_threads_per_block;
 		CUdevice cuDevice;
 		CUcontext cuContext;
 		CUmodule cuModule;
@@ -52,12 +53,15 @@ int main (){
 			#else
 				cuDeviceComputeCapability(&major, &minor, cuDevice);
 			#endif
+			cuDeviceGetAttribute (&max_threads_per_block, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, cuDevice);
 
 			std::stringstream ss;
 			ss << major;
 			ss << minor;
 			std::string version = ss.str();
 			std::string ptxName = std::string("openarc_kernel_") + version + std::string(".ptx");
+			fprintf(stderr, "[INFO] Create %s for device %d\n", ptxName.c_str(), i);
+			fprintf(stderr, "[INFO] Max # of threads per thread block for device %d: %d\n", i, max_threads_per_block);
 			std::string command = std::string("nvcc $OPENARC_JITOPTION -arch=sm_") + version + std::string(" openarc_kernel.cu -ptx -o ") + ptxName;
 			system(command.c_str());
 		}
@@ -123,6 +127,9 @@ int main (){
 				fprintf(stderr, "[ERROR in OpenCL binary creation] failed to create OPENCL queue with error %d (OPENCL GPU)\n", err);
 			exit(1);
 		}
+
+		size_t max_work_group_size;
+		clGetDeviceInfo(clDevice, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &max_work_group_size, NULL);
 		
 		char cBuffer[1024];
 		char *cBufferN;
@@ -131,6 +138,8 @@ int main (){
 		
 		std::string binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".ptx");
 		
+		fprintf(stderr, "[INFO] Create %s for device %d\n", binaryName.c_str(), i);
+		fprintf(stderr, "[INFO] Max # of work-items in a work-group for device %d: %lu\n", i, max_work_group_size);
 		clProgram = clCreateProgramWithSource(clContext, 1, (const char **)&source_str, (const size_t *)&source_size, &err);
 		if(err != CL_SUCCESS) {
 				fprintf(stderr, "[ERROR in OpenCL binary creation] failed to create OPENCL program with error %d (OPENCL GPU)\n", err);
