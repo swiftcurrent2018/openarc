@@ -647,7 +647,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			numThreads_declarator.setInitializer(new Initializer(new NameID("NUM_WORKERS")));
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.UNSIGNED);
+			specs.add(Specifier.LONG);
 			Declaration numThreads_decl = new VariableDeclaration(specs, numThreads_declarator);
 			//tu.addDeclarationAfter(annot, numThreads_decl);
 			if( containsACCAnnotations ) {
@@ -658,7 +659,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			numThreads_declaratorX.setInitializer(new Initializer(new IntegerLiteral(1)));
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.UNSIGNED);
+			specs.add(Specifier.LONG);
 			Declaration numThreads_declX = new VariableDeclaration(specs, numThreads_declaratorX);
 			tu.addDeclarationAfter(numThreads_decl, numThreads_declX);
 			
@@ -666,7 +668,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			numThreads_declaratorY.setInitializer(new Initializer(new IntegerLiteral(1)));
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.UNSIGNED);
+			specs.add(Specifier.LONG);
 			Declaration numThreads_declY = new VariableDeclaration(specs, numThreads_declaratorY);
 			tu.addDeclarationAfter(numThreads_declX, numThreads_declY);
 			
@@ -674,14 +677,16 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			numThreads_declaratorZ.setInitializer(new Initializer(new IntegerLiteral(1)));
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.UNSIGNED);
+			specs.add(Specifier.LONG);
 			Declaration numThreads_declZ = new VariableDeclaration(specs, numThreads_declaratorZ);
 			tu.addDeclarationAfter(numThreads_declY, numThreads_declZ);
 */
 			VariableDeclarator totalNumThreads_declarator = new VariableDeclarator(new NameID("totalGpuNumThreads"));
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.UNSIGNED);
+			specs.add(Specifier.LONG);
 			totalNumThreads_decl = new VariableDeclaration(specs, 
 					totalNumThreads_declarator);
 //			tu.addDeclarationAfter(numThreads_declZ, totalNumThreads_decl);
@@ -692,7 +697,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			VariableDeclarator numBlocks_declarator = new VariableDeclarator(new NameID("gpuNumBlocks"));
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.UNSIGNED);
+			specs.add(Specifier.LONG);
 			Declaration numBlocks_decl = new VariableDeclaration(specs, numBlocks_declarator);
 			if( containsACCAnnotations ) {
 				tu.addDeclarationAfter(totalNumThreads_decl, numBlocks_decl);
@@ -701,14 +707,16 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 /*			VariableDeclarator numBlocks_declaratorX = new VariableDeclarator(new NameID("gpuNumBlocksX"));
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.UNSIGNED);
+			specs.add(Specifier.LONG);
 			Declaration numBlocks_declX = new VariableDeclaration(specs, numBlocks_declaratorX);
 			tu.addDeclarationAfter(numBlocks_decl, numBlocks_declX);
 
 			VariableDeclarator numBlocks_declaratorY = new VariableDeclarator(new NameID("gpuNumBlocksY"));
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.UNSIGNED);
+			specs.add(Specifier.LONG);
 			Declaration numBlocks_declY = new VariableDeclaration(specs, numBlocks_declaratorY);
 			tu.addDeclarationAfter(numBlocks_declX, numBlocks_declY);
 			
@@ -716,7 +724,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				VariableDeclarator numBlocks_declaratorZ = new VariableDeclarator(new NameID("gpuNumBlocksZ"));
 				specs = new LinkedList<Specifier>();
 				specs.add(Specifier.STATIC);
-				specs.add(Specifier.INT);
+				specs.add(Specifier.UNSIGNED);
+				specs.add(Specifier.LONG);
 				Declaration numBlocks_declZ = new VariableDeclaration(specs, numBlocks_declaratorZ);
 				tu.addDeclarationAfter(numBlocks_declY, numBlocks_declZ);
 				//tu.addDeclarationAfter(numBlocks_declZ, totalNumThreads_decl);
@@ -733,7 +742,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				gpuMemSize_declarator.setInitializer(new Initializer(new IntegerLiteral(0)));
 				specs = new LinkedList<Specifier>();
 				specs.add(Specifier.UNSIGNED);
-				specs.add(Specifier.INT);
+				specs.add(Specifier.LONG);
 				gpuMemSize_decl = new VariableDeclaration(specs, gpuMemSize_declarator);
 				if( opt_addSafetyCheckingCode ) {
 					if( containsACCAnnotations ) {
@@ -746,7 +755,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				smemSize_declarator.setInitializer(new Initializer(new IntegerLiteral(0)));
 				specs = new LinkedList<Specifier>();
 				specs.add(Specifier.UNSIGNED);
-				specs.add(Specifier.INT);
+				specs.add(Specifier.LONG);
 				smemSize_decl = new VariableDeclaration(specs, smemSize_declarator);
 				if( opt_addSafetyCheckingCode ) {
 					if( containsACCAnnotations ) {
@@ -760,7 +769,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				specs = new LinkedList<Specifier>();
 				specs.add(Specifier.EXTERN);
 				specs.add(Specifier.UNSIGNED);
-				specs.add(Specifier.INT);
+				specs.add(Specifier.LONG);
 				gpuMemSize_decl = new VariableDeclaration(specs, gpuMemSize_declarator);
 				if( opt_addSafetyCheckingCode && containsACCAnnotations ) {
 					tu.addDeclarationAfter(numBlocks_decl, gpuMemSize_decl);
@@ -769,7 +778,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				specs = new LinkedList<Specifier>();
 				specs.add(Specifier.EXTERN);
 				specs.add(Specifier.UNSIGNED);
-				specs.add(Specifier.INT);
+				specs.add(Specifier.LONG);
 				smemSize_decl = new VariableDeclaration(specs, smemSize_declarator);
 				if( opt_addSafetyCheckingCode && containsACCAnnotations ) {
 					tu.addDeclarationAfter(gpuMemSize_decl, smemSize_decl);
@@ -781,7 +790,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			specs = new LinkedList<Specifier>();
 			specs.add(Specifier.STATIC);
 			specs.add(Specifier.UNSIGNED);
-			specs.add(Specifier.INT);
+			specs.add(Specifier.LONG);
 			Declaration bytes_decl = new VariableDeclaration(specs, bytes_declarator);
 			if( containsACCAnnotations ) {
 				if( opt_addSafetyCheckingCode ) {
