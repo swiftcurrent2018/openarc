@@ -111,7 +111,7 @@ public class ASPENModelGen extends TransformPass {
 	public static Procedure ASPENPredictFunc = null;
 	private static List<String> tuningParameters = new ArrayList<String>();
 	private Map<ASPENDeclaration, Traversable> aspenDeclToIRMap = new HashMap<ASPENDeclaration, Traversable>();
-	private boolean genASPENModel = true;
+	private int genASPENModel = 2;
     static public Set<String> ASPENKeywords = 
     	new HashSet<String>(Arrays.asList("param", "in", "with", "as", "of", "size", //common keywords
     			"model", "kernel", "data", "import", "to", "from", "iterate", "map", 
@@ -126,7 +126,7 @@ public class ASPENModelGen extends TransformPass {
 	/**
 	 * @param program
 	 */
-	public ASPENModelGen(Program program, boolean IRSymOnly, boolean genModel) {
+	public ASPENModelGen(Program program, boolean IRSymOnly, int genModel) {
 		super(program);
 		IRSymbolOnly = IRSymOnly;
 		genASPENModel = genModel;
@@ -1358,7 +1358,7 @@ public class ASPENModelGen extends TransformPass {
 		///////////////////////////////////////////////
 		//Step10: Write the model to the output file. //
 		///////////////////////////////////////////////
-		if( genASPENModel ) {
+		if( genASPENModel > 0 ) {
 			PrintTools.printlnStatus("Printing ASPEN Model...", 1);
 			try {
 				aspenModel.print();
@@ -1667,7 +1667,9 @@ public class ASPENModelGen extends TransformPass {
 					for( int i=0; i<trSize; i++ ) {
 						ASPENTrait tr = tData.getTrait(i);
 						String dtrait = tr.getTrait();
-						if( dtrait.equals("copy") || dtrait.equals("pcopy") ) {
+						//[DEBUG] Changed not to generate intracomm statement for present_or_* clauses.
+						//if( dtrait.equals("copy") || dtrait.equals("pcopy") ) {
+						if( dtrait.equals("copy") ) {
 							ASPENResource clonedRSC = tData.clone();
 							String property = null;
 							if( dtrait.equals("copy") ) {
@@ -1687,11 +1689,12 @@ public class ASPENModelGen extends TransformPass {
 							clonedRSC.setTrait(i, new ASPENTrait(property));
 							tStmt = new ASPENRequiresExpressionStatement("intracomm", clonedRSC);
 							tPostCStmt.addASPENStatement(tStmt);
-							
-						} else if( dtrait.equals("copyin") || dtrait.equals("pcopyin")) {
+						//} else if( dtrait.equals("copyin") || dtrait.equals("pcopyin")) {
+						} else if( dtrait.equals("copyin") ) {
 							ASPENRequiresExpressionStatement tStmt = new ASPENRequiresExpressionStatement("intracomm", tData);
 							tPreCStmt.addASPENStatement(tStmt);
-						} else if( dtrait.equals("copyout") || dtrait.equals("pcopyout")) {
+						//} else if( dtrait.equals("copyout") || dtrait.equals("pcopyout")) {
+						} else if( dtrait.equals("copyout") ) {
 							ASPENRequiresExpressionStatement tStmt = new ASPENRequiresExpressionStatement("intracomm", tData);
 							tPostCStmt.addASPENStatement(tStmt.clone());
 						}

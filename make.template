@@ -186,7 +186,7 @@ COMPILE_HOST: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
 
 COMPILE_KERNEL: $($(CETUS_OUTPUT)/$(KERNLE_FILE)) makedirectories
 	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/$(KERNEL_BINARY); fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
-	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
+	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); ./binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
 
 makedirectories:
 	mkdir -p $(TARGET)

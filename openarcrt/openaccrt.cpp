@@ -356,10 +356,10 @@ void HostConf::setDefaultDevNum() {
 
 void HostConf::setTranslationType()
 {
-    int dev;
+    //int dev;
     char * envVar;
     //Set target device type. 
-    acc_device_t devtype = acc_device_type_var;
+    //acc_device_t devtype = acc_device_type_var;
     envVar = getenv(outputType);
     if( envVar == NULL ) {
         //default device number (0) will be used.

@@ -19,22 +19,51 @@ extern double timer_();
 #define SPMUL_INPUTDIR        "/home/f6l/SPMULInput/"
 #endif
 #define ITER	100
+
+#define INPUTFILE  "nlpkkt240.rbC"
+#define SIZE  27993600
+#define SIZE2  27993600 //debugging purpose (should be replaced with SIZE)
+#define NZR    401232976
+#ifdef _OPENARC_
+#pragma openarc #define SIZE  27993600
+#pragma openarc #define SIZE2  27993600 //debugging purpose (should be replaced with SIZE)
+#pragma openarc #define NZR    401232976
+#endif
+
 /*
-#define INPUTFILE	"af23560.ruaC"
-#define SIZE	23560
-#define SIZE2	23560 //debugging purpose (should be replaced with SIZE)
-#define NZR		484256
+#define INPUTFILE  "af23560.rbC"
+#define SIZE  23560
+#define SIZE2  23560 //debugging purpose (should be replaced with SIZE)
+#define NZR    484256
+#ifdef _OPENARC_
+#pragma openarc #define SIZE  23560
+#pragma openarc #define SIZE2  23560 //debugging purpose (should be replaced with SIZE)
+#pragma openarc #define NZR    484256
+#endif
 */
+
 /*
 #define INPUTFILE	"rajat31.rbC"
 #define SIZE	4690002
 #define SIZE2	4690002 //debugging purpose (should be replaced with SIZE)
 #define NZR		20316253
+#ifdef _OPENARC_
+#pragma openarc #define SIZE  4690002
+#pragma openarc #define SIZE2  4690002 //debugging purpose (should be replaced with SIZE)
+#pragma openarc #define NZR    20316253
+#endif
+*/
 
+/*
 #define INPUTFILE	"af_shell10.rbC"
 #define SIZE	1508065
 #define SIZE2	1508065 //debugging purpose (should be replaced with SIZE)
 #define NZR		27090195
+#ifdef _OPENARC_
+#pragma openarc #define SIZE  1508065
+#pragma openarc #define SIZE2  1508065 //debugging purpose (should be replaced with SIZE)
+#pragma openarc #define NZR    27090195
+#endif
 */
 
 /*
@@ -42,8 +71,14 @@ extern double timer_();
 #define SIZE    220542  
 #define SIZE2   220542  
 #define NZR 5494489 
+#ifdef _OPENARC_
+#pragma openarc #define SIZE	220542
+#pragma openarc #define SIZE2	220542 //debugging purpose (should be replaced with SIZE)
+#pragma openarc #define NZR		5494489
+#endif
 */
 
+/*
 #define INPUTFILE	"kkt_power.rbC"
 #define SIZE	2063494
 #define SIZE2	2063494 //debugging purpose (should be replaced with SIZE)
@@ -53,6 +88,8 @@ extern double timer_();
 #pragma openarc #define SIZE2	2063494 //debugging purpose (should be replaced with SIZE)
 #pragma openarc #define NZR		8130343
 #endif
+*/
+
 /*
 #define ITER	500
 #define INPUTFILE	"msdoor.rbC"

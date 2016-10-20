@@ -65,9 +65,10 @@
 # OpenARC does not support.  For example, on OS X when CPP is      #
 # clang, we have found that /usr/include/stdlib.h uses clang's     #
 # block reference extension.  To suppress that usage, we specify   #
-# CPP as gcc 4.2 (from MacPorts package apple-gcc42) with the -E   #
-# and -std=c99 options. (CF: GCC (Apple LLVM version 6.1.0) on OSX #
-# V10.10 ignores -std=c99 option.)                                 #
+# CPP as gcc 4.2 (from MacPorts package apple-gcc42) or gcc 6.1.0  #
+# (from MacPorts package gcc6) with the -E and -std=c99 options.   #
+# (CF: GCC (Apple LLVM version 6.1.0) on OSX V10.10 ignores        #
+# -std=c99 option.)                                                #
 #                                                                  #
 # LLVM_TARGET_TRIPLE and LLVM_TARGET_DATA_LAYOUT describe the      #
 # target platform to LLVM.  If you have clang installed, you can   #
@@ -115,7 +116,14 @@ TARGET_SYSTEM = Newark
 ifeq ($(TARGET_SYSTEM),Titan)
 
 OPENARC_ARCH = 0
-GOMP_FLAGS = -openmp
+#option for Cray compiler (PrgEnv-cray)
+#GOMP_FLAGS = 
+#option for PGI compiler (PrgEnv-gnu)
+#GOMP_FLAGS = -fopenmp
+#option for Intel compiler (PrgEnv-intel)
+#GOMP_FLAGS = -openmp
+#option for PGI compiler (PrgEnv-pgi)
+GOMP_FLAGS = -mp
 GOMP_LIBS =
 CC = cc
 CXX = CC
@@ -388,7 +396,7 @@ endif
 ifeq ($(TARGET_SYSTEM),Beacon)
 
 OPENARC_ARCH = 2
-GOMP_FLAGS = -openmp
+GOMP_FLAGS = -qopenmp
 GOMP_LIBS =
 CC = icc
 CXX = icpc

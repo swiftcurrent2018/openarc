@@ -42,8 +42,11 @@ int main (){
 		CUdevice cuDevice;
 		CUcontext cuContext;
 		CUmodule cuModule;
-		int numDevices;
-		cudaGetDeviceCount(&numDevices);
+		int numDevices = 0;
+		if( cudaGetDeviceCount(&numDevices) != cudaSuccess ) {
+			fprintf(stderr, "[ERROR in CUDA binary creation] no available NVIDIA GPU found!; exit!\n");
+			exit(1);
+		}
 		
 		for(int i=0 ; i < numDevices; i++) {
 			cuDeviceGet(&cuDevice, i);
