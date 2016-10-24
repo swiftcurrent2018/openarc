@@ -425,9 +425,9 @@ public class acc2gpu extends CodeGenPass
 		}
 		if( (ASPENModelGenMode >= 1) && (ASPENModelGenMode <= 3) ) {
 			if( ASPENModelGenMode == 1 ) {
-				TransformPass.run(new ASPENModelGen(program, IRSymbolOnly, false));
+				TransformPass.run(new ASPENModelGen(program, IRSymbolOnly, 0));
 			} else {
-				TransformPass.run(new ASPENModelGen(program, IRSymbolOnly, true));
+				TransformPass.run(new ASPENModelGen(program, IRSymbolOnly, 1));
 			}
 			ASPENModelGen.cleanASPENAnnotations(program);
 			cleanAnnotations();
@@ -443,7 +443,7 @@ public class acc2gpu extends CodeGenPass
 			return;
 		}
 		
-		//[FIXME] This may no be the right position to call this pass; we have to
+		//[FIXME] This may not be the right position to call this pass; we have to
 		//check the interaction of this pass with other passes.
 		TransformPass.run(new DataLayoutTransform(program, IRSymbolOnly));
 		
