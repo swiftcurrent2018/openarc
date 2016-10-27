@@ -84,11 +84,12 @@ public class acc2gpu extends CodeGenPass
 		// Clean internal Cetus annotations if showInternalAnnotations is off. //
 		/////////////////////////////////////////////////////////////////////////
 		if( showInternalAnnotations == 0) {
-			AnalysisTools.removePragmas(program, ACCAnnotation.class);
-			AnalysisTools.removePragmas(program, ARCAnnotation.class);
+			AnalysisTools.removePragmas(program, ACCAnnotation.class, null);
+			AnalysisTools.removePragmas(program, ARCAnnotation.class, null);
 		} 
 		if( showInternalAnnotations < 3) {
-			AnalysisTools.removePragmas(program, CetusAnnotation.class);
+			AnalysisTools.removePragmas(program, CetusAnnotation.class, null);
+			AnalysisTools.removePragmas(program, PragmaAnnotation.class, "name");
 		} 
 		if( showInternalAnnotations > 1 ){
 			List<ACCAnnotation> internalAnnots = IRTools.collectPragmas(program, ACCAnnotation.class, "internal");
