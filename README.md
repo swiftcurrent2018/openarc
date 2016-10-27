@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.6 (June 15, 2016)
+OpenARC V0.7 (Nov. 01, 2016)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -13,7 +13,7 @@ can be built for better debuggability/performance/resilience on the complex
 accelerator computing. 
 OpenARC supports the full feature set of OpenACC V1.0 and performs 
 source-to-source transformations, targeting heterogeneous devices, such as 
-NVIDIA GPUs, AMD GPUs, and Intel MICs.
+NVIDIA GPUs, AMD GPUs, Intel MICs, and Altera FPGAs.
 Please refer to the OpenARC website (http://ft.ornl.gov/research/openarc) to 
 find more details on OpenARC.
 
@@ -256,6 +256,13 @@ directive in the input source code.
     - Example: change "struct var { int *data1; int *data2;} aa;" to "int *aa_data1; int *aa_data2;"
     
 - The current implementation allows a subarray (partial array) if its start index is 0; subarrays with non-zero start index are allowed only in an OpenACC update directive.
+
+- The current implementation does not support Variable Length Arrays (VLAs).
+Even if a host variable is a pointer, it will be changed to VLA if it is used as a private variable in a kernel. To prevent this, the number of elements of data pointed by the pointer should be changed to compile-time constant. 
+
+	- Example: in the following example, _N_ should be compile-time constant.
+
+	#pragma acc parallel loop private(z[0:_N_]) ...
 
 - Current implementation ignores vector clause. (e.g., for CUDA target, 
 gang clause is used to set the number of thread blocks, and worker clause is 

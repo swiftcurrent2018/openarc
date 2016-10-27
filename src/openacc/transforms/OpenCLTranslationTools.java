@@ -1389,7 +1389,7 @@ public abstract class OpenCLTranslationTools {
                         // - Insert cudaMalloc() function before the region.                   //
                         // Ex: cudaMalloc(((void *  * )( & gfpriv__x)), gpuBytes);             //
                         /////////////////////////////////////////////////////////////////////////
-                        FunctionCall malloc_call = new FunctionCall(new NameID("HI_tmp_alloc1D"));
+                        FunctionCall malloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
                         List<Specifier> specs = new ArrayList<Specifier>(4);
                         specs.add(Specifier.VOID);
                         specs.add(PointerSpecifier.UNQUALIFIED);
@@ -1415,6 +1415,7 @@ public abstract class OpenCLTranslationTools {
                         }
                         // Add gpuBytes argument to cudaMalloc() call
                         arg_list.add((Identifier)cloned_bytes.clone());
+                        arg_list.add(new NameID("acc_device_current"));
                         malloc_call.setArguments(arg_list);
                         ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
                         if( insertMalloc ) {
@@ -1436,15 +1437,19 @@ public abstract class OpenCLTranslationTools {
                         // Ex: "float lfpriv_b[(2048+2)][(2048+2)]"                //
                         /////////////////////////////////////////////////////////////
                         List edimensions = new LinkedList();
-                        for( int i=0; i<dimsize; i++ )
+                        edimensions.add(null);
+                        for( int i=1; i<dimsize; i++ )
                         {
                             edimensions.add(lengthList.get(i).clone());
                         }
                         ArraySpecifier easpec = new ArraySpecifier(edimensions);
+                        List<Specifier> etypeSpecs = new ArrayList<Specifier>();
+                        etypeSpecs.add(OpenCLSpecifier.OPENCL_GLOBAL);
+                        etypeSpecs.addAll(typeSpecs);
                         VariableDeclarator lfpriv_declarator = new VariableDeclarator(new NameID(localFPSymName), easpec);
                         VariableDeclaration lfpriv_decl =
-                                new VariableDeclaration(typeSpecs, lfpriv_declarator);
-                        Identifier array_var = new Identifier(lfpriv_declarator);
+                                new VariableDeclaration(etypeSpecs, lfpriv_declarator);
+                        lfpriv_var = new Identifier(lfpriv_declarator);
                         new_proc.addDeclaration(lfpriv_decl);
 
                         //////////////////////////////////////////////////
@@ -1578,8 +1583,14 @@ public abstract class OpenCLTranslationTools {
                             //	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
                             //}
                             // Insert "cudaFree(gfpriv__x);"
-                            FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tmp_free"));
-                            cudaFree_call.addArgument((Identifier)gfpriv_var.clone());
+                            FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							specs = new ArrayList<Specifier>(4);
+							specs.add(Specifier.VOID);
+							specs.add(PointerSpecifier.UNQUALIFIED);
+							specs.add(PointerSpecifier.UNQUALIFIED);
+							cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+									(Identifier)gfpriv_var.clone())));
+                            cudaFree_call.addArgument(new NameID("acc_device_current"));
                             ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
                             //mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
                             //mallocScope.addStatementAfter(confRefStmt, orgGpuBytes_stmt.clone());
@@ -1590,7 +1601,6 @@ public abstract class OpenCLTranslationTools {
                             }
 
 							/* Insert memory copy function from CPU to GPU */
-                            // Ex: cudaMemcpy(gfpriv__x, x, gpuBytes, cudaMemcpyHostToDevice);
                             CompoundStatement ifBody = new CompoundStatement();
                             IfStatement ifStmt = null;
                             if( ifCond != null ) {

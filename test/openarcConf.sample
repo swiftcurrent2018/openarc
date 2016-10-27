@@ -795,7 +795,7 @@
 #showInternalAnnotations=1
 #skipKernelLoopBoundChecking
 #SetAccEntryFunction=filename
-#addIncludePath=__openarcrt__
+addIncludePath=__openarcrt__
 #macro=_N_=__inputSize__
 defaultNumWorkers=64
 #maxNumGangs=N

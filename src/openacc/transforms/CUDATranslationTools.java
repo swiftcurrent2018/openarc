@@ -3459,14 +3459,14 @@ public abstract class CUDATranslationTools {
 							//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 							//}
 							// Insert "cudaFree(gwpriv__x);"
-                            FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
- specs = new ArrayList<Specifier>(4);
-                        specs.add(Specifier.VOID);
-                        specs.add(PointerSpecifier.UNQUALIFIED);
-                        specs.add(PointerSpecifier.UNQUALIFIED);
-                        cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-(Identifier)gwpriv_var.clone())));
-                            cudaFree_call.addArgument(new NameID("acc_device_current"));
+							FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							specs = new ArrayList<Specifier>(4);
+							specs.add(Specifier.VOID);
+							specs.add(PointerSpecifier.UNQUALIFIED);
+							specs.add(PointerSpecifier.UNQUALIFIED);
+							cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+									(Identifier)gwpriv_var.clone())));
+							cudaFree_call.addArgument(new NameID("acc_device_current"));
 							ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 							//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
 							//mallocScope.addStatementAfter(confRefStmt, gpuBytes_stmt.clone());
@@ -3660,14 +3660,14 @@ public abstract class CUDATranslationTools {
 					//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 					//}
 					// Insert "cudaFree(ggpriv__x);"
-                    FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
-ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
-                        specs.add(Specifier.VOID);
-                        specs.add(PointerSpecifier.UNQUALIFIED);
-                        specs.add(PointerSpecifier.UNQUALIFIED);
-                        cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-(Identifier)ggpriv_var.clone())));
-                    cudaFree_call.addArgument(new NameID("acc_device_current"));
+					FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+					ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
+					specs.add(Specifier.VOID);
+					specs.add(PointerSpecifier.UNQUALIFIED);
+					specs.add(PointerSpecifier.UNQUALIFIED);
+					cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+							(Identifier)ggpriv_var.clone())));
+					cudaFree_call.addArgument(new NameID("acc_device_current"));
 					ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 					//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
 					//mallocScope.addStatementAfter(confRefStmt, gpuBytes_stmt.clone());
@@ -3829,7 +3829,8 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 						// Ex: "float lfpriv_b[(2048+2)][(2048+2)]"                //
 						/////////////////////////////////////////////////////////////
 						List edimensions = new LinkedList();
-						for( int i=0; i<dimsize; i++ )
+						edimensions.add(null);
+						for( int i=1; i<dimsize; i++ )
 						{
 							edimensions.add(lengthList.get(i).clone());
 						}
@@ -3837,7 +3838,7 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 						VariableDeclarator lfpriv_declarator = new VariableDeclarator(new NameID(localFPSymName), easpec);
 						VariableDeclaration lfpriv_decl = 
 							new VariableDeclaration(typeSpecs, lfpriv_declarator); 
-						Identifier array_var = new Identifier(lfpriv_declarator);
+						lfpriv_var = new Identifier(lfpriv_declarator);
 						new_proc.addDeclaration(lfpriv_decl);
 						
 						//////////////////////////////////////////////////
@@ -3971,13 +3972,13 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 							//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 							//}
 							// Insert "cudaFree(gfpriv__x);"
-                            FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
- specs = new ArrayList<Specifier>(4);
-                        specs.add(Specifier.VOID);
-                        specs.add(PointerSpecifier.UNQUALIFIED);
-                        specs.add(PointerSpecifier.UNQUALIFIED);
-                        cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-(Identifier)gfpriv_var.clone())));
+							FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							specs = new ArrayList<Specifier>(4);
+							specs.add(Specifier.VOID);
+							specs.add(PointerSpecifier.UNQUALIFIED);
+							specs.add(PointerSpecifier.UNQUALIFIED);
+							cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+									(Identifier)gfpriv_var.clone())));
                             cudaFree_call.addArgument(new NameID("acc_device_current"));
 							ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 							//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
@@ -3989,7 +3990,6 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 							}
 							
 							/* Insert memory copy function from CPU to GPU */
-							// Ex: cudaMemcpy(gfpriv__x, x, gpuBytes, cudaMemcpyHostToDevice); 
 							CompoundStatement ifBody = new CompoundStatement();
 							IfStatement ifStmt = null;
 							if( ifCond != null ) {
@@ -4025,7 +4025,7 @@ ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 								arg_list2.add(new Identifier(privSym));
 							}
 							arg_list2.add((Identifier)cloned_bytes.clone());
-							arg_list2.add(new NameID("cudaMemcpyHostToDevice"));
+							arg_list2.add(new NameID("HI_MemcpyHostToDevice"));
 							arg_list2.add(new IntegerLiteral(0));
 							if( asyncID != null ) {
 								arg_list2.add(asyncID.clone());

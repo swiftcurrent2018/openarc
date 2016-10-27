@@ -52,6 +52,14 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 				if( cAnnot.containsKey("parallel") ) {
 					isParallelRegion = true;
 				}
+				//Replace vector clause with worker clause if existing, since the current implementation does not support vector clause yet.
+				List<ACCAnnotation> vectorAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, "vector", null);
+				if( vectorAnnots != null ) {
+					for( ACCAnnotation vAnnot : vectorAnnots ) {
+						vAnnot.remove("vector");
+						vAnnot.put("worker", "_clause");
+					}
+				}
 				if( at instanceof ForLoop ) {
 					if( !cAnnot.containsKey("loop") ) {
 						//If kernels loop has separate kernels annotation and loop annotaion, merge them together.

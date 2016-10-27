@@ -432,6 +432,8 @@ public abstract class TransformTools {
 			for( Symbol sym : declaredSymbols ) {
 				if( (sym instanceof Declarator) && (AnalysisTools.isTypedefName((Declarator)sym)) ) {
 					continue; //Skip typedef name.
+				} else if( sym.getDeclaration() instanceof Enumeration ) {
+					continue; //Skip enum variables.
 				}
 				String sname = sym.getSymbolName();
 				CompoundStatement cParent = null;

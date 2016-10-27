@@ -1663,14 +1663,31 @@ public abstract class AnalysisTools {
 	 * @param t the traversable object to be searched.
 	 * @param pragma_cls the type of pragmas to be removed.
 	 */
-	public static <T extends PragmaAnnotation> void removePragmas(
-			Traversable t, Class<T> pragma_cls) {
-		DFIterator<Annotatable> iter =
-			new DFIterator<Annotatable>(t, Annotatable.class);
-		while (iter.hasNext()) {
-			Annotatable at = iter.next();
-			at.removeAnnotations(pragma_cls);
-		}
+    public static <T extends PragmaAnnotation> void removePragmas(
+    		Traversable t, Class<T> pragma_cls, String key) {
+    	if( key == null ) {
+    		DFIterator<Annotatable> iter =
+    				new DFIterator<Annotatable>(t, Annotatable.class);
+    		while (iter.hasNext()) {
+    			Annotatable at = iter.next();
+    			at.removeAnnotations(pragma_cls);
+    		}
+    	} else {
+    		DFIterator<Annotatable> iter =
+    				new DFIterator<Annotatable>(t, Annotatable.class);
+    		while (iter.hasNext()) {
+    			Annotatable at = iter.next();
+    			List<T> annots = at.getAnnotations(pragma_cls);
+    			if( (annots != null) && (!annots.isEmpty()) ) {
+    				at.removeAnnotations(pragma_cls);
+    				for( T annot : annots ) {
+    					if( !annot.containsKey(key) ) {
+    						at.annotate(annot);
+    					}
+    				}
+    			}
+    		}
+    	}
 	}
 
 	/**

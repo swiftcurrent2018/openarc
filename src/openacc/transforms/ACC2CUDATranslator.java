@@ -4397,9 +4397,9 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		
 		if( kernelVerification ) {
 			Statement clonedRegion = region.clone();
-			AnalysisTools.removePragmas(clonedRegion, ACCAnnotation.class);
-			AnalysisTools.removePragmas(clonedRegion, ARCAnnotation.class);
-			AnalysisTools.removePragmas(clonedRegion, CetusAnnotation.class);
+			AnalysisTools.removePragmas(clonedRegion, ACCAnnotation.class, null);
+			AnalysisTools.removePragmas(clonedRegion, ARCAnnotation.class, null);
+			AnalysisTools.removePragmas(clonedRegion, CetusAnnotation.class, null);
 			if( enableFaultInjection ) {
 				//Remove device function to inject faults.
 				//FIXME: device functions called in the compute region should be removed too.
@@ -4557,9 +4557,9 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			//If if-condition exists, create a copy of this region to be executed on 
 			//a host if the condition fails.
 			Statement clonedRegion = region.clone();
-			AnalysisTools.removePragmas(clonedRegion, ACCAnnotation.class);
-			AnalysisTools.removePragmas(clonedRegion, ARCAnnotation.class);
-			AnalysisTools.removePragmas(clonedRegion, CetusAnnotation.class);
+			AnalysisTools.removePragmas(clonedRegion, ACCAnnotation.class, null);
+			AnalysisTools.removePragmas(clonedRegion, ARCAnnotation.class, null);
+			AnalysisTools.removePragmas(clonedRegion, CetusAnnotation.class, null);
 			Statement dummyStmt = new AnnotationStatement();
 			IfStatement ifStmt = new IfStatement(ifCond.clone(), dummyStmt,  clonedRegion);
 			region.swapWith(ifStmt);
@@ -4587,7 +4587,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		}
 		
 		//Remove OpenMP pragmas existing in the current compute region.
-		AnalysisTools.removePragmas(region, OmpAnnotation.class);
+		AnalysisTools.removePragmas(region, OmpAnnotation.class, null);
 		
 		
 		//If acc_on_device() is called in a compute region, inline it!
@@ -5761,6 +5761,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		for( Symbol tASym : tAccessedSymbols ) {
 			Declaration tADecl = tASym.getDeclaration();
 			if( tADecl instanceof Enumeration ) {
+				usedSymbols.add(tASym);
+			} else if( tASym.getTypeSpecifiers().contains(CUDASpecifier.CUDA_CONSTANT)) {
 				usedSymbols.add(tASym);
 			}
 		}

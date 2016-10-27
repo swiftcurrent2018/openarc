@@ -1507,7 +1507,9 @@ public abstract class ACC2GPUTranslator {
 			Declaration refDecl) {
 		Declaration prevDecl = null;
 		Declaration newDecl = null;
+		String newDeclStr = null;
 		SymbolTable symTable = null;
+		Set<String> addedDeclSet = new HashSet<String>();
 		while( tr != null ) {
 			if( tr instanceof SymbolTable ) {
 				symTable = (SymbolTable)tr;
@@ -1585,17 +1587,23 @@ public abstract class ACC2GPUTranslator {
 			if( !declStack.isEmpty() ) {
 				while( !declStack.isEmpty() ) {
 					newDecl = declStack.pop();
-					if( prevDecl == null ) {
-						tUnit.addDeclarationAfter(refDecl, newDecl);
-					} else {
-						tUnit.addDeclarationAfter(prevDecl, newDecl);
-					}
-					prevDecl = newDecl;
+					newDeclStr = newDecl.toString();
+					if( !addedDeclSet.contains(newDeclStr) ) {
+						addedDeclSet.add(newDeclStr);
+						if( prevDecl == null ) {
+							tUnit.addDeclarationAfter(refDecl, newDecl);
+						} else {
+							tUnit.addDeclarationAfter(prevDecl, newDecl);
+						}
+						prevDecl = newDecl;
 /*                    if( tProc == null ) {
                         tUnit.addDeclaration(declStack.pop());
-                    } else {
+                    	} else {
                         tUnit.addDeclarationBefore(tProc, declStack.pop());
-                    }   */ 
+                    	}   */ 
+					} else {
+						newDecl = prevDecl;
+					}
 				}
 			}
 		}

@@ -1398,6 +1398,9 @@ public abstract class ACC2GPUTranslationTools {
 									new NameID(localWPSymName));
 							VariableDeclaration kParam_decl = new VariableDeclaration(typeSpecs,
 									kParam_declarator);
+							if( targetModel > 0 ) { //for OpenCL
+								kParam_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+							}
 							lpriv_var = new Identifier(kParam_declarator);
 							new_proc.addDeclaration(kParam_decl);
 						} else {
@@ -1405,6 +1408,9 @@ public abstract class ACC2GPUTranslationTools {
 									new NameID(localRedSymName));
 							VariableDeclaration kParam_decl = new VariableDeclaration(typeSpecs,
 									kParam_declarator);
+							if( targetModel > 0 ) { //for OpenCL
+								kParam_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+							}
 							lred_var = new Identifier(kParam_declarator);
 							new_proc.addDeclaration(kParam_decl);
 						}
@@ -1413,10 +1419,15 @@ public abstract class ACC2GPUTranslationTools {
 						call_to_new_proc.addArgument(gwpriv_var.clone());
 
 					} else {
-						if( (redOp == null) || ((redOp != null) && workerPrivOnGlobal) ) {
-							lpriv_var = TransformTools.declareClonedVariable(new_proc, privSym, localWPSymName, removeSpecs, null, true, assumeNoAliasing);
+						if( targetModel == 0 ) { //for CUDA
+							addSpecs = null;
 						} else {
-							lred_var = TransformTools.declareClonedVariable(new_proc, privSym, localRedSymName, removeSpecs, null, true, assumeNoAliasing);
+							addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
+						}
+						if( (redOp == null) || ((redOp != null) && workerPrivOnGlobal) ) {
+							lpriv_var = TransformTools.declareClonedVariable(new_proc, privSym, localWPSymName, removeSpecs, addSpecs, true, assumeNoAliasing);
+						} else {
+							lred_var = TransformTools.declareClonedVariable(new_proc, privSym, localRedSymName, removeSpecs, addSpecs, true, assumeNoAliasing);
 						}
 
 						// Insert argument to the kernel function call
