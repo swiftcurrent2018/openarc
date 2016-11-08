@@ -3,9 +3,9 @@ if [ $# -ge 1 ]; then
 	inputData1=$1
 else
 	#default values for _MAX_ROWS_
-	#inputData1=2049
+	inputData1=2049
 	#inputData1=4097
-	inputData1=8193
+	#inputData1=8193
 	#inputData1=16385
 fi
 
@@ -35,7 +35,7 @@ java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPU
 echo ""
 echo "====> Input Data: _MAX_ROWS_ = ${inputData1}"
 echo ""
-echo "====> To compiled the translated output file:"
+echo "====> To compile the translated output file:"
 #echo "\$ make _MAX_ROWS_=${inputData1}"
 echo "\$ make"
 echo ""

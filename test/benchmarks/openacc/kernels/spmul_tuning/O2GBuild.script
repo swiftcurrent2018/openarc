@@ -45,3 +45,10 @@ java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPU
 fi
 
 rm -f spmul.c timer.c
+echo ""
+echo "====> To compile the translated output file:"
+echo "\$ make"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; spmul_ACC"
+echo ""

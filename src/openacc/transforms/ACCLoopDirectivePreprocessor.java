@@ -84,7 +84,8 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 						//If a compute region is a loop, but not having loop directive, add it.
 						cAnnot.put("loop", "_directive");
 					}
-					if( !cAnnot.containsKey("gang") && !cAnnot.containsKey("worker") && !cAnnot.containsKey("seq")) {
+					//if( !cAnnot.containsKey("gang") && !cAnnot.containsKey("worker") && !cAnnot.containsKey("seq")) {
+					if( !cAnnot.containsKey("gang") && !cAnnot.containsKey("seq")) {
 						if( isParallelRegion ) {
 							cAnnot.put("gang", "_clause");
 							if( !AnalysisTools.ipContainPragmas(at, ACCAnnotation.class, "worker", null) ) {
@@ -151,7 +152,7 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 							}
 							if( isOutermostACCLoop ) {
 								if( gLoop.containsAnnotation(ACCAnnotation.class, "gang") || 
-										gLoop.containsAnnotation(ACCAnnotation.class, "worker") ||
+										//gLoop.containsAnnotation(ACCAnnotation.class, "worker") ||
 										gLoop.containsAnnotation(ACCAnnotation.class, "seq") ) {
 									continue;
 								} else {
@@ -167,6 +168,9 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 											//OpenACC loop without worksharing clauses in a kernels region is implementation-dependent.
 											if( lAnnot.containsKey("independent") || gLoop.containsAnnotation(CetusAnnotation.class, "parallel") ) {
 												lAnnot.put("gang", "_clause");
+												if( !AnalysisTools.ipContainPragmas(lBody, ACCAnnotation.class, "worker", null) ) {
+													lAnnot.put("worker", "_clause");
+												}
 											} else {
 												lAnnot.put("seq", "_clause");
 											}
@@ -282,7 +286,23 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 										} else {
 											Object cVal = cAnnot.get(tKey);
 											boolean conflict = false;
-											if( tVal instanceof String ) {
+											if( tKey.equals("reduction") ) {
+												Map orig_map = (Map)cVal;
+												Map reduction_map = (Map)tVal;
+												for ( ReductionOperator nop : (Set<ReductionOperator>)reduction_map.keySet() )
+												{
+													Set new_set = (Set)reduction_map.get(nop);
+													if (orig_map.keySet().contains(nop))
+													{
+														Set orig_set = (Set)orig_map.get(nop);
+														orig_set.addAll(new_set);
+													}
+													else
+													{
+														orig_map.put(nop, new_set);
+													}
+												}
+											} else if( tVal instanceof String ) {
 												if( !tVal.equals(cVal) ) {
 													conflict = true;
 												}
@@ -328,7 +348,7 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 												}
 											} else {
 												Tools.exit("[ERROR] unexpected argument (" + tVal.toString() + 
-														") is found whilie merging OpenACC annotations in loops associated with a collapse clause:\n" +
+														") is found while merging OpenACC annotations in loops associated with a collapse clause:\n" +
 														"Enclosing procedure: " + proc.getSymbolName() + "\n" +
 														"For loop:\n" + accLoop.toString() + "\n");
 

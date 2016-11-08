@@ -123,7 +123,7 @@ public class OmpParser {
     	case omp_taskgroup      : parse_omp_taskgroup();    return true;
     	case omp_cancel         : parse_omp_cancel();       return false;
     	case omp_cancellation   : parse_omp_cancellation_point(); return false;
-    	default                 : OmpParserError("Not Supported Construct");
+    	default                 : OmpParserError("Not Supported Construct" + construct);
     	}
     	return true;        // meaningless return because it is unreachable
     }
@@ -170,7 +170,7 @@ public class OmpParser {
                     case token_copyin       : parse_omp_copyin();       break;
                     case token_reduction    : parse_omp_reduction();    break;
                     default                 :
-                        OmpParserError("NoSuchParallelConstruct : " + clause);
+                        OmpParserError("Not supported clause : " + clause);
                 }
             }
         }
@@ -218,7 +218,7 @@ public class OmpParser {
                     case token_collapse     : parse_omp_collapse();     break;
                     case token_ordered      : parse_omp_ordered();      break;
                     case token_nowait       : parse_omp_nowait();       break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -255,7 +255,7 @@ public class OmpParser {
                 case token_lastprivate  : parse_omp_lastprivate();  break;
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_nowait       : parse_omp_nowait();       break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -290,7 +290,7 @@ public class OmpParser {
                 case token_firstprivate : parse_omp_firstprivate(); break;
                 case token_copyprivate  : parse_omp_copyprivate();  break;
                 case token_nowait       : parse_omp_nowait();       break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -332,7 +332,7 @@ public class OmpParser {
                     case token_schedule     : parse_omp_schedule();     break;
                     case token_collapse     : parse_omp_collapse();     break;
                     case token_ordered      : parse_omp_ordered();      break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -363,7 +363,7 @@ public class OmpParser {
                 case token_safelen      : parse_omp_safelen();      break;
                 case token_linear       : parse_omp_linear();       break;
                 case token_aligned      : parse_omp_aligned();      break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
 
@@ -402,7 +402,7 @@ public class OmpParser {
                 case token_copyin       : parse_omp_copyin();       break;
                 case token_lastprivate  : parse_omp_lastprivate();  break;
                 case token_reduction    : parse_omp_reduction();    break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -436,7 +436,7 @@ public class OmpParser {
                 case token_private      : parse_omp_private();      break;
                 case token_firstprivate : parse_omp_firstprivate(); break;
                 case token_shared       : parse_omp_shared();       break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -501,12 +501,12 @@ public class OmpParser {
                 String clause = "token_" + get_token();
                 switch (omp_clause.valueOf(clause)) {
                     case token_if      : parse_omp_if();      break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + clause);
                 }
             }
         } else
         {
-            OmpParserError("NoSuchParallelConstruct");
+            OmpParserError("Not supported clause: " + lookahead());
         }
     }
 
@@ -517,10 +517,10 @@ public class OmpParser {
             if (check("parallel") || check("sections") || check("for") || check("taskgroup")) {
                 addToMap("cancellation point", new String(get_token()));
             } else {
-                OmpParserError("NoSuchParallelConstruct");
+                OmpParserError("Not supported clause: " + lookahead());
             }
         } else {
-            OmpParserError("NoSuchParallelConstruct");
+            OmpParserError("Not supported clause: " + lookahead());
         }
     }
 
@@ -582,7 +582,7 @@ public class OmpParser {
             eat();
             parse_omp_declare_target();
         }else {
-            OmpParserError("NoSuchParallelConstruct : ");
+            OmpParserError("Not supported clause : " + lookahead());
         }
     }
 
@@ -597,10 +597,10 @@ public class OmpParser {
                 addToMap("declare", "target");
                 eat();
             } else {
-                OmpParserError("NoSuchParallelConstruct : ");
+                OmpParserError("Not supported clause : " + lookahead());
             }
         }else {
-            OmpParserError("NoSuchParallelConstruct : ");
+            OmpParserError("NoSuchParallelConstruct : " + lookahead());
         }
     }
 
@@ -617,7 +617,7 @@ public class OmpParser {
             switch (omp_clause.valueOf(clause)) {
                 case token_to           : parse_omp_to();           break;
                 case token_link         : parse_omp_link();         break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
 
@@ -656,7 +656,7 @@ public class OmpParser {
                 case token_lastprivate  : parse_omp_lastprivate();  break;
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_collapse     : parse_omp_collapse();     break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -687,7 +687,7 @@ public class OmpParser {
                 case token_uniform      : parse_omp_uniform();      break;
                 case token_inbranch     : parse_omp_inbranch();     break;
                 case token_notinbranch  : parse_omp_notinbranch();  break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -720,7 +720,7 @@ public class OmpParser {
                 case token_schedule     : parse_omp_schedule();     break;
                 case token_ordered      : parse_omp_ordered();      break;
                 case token_nowait       : parse_omp_nowait();       break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -775,7 +775,7 @@ public class OmpParser {
                     case token_private      : parse_omp_private();      break;
                     case token_firstprivate : parse_omp_firstprivate(); break;
                     case token_is_device_ptr : parse_omp_is_device_ptr(); break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -795,7 +795,7 @@ public class OmpParser {
                 case token_if           : parse_omp_if();           break;
                 case token_to           : parse_omp_to();           break;
                 case token_from         : parse_omp_from();         break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
 
@@ -825,7 +825,7 @@ public class OmpParser {
                     case token_shared       : parse_omp_shared();       break;
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse     : parse_omp_collapse();     break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -843,7 +843,7 @@ public class OmpParser {
                 eat();
                 parse_omp_target_teams_distribute_parallel_for();
             } else {
-                OmpParserError("NoSuchParallelConstruct");
+                OmpParserError("Not supported clause: " + lookahead());
             }
         }else {
             while (end_of_token() == false) {
@@ -864,7 +864,7 @@ public class OmpParser {
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse     : parse_omp_collapse();         break;
                     case token_dist_schedule: parse_omp_dist_schedule();    break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -892,7 +892,7 @@ public class OmpParser {
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_collapse         : parse_omp_collapse();         break;
                 case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -923,7 +923,7 @@ public class OmpParser {
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse         : parse_omp_collapse();         break;
                     case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -951,7 +951,7 @@ public class OmpParser {
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_collapse         : parse_omp_collapse();         break;
                 case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -979,7 +979,7 @@ public class OmpParser {
                 case token_map          : parse_omp_map();          break;
                 case token_if           : parse_omp_if();           break;
                 case token_use_device_ptr           : parse_omp_use_device_ptr();           break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -1006,7 +1006,7 @@ public class OmpParser {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
                 case token_if           : parse_omp_if();           break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -1033,7 +1033,7 @@ public class OmpParser {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
                 case token_if           : parse_omp_if();           break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -1067,7 +1067,7 @@ public class OmpParser {
                 eat();
                 parse_omp_teams_parallel_for();
             } else {
-                OmpParserError("NoSuchParallelConstruct");
+                OmpParserError("Not supported clause: " + lookahead());
             }
         } else {
             while (end_of_token() == false) {
@@ -1083,7 +1083,7 @@ public class OmpParser {
                     case token_firstprivate : parse_omp_firstprivate(); break;
                     case token_shared       : parse_omp_shared();       break;
                     case token_reduction    : parse_omp_reduction();    break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -1101,7 +1101,7 @@ public class OmpParser {
                 eat();
                 parse_omp_teams_distribute_parallel_for();
             } else {
-                OmpParserError("NoSuchParallelConstruct");
+                OmpParserError("Not supported clause: " + lookahead());
             }
         } else {
             while (end_of_token() == false) {
@@ -1119,7 +1119,7 @@ public class OmpParser {
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse         : parse_omp_collapse();         break;
                     case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -1144,7 +1144,7 @@ public class OmpParser {
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_collapse         : parse_omp_collapse();         break;
                 case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -1171,7 +1171,7 @@ public class OmpParser {
                     case token_shared       : parse_omp_shared();       break;
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse         : parse_omp_collapse();         break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -1195,7 +1195,7 @@ public class OmpParser {
                 case token_shared       : parse_omp_shared();       break;
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_collapse         : parse_omp_collapse();         break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -1223,7 +1223,7 @@ public class OmpParser {
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse         : parse_omp_collapse();         break;
                     case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -1248,7 +1248,7 @@ public class OmpParser {
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_collapse         : parse_omp_collapse();         break;
                 case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -1280,7 +1280,7 @@ public class OmpParser {
                 eat();
                 parse_omp_distribute_parallel_for();
             } else {
-                OmpParserError("NoSuchParallelConstruct");
+                OmpParserError("Not supported clause: " + lookahead());
             }
         } else {
             while (end_of_token() == false) {
@@ -1293,7 +1293,7 @@ public class OmpParser {
                     case token_firstprivate     : parse_omp_firstprivate();     break;
                     case token_collapse         : parse_omp_collapse();         break;
                     case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    default : OmpParserError("Not supported clause: " + tok);
                 }
             }
         }
@@ -1312,7 +1312,7 @@ public class OmpParser {
                 case token_firstprivate     : parse_omp_firstprivate();     break;
                 case token_collapse         : parse_omp_collapse();         break;
                 case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("Not supported clause: " + tok);
             }
         }
     }
@@ -1335,8 +1335,8 @@ public class OmpParser {
                     case token_firstprivate     : parse_omp_firstprivate();     break;
                     case token_collapse         : parse_omp_collapse();         break;
                     case token_dist_schedule    : parse_omp_dist_schedule();    break;
-		    case token_shared           : parse_omp_shared();           break;
-                    default : OmpParserError("NoSuchParallelConstruct");
+                    case token_shared           : parse_omp_shared();           break;
+                    default : OmpParserError("NoSuchParallelConstruct: " + tok);
                 }
             }
         }
@@ -1355,7 +1355,7 @@ public class OmpParser {
                 case token_firstprivate     : parse_omp_firstprivate();     break;
                 case token_collapse         : parse_omp_collapse();         break;
                 case token_dist_schedule    : parse_omp_dist_schedule();    break;
-                default : OmpParserError("NoSuchParallelConstruct");
+                default : OmpParserError("NoSuchParallelConstruct: " + tok);
             }
         }
     }
@@ -1426,7 +1426,7 @@ public class OmpParser {
         } else if (check("auto") || check("runtime")) {
             str = new String(get_token());
         } else {
-            OmpParserError("No such scheduling kind");
+            OmpParserError("No such scheduling kind" + lookahead());
         }
         match(")");
         addToMap("schedule", str);
@@ -1456,7 +1456,7 @@ public class OmpParser {
         if (check("shared") || check("none")) {
             addToMap("default", new String(get_token()));
         } else {
-            OmpParserError("NoSuchParallelDefaultCluase");
+            OmpParserError("NoSuchParallelDefaultCluase" + lookahead());
         }
         match(")");
     }
@@ -1547,7 +1547,7 @@ public class OmpParser {
             op = get_token();
             PrintTools.println("reduction op:" + op, 2);
         } else {
-            OmpParserError("Undefined reduction operator");
+            OmpParserError("Undefined reduction operator" + lookahead());
         }
 
         // check if there is already a reduction annotation with the same
@@ -1585,9 +1585,37 @@ public class OmpParser {
     @SuppressWarnings("unchecked")
     private static void parse_commaSeparatedList(Set set) {
     	String cTok = null;
-        for (;;) {
+    	String tTok = null;
+    	while( !end_of_token() ) {
+    		tTok = lookahead();
+    		if(tTok.compareTo(")") == 0) {
+    			if( cTok == null ) {
+    				OmpParserError("missing entry in comma separated list");
+    			} else {
+    				set.add(cTok);
+    			}
+    			break;
+    		} else if(tTok.compareTo(",") == 0) {
+    			eat();
+    			if( cTok == null ) {
+    				OmpParserError("missing entry in comma separated list");
+    			} else {
+    				set.add(cTok);
+    			}
+    			cTok = null;
+    		} else {
+    			eat();
+    			if( cTok == null ) {
+    				cTok = tTok;
+    			} else {
+    				cTok = cTok+tTok;
+    			}
+    		}
+    	}
+//Old implementation
+/*        for (;;) {
         	cTok = get_token();
-        	if( check(":") ) {
+        	while( check(":") ) {
         		match(":");
         		cTok = cTok+":"+get_token();
         	}
@@ -1597,7 +1625,7 @@ public class OmpParser {
             } else if (match(",") == false) {
                 OmpParserError("comma expected in comma separated list");
             }
-        }
+        }*/
     }
 
     private static void notSupportedWarning(String text) {
@@ -1607,6 +1635,7 @@ public class OmpParser {
     private static void OmpParserError(String text) {
         System.out.println("OpenMP Parser Syntax Error: " + text);
         System.out.println(display_tokens());
+        System.exit(0);
     }
 
     @SuppressWarnings("unchecked")
@@ -1755,7 +1784,7 @@ public class OmpParser {
             }
             // schedule(auto), schedule(runtime)
         } else {
-            OmpParserError("No such scheduling kind");
+            OmpParserError("No such scheduling kind" + lookahead());
         }
         match(")");
         addToMap("schedule", str);

@@ -40,7 +40,7 @@ java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPU
 echo ""
 echo "====> Input Class: ${inputData1}"
 echo ""
-echo "====> To compiled the translated output file:"
+echo "====> To compile the translated output file:"
 echo "\$ make"
 echo ""
 echo "====> To run the compiled binary:"

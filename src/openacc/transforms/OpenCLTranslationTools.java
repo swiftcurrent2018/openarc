@@ -2418,6 +2418,23 @@ public abstract class OpenCLTranslationTools {
             if( at.containsAnnotation(ACCAnnotation.class, "parallel") ) {
                 isGangReduction = true;
             }
+            {
+            	ACCAnnotation tAnnot = at.getAnnotation(ACCAnnotation.class, "totalnumworkers");
+            	if( tAnnot != null ) {
+            		num_workersExp = tAnnot.get("totalnumworkers");
+            		if( num_workersExp instanceof IntegerLiteral ) {
+            			num_workers = ((IntegerLiteral)num_workersExp).getValue();
+            		}
+            	} else {
+            		tAnnot = at.getAnnotation(ACCAnnotation.class, "num_workers");
+            		if( tAnnot != null ) {
+            			num_workersExp = tAnnot.get("num_workers");
+            			if( num_workersExp instanceof IntegerLiteral ) {
+            				num_workers = ((IntegerLiteral)num_workersExp).getValue();
+            			}
+            		}
+            	}
+            }
             scope = null;
             if( isWorkerReduction ) {//A worker reduction variable is declared in the innermost worker loop body.
                 ACCAnnotation tAnnot = AnalysisTools.findInnermostPragma(at, ACCAnnotation.class, "worker");

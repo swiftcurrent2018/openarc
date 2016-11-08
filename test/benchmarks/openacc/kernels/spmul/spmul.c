@@ -20,6 +20,7 @@ extern double timer_();
 #endif
 #define ITER	100
 
+/*
 #define INPUTFILE  "nlpkkt240.rbC"
 #define SIZE  27993600
 #define SIZE2  27993600 //debugging purpose (should be replaced with SIZE)
@@ -29,6 +30,7 @@ extern double timer_();
 #pragma openarc #define SIZE2  27993600 //debugging purpose (should be replaced with SIZE)
 #pragma openarc #define NZR    401232976
 #endif
+*/
 
 /*
 #define INPUTFILE  "af23560.rbC"
@@ -78,7 +80,6 @@ extern double timer_();
 #endif
 */
 
-/*
 #define INPUTFILE	"kkt_power.rbC"
 #define SIZE	2063494
 #define SIZE2	2063494 //debugging purpose (should be replaced with SIZE)
@@ -88,7 +89,6 @@ extern double timer_();
 #pragma openarc #define SIZE2	2063494 //debugging purpose (should be replaced with SIZE)
 #pragma openarc #define NZR		8130343
 #endif
-*/
 
 /*
 #define ITER	500
@@ -184,11 +184,18 @@ extern double timer_();
 #define NZR 25600000
 */
 
+/*
 int colind[NZR];
 int rowptr[SIZE+1];
 float values[NZR];
 float x[SIZE];
 float y[SIZE];
+*/
+int *colind;
+int *rowptr;
+float *values;
+float *x;
+float *y;
 
 int main() {
 	FILE *fp10;
@@ -203,6 +210,13 @@ int main() {
 	int r_ncol, r_nnzero, r_nrow;
 	int cpumemsize = 0;
 
+
+
+	colind = (int *)malloc(sizeof(int)*NZR);	
+	rowptr = (int *)malloc(sizeof(int)*(SIZE+1));	
+	values = (float *)malloc(sizeof(int)*NZR);	
+	x = (float *)malloc(sizeof(int)*SIZE);	
+	y = (float *)malloc(sizeof(int)*SIZE);	
   printf("**** SerialSpmul starts! ****\n");
 
 #if defined(_OPENMP)

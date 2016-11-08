@@ -38,7 +38,7 @@ java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPU
 echo ""
 echo "====> Input Data: _M_SIZE = ${inputData1}"
 echo ""
-echo "====> To compiled the translated output file:"
+echo "====> To compile the translated output file:"
 #echo "\$ make _M_SIZE=${inputData1}"
 echo "\$ make"
 echo ""

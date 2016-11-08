@@ -4,13 +4,13 @@ if [ $# -ge 2 ]; then
 	inputData1=$2
 elif [ $# -eq 1 ]; then
 	runMode=$1
-	inputData1=8193
+    inputData1=2049
 else
 	runMode=1
 	#default values for _MAX_ROWS_
-    #inputData1=2049
+    inputData1=2049
 	#inputData1 = 4097
-	inputData1 = 8193
+	#inputData1 = 8193
 	#inputData1 = 16385
 fi
 
@@ -48,7 +48,7 @@ fi
 echo ""
 echo "====> Input Data: _MAX_ROWS_ = ${inputData1}"
 echo ""
-echo "====> To compiled the translated output file:"
+echo "====> To compile the translated output file:"
 #echo "\$ make _MAX_ROWS_=${inputData1}"
 echo "\$ make"
 echo ""

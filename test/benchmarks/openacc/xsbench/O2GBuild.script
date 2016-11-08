@@ -90,3 +90,21 @@ if [ "$BENCHMARK" == "1" ]; then
 fi
 
 java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPUDriver -verbosity=${verLevel} -gpuConfFile=openarcConf.txt "${sources[@]}"
+
+if [ ! -d ./bin ]; then
+    mkdir bin
+fi
+echo "====> To compile the translated output file:"
+echo "\$ make"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; xsbench_ACC -s small"
+echo ""
+echo "====> Available options:"
+echo "-t <threads>     Number of OpenMP threads to run"
+echo "-s <size>        Size of H-M Benchmark to run (small, large, XL, XXL)"
+echo "-g <gridpoints>  Number of gridpoints per nuclide"
+echo "-l <lookups>     Number of Cross-section (XS) lookups"
+echo "Default (no arguments given) is equivalent to: -s large -l 15000000"
+
+

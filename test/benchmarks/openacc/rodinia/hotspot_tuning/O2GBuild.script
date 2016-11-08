@@ -45,7 +45,7 @@ fi
 echo ""
 echo "====> Input Data: ROW_SIZE = ${inputData1}, COL_SIZE=${inputData1}"
 echo ""
-echo "====> To compiled the translated output file:"
+echo "====> To compile the translated output file:"
 echo "\$ make ROW_SIZE=${inputData1} COL_SIZE=${inputData1}"
 echo ""
 echo "====> To run the compiled binary:"

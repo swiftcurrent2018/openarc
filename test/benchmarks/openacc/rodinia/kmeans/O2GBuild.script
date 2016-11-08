@@ -56,7 +56,7 @@ java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPU
 echo ""
 echo "====> Input Data: _NCLUSTERS = ${inputData1}, _NATTRIBUTES=${inputData2}, _NPOINTS=${inputData3}, _UNROLLFAC=${inputData4}"
 echo ""
-echo "====> To compiled the translated output file:"
+echo "====> To compile the translated output file:"
 echo "\$ make _NCLUSTERS=${inputData1} _NATTRIBUTES=${inputData2} _NPOINTS=${inputData3} _UNROLLFAC=${inputData4}"
 echo ""
 echo "====> To run the compiled binary:"

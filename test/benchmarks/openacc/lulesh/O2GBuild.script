@@ -49,3 +49,25 @@ cat "openarcConf.txt_tmp" | sed "s|__dump_output__|${dump_output}|g" > "openarcC
 rm "openarcConf.txt_tmp"
 
 java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPUDriver -verbosity=${verLevel} -gpuConfFile=openarcConf.txt *.c
+
+if [ ! -d ./bin ]; then
+    mkdir bin 
+fi
+echo "====> To compile the translated output file:"
+echo "\$ make"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; lulesh_ACC"
+echo ""
+echo "Available options: "
+echo " -q              : quiet mode - suppress all stdout"
+echo " -i <iterations> : number of cycles to run"
+echo " -s <size>       : length of cube mesh along side"
+echo " -r <numregions> : Number of distinct regions (def: 11)"
+echo " -b <balance>    : Load balance between regions of a domain (def: 1)"
+echo " -c <cost>       : Extra cost of more expensive regions (def: 1)"
+echo " -f <numfiles>   : Number of files to split viz dump into (def: (np+10)/9)"
+echo " -p              : Print out progress"
+echo " -h              : This message"
+
+

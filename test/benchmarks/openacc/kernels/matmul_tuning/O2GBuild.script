@@ -47,3 +47,16 @@ java -classpath $openarclib/cetus.jar:$openarclib/antlr.jar openacc.exec.ACC2GPU
 fi
 
 rm -f matmul.c
+echo ""
+echo "====> To compile the translated output file:"
+echo "\$ make"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; matmul_ACC"
+echo ""
+if [ -f "./cetus_output/openarc_kernel.cl" ]; then
+    cd ./cetus_output
+    cp "openarc_kernel.cl" "openarc_kernel.tmp"
+    cat "openarc_kernel.tmp" | sed '/cl_khr_fp64/d' > "openarc_kernel.cl"
+    rm "openarc_kernel.tmp"
+fi

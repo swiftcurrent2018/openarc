@@ -389,7 +389,7 @@ defaultNumWorkers=64
 # Misc. Cetus configururation #
 ###############################
 #outdir=cetus_output
-macro=VERIFICATION=1,NEL=__inputData1__,block_length=__inputData2__,NELR=__inputData3__
+macro=VERIFICATION=0,NEL=__inputData1__,block_length=__inputData2__,NELR=__inputData3__
 #dump-options
 #dump-system-options
 #induction

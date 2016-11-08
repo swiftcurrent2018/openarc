@@ -9,14 +9,15 @@ elif [ $# -eq 2 ]; then
 	inputData2=1
 elif [ $# -eq 1 ]; then
 	runMode=$1
-	inputData1=8192
+	inputData1=1024
 	inputData2=1
 else
 	runMode=1
 	#default values for _ROWS_ and _COLS_
-	inputData1=8192
+	inputData1=1024
 	#inputData1 = 2048
 	#inputData1 = 4096
+	#inputData1=8192
 	inputData2=1
 fi
 
@@ -60,7 +61,7 @@ fi
 echo ""
 echo "====> Input Data: _ROWS_ = ${inputData1} _COLS_ = ${inputData1}"
 echo ""
-echo "====> To compiled the translated output file:"
+echo "====> To compile the translated output file:"
 #echo "\$ make _MAX_ROWS_=${inputData1}"
 echo "\$ make"
 echo ""
