@@ -5,6 +5,7 @@ import cetus.hir.*;
 import java.util.*;
 
 import openacc.hir.OpenACCLibrary;
+import openacc.hir.OpenMPLibrary;
 
 /**
 * Interprocedural analysis enables computation of points-to relations through
@@ -838,7 +839,7 @@ public class IPPointsToAnalysis extends IPAnalysis {
     * @param callsite the calling site that generates the query.
     * @return the set of return points-to relations. an empty set means there
     * is no relations created, and {@code null} means no information is
-    * available (should produce universe doamin).
+    * available (should produce universe domain).
     */
     public static Set<PointsToRel> getReturnRelations(CallSite callsite) {
         Set<PointsToRel> ret = null;
@@ -1407,11 +1408,18 @@ public class IPPointsToAnalysis extends IPAnalysis {
         PointsToRel ret = null;
         //[Modified by Seyong Lee]
         if (!StandardLibrary.contains(callsite.getFunctionCall()) &&
-        !OpenACCLibrary.contains(callsite.getFunctionCall())) {
+        !OpenACCLibrary.contains(callsite.getFunctionCall()) &&
+        !OpenMPLibrary.contains(callsite.getFunctionCall())) {
             return ret;
         }
         Expression fname = callsite.getFunctionCall().getName();
+        //[DEBUG by Seyong Lee] function created using NameID(), which happens when 
+        //a new function call is manually inserted by a compiler pass writer, will 
+        //return null by the following SymbolTools.getSymbolOf()
         Symbol pointer = SymbolTools.getSymbolOf(fname);
+/*        if( pointer == null ) {
+        	System.out.println("No symbol for " + fname.toString());
+        }*/
         Symbol pointed_to = null;
         if (return_to_arg1.contains(fname.toString())) {
             Symbol arg =
@@ -1437,7 +1445,8 @@ public class IPPointsToAnalysis extends IPAnalysis {
         } else {
             pointed_to = pointer;       // add a dummy for other cases.
         }
-        if (pointed_to != null) {
+        //[Modified by Seyong Lee]
+        if ( (pointed_to != null) && (pointer != null) ) {
             ret = new PointsToRel(pointer, pointed_to, false);
         }
         return ret;

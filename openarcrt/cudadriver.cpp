@@ -1631,7 +1631,7 @@ HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_
 
 //[DEBUG] CUDA driver does not offer asynchronous version of cuModuleGetGlobal(), 
 //and thus HI_memcpy_const_async() is the same as HI_memcpy_const().
-HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
+HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits, int *waits) {
 	void *devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1730,7 +1730,7 @@ HI_error_t CudaDriver::HI_present_or_memcpy_const(void *hostPtr, std::string con
 
 
 HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
-        HI_MemcpyKind_t kind, int trType, int async) {
+        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
     HostConf_t * tconf = getHostConf();
 
 /*
@@ -1830,7 +1830,7 @@ HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
 
 //Used for kernel verification.
 HI_error_t CudaDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count,
-        HI_MemcpyKind_t kind, int trType, int async) {
+        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_asyncS(%d)\n", async);
@@ -2015,7 +2015,7 @@ HI_error_t CudaDriver::HI_memcpy2D(void *dst, size_t dpitch, const void *src, si
 }
 
 HI_error_t CudaDriver::HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
-        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async) {
+        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy2D_async(%d)\n", async);
@@ -2214,7 +2214,7 @@ HI_error_t CudaDriver::HI_register_kernel_arg(std::string kernel_name, int arg_i
 
 
 
-HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async)
+HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async, int num_waits, int *waits)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {

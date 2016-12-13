@@ -2261,6 +2261,107 @@ public abstract class AnalysisTools {
 			return SymbolStatus.UnknownError;
 		}
 	}
+
+	/**
+	 * Check the type of the input symbol, inSym and return its type as a three-bit vector of [Struct	Array Pointer]:
+	 * 0b000: scalar variable
+	 * 0b001: struct variable
+	 * 0b010: array variable
+	 * 0b100: pointer variable
+	 * 
+	 * If the analysis fails, it will return -1.
+	 * 
+	 * @param inSym
+	 * @param tt
+	 * @param IRSymbolOnly
+	 * @return
+	 */
+	public static int checkSymbolType(Symbol inSym, Traversable tt, boolean IRSymbolOnly) {
+		int symType = 0;
+		while( (tt != null) && !(tt instanceof SymbolTable) ) {
+			tt = tt.getParent();
+		}
+		Boolean isStruct = false;
+		Boolean isArray = false;
+		Boolean isPointer = false;
+		Symbol tSym = inSym;
+		List<Specifier> typeSpecs = new ArrayList<Specifier>();
+		if( IRSymbolOnly ) {
+			if( inSym instanceof PseudoSymbol ) {
+				tSym = ((PseudoSymbol)inSym).getIRSymbol();
+			}
+		} else {
+			tSym = inSym;
+			while( tSym instanceof AccessSymbol ) {
+				tSym = ((AccessSymbol)tSym).getMemberSymbol();
+			}
+		}
+		typeSpecs.addAll(((VariableDeclaration)tSym.getDeclaration()).getSpecifiers());
+		isStruct = SymbolTools.isStruct(tSym, tt);
+		if( tSym instanceof NestedDeclarator ) {
+			Symbol nestedSym = (Symbol)((NestedDeclarator)tSym).getDeclarator();
+			isArray = SymbolTools.isArray(nestedSym);
+			if( !isArray ) {
+				//Array speciifer has higher precedence than a pointer specifier.
+				// int *A[10] is an array of int pointer. 
+				isPointer = SymbolTools.isPointer(nestedSym);
+			}
+		} else {
+			isArray = SymbolTools.isArray(tSym);
+			if( !isArray ) {
+				isPointer = SymbolTools.isPointer(tSym);
+			}
+			if( !isArray && !isPointer ) {
+				for( Object tObj : typeSpecs ) {
+					if( tObj instanceof UserSpecifier ) {
+						IDExpression tExp = ((UserSpecifier)tObj).getIDExpression();
+						String tExpStr = tExp.getName();
+						if( !tExpStr.startsWith("struct") && !tExpStr.startsWith("enum") ) {
+							if( tt != null ) {
+								Declaration tDecl = SymbolTools.findSymbol((SymbolTable)tt, tExp);
+								if( tDecl != null ) {
+									if( tDecl instanceof VariableDeclaration ) {
+										if( ((VariableDeclaration)tDecl).getSpecifiers().contains(Specifier.TYPEDEF) ) {
+											Declarator tDeclr = ((VariableDeclaration)tDecl).getDeclarator(0);
+											if( tDeclr instanceof NestedDeclarator ) {
+												Symbol nestedSym = (Symbol)((NestedDeclarator)tDeclr).getDeclarator();
+												isArray = SymbolTools.isArray(nestedSym);
+												if( !isArray ) {
+													isPointer = SymbolTools.isPointer(nestedSym);
+												}
+											} else if( tDeclr instanceof VariableDeclarator ) {
+												VariableDeclarator vDeclr = (VariableDeclarator)tDeclr;
+												isArray = SymbolTools.isArray(vDeclr);
+												if( !isArray ) {
+													isPointer = SymbolTools.isPointer(vDeclr);
+												}
+											}
+											break;
+										}
+									}
+								}
+							} else {
+								symType = -1;
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+		if( symType == 0 ) {
+			if( isStruct ) {
+				symType += 1;
+			}
+			if( isArray ) {
+				symType += 2;
+			}
+			if( isPointer ) {
+				symType += 4;
+			}
+		}
+		return symType;
+	}
 	
 	/**
 	 * Find the original symbol of the input symbol, inSym.

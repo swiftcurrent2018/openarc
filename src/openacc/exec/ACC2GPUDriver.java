@@ -167,6 +167,11 @@ public class ACC2GPUDriver extends Driver
 		"Default number of workers per gang for compute regions (default value = 64)");
 		optionsWithIntArgument.add("defaultNumWorkers");
 
+		options.add(options.UTILITY, "defaultNumAsyncQueues", "N",
+		"Default number of asynchronous queues per device (default value = 4); "
+		+ "applicable only to OpenMP-to-OpenACC translation");
+		optionsWithIntArgument.add("defaultNumAsyncQueues");
+
 		options.add(options.UTILITY, "defaultNumComputeUnits", "N",
 		"Default number of physical compute units (default value = 1); "
 		+ "applicable only to Altera-OpenCL devices");
@@ -576,6 +581,18 @@ public class ACC2GPUDriver extends Driver
         {
             setOptionValue("shrdArryCachingOnTM", null);
         }
+
+		value = getOptionValue("defaultNumAsyncQueues");
+		int defaultNumAsyncQueues = 4;
+		if( value != null ) {
+			defaultNumAsyncQueues = Integer.valueOf(value).intValue();
+		} else {
+			if( env.containsKey("defaultNumAsyncQueues") ) {
+				value = env.get("defaultNumAsyncQueues");
+				defaultNumAsyncQueues = Integer.valueOf(value).intValue();
+				setOptionValue("defaultNumAsyncQueues", Integer.toString(defaultNumAsyncQueues));
+			}
+		}
 		
 		//////////////////////////
 		//Verify option values. //

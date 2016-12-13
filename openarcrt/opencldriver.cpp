@@ -1524,7 +1524,7 @@ HI_error_t  OpenCLDriver::HI_memcpy_unified(void *dst, const void *src, size_t c
 
 
 HI_error_t OpenCLDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
-        HI_MemcpyKind_t kind, int trType, int async) {
+        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_memcpy_async(%d, %lu)\n", async, count);
@@ -1636,7 +1636,7 @@ HI_error_t OpenCLDriver::HI_memcpy_async(void *dst, const void *src, size_t coun
 }
 
 HI_error_t OpenCLDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count,
-        HI_MemcpyKind_t kind, int trType, int async) {
+        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_memcpy_asyncS(%d)\n", async);
@@ -1766,7 +1766,7 @@ HI_error_t OpenCLDriver::HI_memcpy2D(void *dst, size_t dpitch, const void *src, 
 }
 
 HI_error_t OpenCLDriver::HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
-        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async) {
+        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits) {
 
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1847,7 +1847,7 @@ HI_error_t OpenCLDriver::HI_register_kernel_arg(std::string kernel_name, int arg
     return HI_success;
 }
 
-HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async)
+HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async, int num_waits, int *waits)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {

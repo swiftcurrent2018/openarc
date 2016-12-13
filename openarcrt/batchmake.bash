@@ -26,6 +26,7 @@ if [ "$mode" = "all" ] || [ "$mode" = "util" ]; then
 	fi
 	make clean
 	make res
+	make omphelp
 	gcc -o Timer Timer.c
 	make clean
 fi

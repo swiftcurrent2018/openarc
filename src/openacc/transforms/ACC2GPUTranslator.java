@@ -59,6 +59,7 @@ public abstract class ACC2GPUTranslator {
 	
 	protected int defaultNumWorkers = 128;
 	protected int maxNumGangs = 0; //0 if undefined.
+	protected int defaultNumAsyncQueues = 4;
 	///////////////////////////////////////////////////////////////
 	// DEBUG: below two variables should have the same values as //
 	// the ones in acc2gpu.java.                                 //
@@ -112,25 +113,65 @@ public abstract class ACC2GPUTranslator {
 
     protected Expression getAsyncExpression(ACCAnnotation tAnnot)
     {
-                if( tAnnot != null ) 
-                {
-                    Object obj = tAnnot.get("async");
-                    if( obj instanceof String ) 
-                    {
-                        //asyncID = new NameID("INT_MAX");
-                        return new NameID("acc_async_noval");
-                    } 
-                    else if( obj instanceof Expression ) 
-                    {
-                        return (Expression)obj;
-                    }
-                    else
-                    {
-                        PrintTools.println("[Warning] Unsupported Async Clause " + obj,0);
-                    }
-                }
+    	if( tAnnot != null ) 
+    	{
+    		Object obj = tAnnot.get("async");
+    		if( obj instanceof String ) 
+    		{
+    			//asyncID = new NameID("INT_MAX");
+    			return new NameID("acc_async_noval");
+    		} 
+    		else if( obj instanceof Expression ) 
+    		{
+    			return (Expression)obj;
+    		}
+    		else
+    		{
+    			PrintTools.println("[Warning] Unsupported Async Clause " + obj,0);
+    		}
+    	}
 
-                return new NameID("DEFAULT_QUEUE");
+    	return new NameID("DEFAULT_QUEUE");
+    }
+
+    protected List<Expression> getWaitList(ACCAnnotation tAnnot)
+    {
+    	List<Expression> waitslist = null;
+    	if( tAnnot == null ) 
+    	{
+    		return null;
+    	} else {
+    		Object obj = tAnnot.get("wait");
+    		if( obj instanceof String ) 
+    		{
+    			waitslist = new LinkedList<Expression>();
+    			return waitslist;
+    		} 
+    		else if( obj instanceof List ) 
+    		{
+    			waitslist = new LinkedList<Expression>();
+    			List tlist = (List)obj;
+    			if( tlist.isEmpty() ) {
+    				return waitslist;
+    			} else if( tlist.get(0) instanceof Expression ) {
+    				for( Object tobj : tlist ) {
+    					waitslist.add((Expression)tobj);
+    				}
+    				return waitslist;
+
+    			} else {
+    				Tools.exit("[ERROR] Unsupported Wait Clause Argument Type 1: " 
+    						+ obj + "\n" + AnalysisTools.getEnclosingAnnotationContext(tAnnot));
+    				return null;
+    			}
+    		}
+    		else
+    		{
+    			Tools.exit("[ERROR] Unsupported Wait Clause Argument Type 2: " 
+    					+ obj + "\n" + AnalysisTools.getEnclosingAnnotationContext(tAnnot));
+    			return null;
+    		}
+    	}
     }
 
 	protected ACC2GPUTranslator(Program prog) {
@@ -475,6 +516,15 @@ public abstract class ACC2GPUTranslator {
 		BLKSizePrintCall.addArgument(new StringLiteral("====> Default Number of Workers per Gang: "
 				+defaultNumWorkers+" \\n"));
 		confPrintStmts.add( new ExpressionStatement(BLKSizePrintCall) );
+
+		value = Driver.getOptionValue("defaultNumAsyncQueues");
+		if( value != null ) {
+			defaultNumAsyncQueues = Integer.valueOf(value).intValue();
+		}
+		FunctionCall AsyncQueuePrintCall = new FunctionCall(new NameID("printf"));
+		AsyncQueuePrintCall.addArgument(new StringLiteral("====> Default Number of Async Queues per Device: "
+				+defaultNumAsyncQueues+" \\n"));
+		confPrintStmts.add( new ExpressionStatement(AsyncQueuePrintCall) );
 		
 		value = Driver.getOptionValue("programVerification");
 		if( value != null ) {

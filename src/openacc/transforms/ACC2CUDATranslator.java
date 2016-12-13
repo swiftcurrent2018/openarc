@@ -799,11 +799,31 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					tu.addDeclarationAfter(numBlocks_decl, bytes_decl);
 				}
 			}
+
+			VariableDeclarator async_declarator = new VariableDeclarator(new NameID("openarc_async"));
+			specs = new LinkedList<Specifier>();
+			specs.add(Specifier.STATIC);
+			specs.add(Specifier.INT);
+			Declaration async_decl = new VariableDeclaration(specs, async_declarator);
+			if( containsACCAnnotations ) {
+				tu.addDeclarationAfter(bytes_decl, async_decl);
+			}
+
+			ArraySpecifier aspec = new ArraySpecifier(new IntegerLiteral(defaultNumAsyncQueues));
+			VariableDeclarator waits_declarator = new VariableDeclarator(new NameID("openarc_waits"), aspec);
+			specs = new LinkedList<Specifier>();
+			specs.add(Specifier.STATIC);
+			specs.add(Specifier.INT);
+			Declaration waits_decl = new VariableDeclaration(specs, waits_declarator);
+			if( containsACCAnnotations ) {
+				tu.addDeclarationAfter(async_decl, waits_decl);
+			}
+
 			str = new StringBuilder(256);
             if( containsACCAnnotations ) {
             	if( !opt_GenDistOpenACC ) {
             		str.append("\n#ifdef _OPENMP\n");
-                	str.append("#pragma omp threadprivate(gpuNumThreads, totalGpuNumThreads, gpuNumBlocks, gpuBytes)\n");
+                	str.append("#pragma omp threadprivate(gpuNumThreads, totalGpuNumThreads, gpuNumBlocks, gpuBytes, openarc_async, openarc_waits)\n");
             		str.append("#endif\n");
             	}
 			}
@@ -811,7 +831,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			CodeAnnotation tailAnnot = new CodeAnnotation(str.toString());
 			AnnotationDeclaration tailDecl = new AnnotationDeclaration(tailAnnot);
 			if( containsACCAnnotations ) {
-				tu.addDeclarationAfter(bytes_decl, tailDecl);
+				tu.addDeclarationAfter(waits_decl, tailDecl);
 			} else {
 				if( main_TU ) {
 					if( opt_addSafetyCheckingCode ) {
@@ -999,6 +1019,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				asyncID = (Expression)obj;
 			}
 		}
+
+		//Check wait list. 
+		List<Expression> waitslist = null;
+		tAnnot = at.getAnnotation(ACCAnnotation.class, "wait");
+		waitslist = getWaitList(tAnnot);
 		
 		Statement profileRegion = null;
 		if( enableCustomProfiling ) {
@@ -1251,7 +1276,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 							if( ROSymSet.contains(IRSym) ) {
 								ROSymbol = true;
 							}
-							genCUDACodesForDataClause(dAnnot, IRSym, varName, startList, lengthList, typeSpecs, ifCond, asyncID, dataClauseT, 
+							genCUDACodesForDataClause(dAnnot, IRSym, varName, startList, lengthList, typeSpecs, ifCond, asyncID, waitslist, dataClauseT, 
 									mallocT, memtrT, dRegionType, inStmts, outStmts, asyncW1Stmt, profileRegion, isFirstData, ROSymbol);
 							isFirstData = false;
 						} else {
@@ -1658,7 +1683,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 	 * @param outStmts a list of reference statements where free-related statements are inserted.
 	 */
 	protected void genCUDACodesForDataClause(ACCAnnotation dAnnot, Symbol IRSym, Expression hostVar, List<Expression> startList, 
-			List<Expression> lengthList, List<Specifier> typeSpecs, Expression ifCondExp, Expression asyncExp, DataClauseType dataClauseT, 
+			List<Expression> lengthList, List<Specifier> typeSpecs, Expression ifCondExp, Expression asyncExp, List<Expression> waitslist, DataClauseType dataClauseT, 
 			MallocType mallocT, MemTrType memtrT, DataRegionType dRegionType, List<Statement> inStmts, List<Statement>outStmts,
 			Statement asyncW1Stmt, Statement profileRegion, boolean isFirstData, boolean ROSymbol) {
 		Annotatable at = dAnnot.getAnnotatable();
@@ -2361,6 +2386,36 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				if( asyncExp != null ) {
 					copyinCall.addArgument(asyncExp.clone());
 				}
+				if( (waitslist != null) && (!waitslist.isEmpty()) ) {
+					copyinCall.addArgument(new IntegerLiteral(waitslist.size()));
+					boolean allBuiltinVars = true;
+					for( Expression tWaitArg : (List<Expression>) waitslist ) {
+						if( !(tWaitArg instanceof ArrayAccess) ) {
+							allBuiltinVars = false;
+							break;
+						} else if( !((ArrayAccess)tWaitArg).getArrayName().toString().equals("openarc_waits") ) {
+							allBuiltinVars = false;
+							break;
+						}
+					}
+					if( !allBuiltinVars ) {
+						Traversable tempAt = at;
+						while ((tempAt != null) && !(tempAt instanceof Statement) ) {
+							tempAt = tempAt.getParent();
+						}
+						Statement AtStmt = (Statement)tempAt;
+						CompoundStatement parentCStmt = (CompoundStatement)AtStmt.getParent();
+						int i=0;
+						for( Expression tWaitArg : (List<Expression>) waitslist ) {
+							AssignmentExpression tAExp = new AssignmentExpression(
+									new ArrayAccess(new NameID("openarc_waits"), new IntegerLiteral(i)),
+									AssignmentOperator.NORMAL,
+									tWaitArg.clone());
+							parentCStmt.addStatementBefore(AtStmt, new ExpressionStatement(tAExp));
+							i++;
+						}
+					}
+				}
 				copyin_stmt = new ExpressionStatement(copyinCall);
 				preambleList.add(copyin_stmt);
 				
@@ -2434,6 +2489,36 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				copyoutCall.addArgument(new IntegerLiteral(0));
 				if( asyncExp != null ) {
 					copyoutCall.addArgument(asyncExp.clone());
+				}
+				if( (waitslist != null) && (!waitslist.isEmpty()) ) {
+					copyoutCall.addArgument(new IntegerLiteral(waitslist.size()));
+					boolean allBuiltinVars = true;
+					for( Expression tWaitArg : (List<Expression>) waitslist ) {
+						if( !(tWaitArg instanceof ArrayAccess) ) {
+							allBuiltinVars = false;
+							break;
+						} else if( !((ArrayAccess)tWaitArg).getArrayName().toString().equals("openarc_waits") ) {
+							allBuiltinVars = false;
+							break;
+						}
+					}
+					if( !allBuiltinVars ) {
+						Traversable tempAt = at;
+						while ((tempAt != null) && !(tempAt instanceof Statement) ) {
+							tempAt = tempAt.getParent();
+						}
+						Statement AtStmt = (Statement)tempAt;
+						CompoundStatement parentCStmt = (CompoundStatement)AtStmt.getParent();
+						int i=0;
+						for( Expression tWaitArg : (List<Expression>) waitslist ) {
+							AssignmentExpression tAExp = new AssignmentExpression(
+									new ArrayAccess(new NameID("openarc_waits"), new IntegerLiteral(i)),
+									AssignmentOperator.NORMAL,
+									tWaitArg.clone());
+							parentCStmt.addStatementBefore(AtStmt, new ExpressionStatement(tAExp));
+							i++;
+						}
+					}
 				}
 				copyout_stmt = new ExpressionStatement(copyoutCall);
 				postscriptList.add(copyout_stmt);
@@ -3954,6 +4039,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				asyncID = (Expression)obj;
 			}
 		}
+
+		//Check wait list. 
+		List<Expression> waitslist = null;
+		tAnnot = at.getAnnotation(ACCAnnotation.class, "wait");
+		waitslist = getWaitList(tAnnot);
 		
 		Statement profileRegion = null;
 		if( enableCustomProfiling ) {
@@ -4069,7 +4159,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 								ROSymbol = true;
 							}
 							genCUDACodesForDataClause(uAnnot, IRSym, varName, startList, lengthList, typeSpecs, 
-									ifCond, asyncID, dataClauseT, mallocT, memtrT, regionT, inStmts, outStmts, null, 
+									ifCond, asyncID, waitslist, dataClauseT, mallocT, memtrT, regionT, inStmts, outStmts, null, 
 									profileRegion, isFirstData, ROSymbol);
 							isFirstData = false;
 						} else {
@@ -4338,6 +4428,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		if( ifCond != null ) {
 			ifCondBody = new CompoundStatement();
 		}
+
+		//Check wait list. 
+		List<Expression> waitslist = null;
+		tAnnot = region.getAnnotation(ACCAnnotation.class, "wait");
+		waitslist = getWaitList(tAnnot);
 		
 		//Check async condition
 		Expression asyncID = null;
@@ -5713,6 +5808,31 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			//getAsyncHandle.addArgument(asyncID.clone());
 			//kernelConf.add(getAsyncHandle);
 			kernelConf.add(asyncID.clone());
+		}
+		if( (waitslist != null) && (!waitslist.isEmpty()) ) {
+			kernelConf.add(new IntegerLiteral(waitslist.size()));
+			boolean allBuiltinVars = true;
+			for( Expression tWaitArg : (List<Expression>) waitslist ) {
+				if( !(tWaitArg instanceof ArrayAccess) ) {
+					allBuiltinVars = false;
+					break;
+				} else if( !((ArrayAccess)tWaitArg).getArrayName().toString().equals("openarc_waits") ) {
+					allBuiltinVars = false;
+					break;
+				}
+			}
+			if( !allBuiltinVars ) {
+				CompoundStatement parentCStmt = (CompoundStatement)region.getParent();
+				i=0;
+				for( Expression tWaitArg : (List<Expression>) waitslist ) {
+					AssignmentExpression tAExp = new AssignmentExpression(
+							new ArrayAccess(new NameID("openarc_waits"), new IntegerLiteral(i)),
+							AssignmentOperator.NORMAL,
+							tWaitArg.clone());
+					parentCStmt.addStatementBefore(region, new ExpressionStatement(tAExp));
+					i++;
+				}
+			}
 		}
 		call_to_new_proc.setConfArguments(kernelConf);
 		

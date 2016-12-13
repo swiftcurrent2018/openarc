@@ -88,7 +88,7 @@ public:
     HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
     HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
-    HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
+    HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
     HI_error_t HI_synchronize( int forcedSync = 0 );
     HI_error_t destroy();
     HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
@@ -99,11 +99,11 @@ public:
     HI_error_t HI_pin_host_memory(const void* hostPtr, size_t size);
     void HI_unpin_host_memory(const void* hostPtr);
 
-    HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async);
-    HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async);
+    HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
+    HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
     HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind);
-    HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async);
-    HI_error_t HI_memcpy2D_asyncS(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async);
+    HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
+    HI_error_t HI_memcpy2D_asyncS(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
 
     void HI_tempFree( void** tempPtr, acc_device_t devType);
     void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
@@ -119,7 +119,7 @@ public:
     HI_error_t createKernelArgMap();
     HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size);
     HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
-    HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async);
+    HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits=0, int *waits=NULL);
     HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
     void HI_set_async(int asyncId);
     void HI_wait(int arg);
@@ -183,7 +183,7 @@ public:
     HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
     HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
-    HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
+    HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
     HI_error_t HI_synchronize( int forcedSync = 0 );
     HI_error_t destroy();
     HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
@@ -194,10 +194,10 @@ public:
     HI_error_t HI_pin_host_memory(const void* hostPtr, size_t size);
     void HI_unpin_host_memory(const void* hostPtr);
 
-    HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async);
-    HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async);
+    HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
+    HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
     HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind);
-    HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async);
+    HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
 
     void HI_tempFree( void** tempPtr, acc_device_t devType);
     void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags=HI_MEM_READ_WRITE);

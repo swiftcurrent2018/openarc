@@ -423,12 +423,12 @@ public class OmpParser {
       * --------------------------------------------------------------- */
     private static void parse_omp_task() {
         PrintTools.println("OmpParser is parsing [task] clause", 2);
+        addToMap("task", "true");
         while (end_of_token() == false) {
             String tok = get_token();
             if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
             if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
             String clause = "token_" + tok; 
-            addToMap("task", "true");
             switch (omp_clause.valueOf(clause)) {
                 case token_if           : parse_omp_if();           break;
                 case token_untied       : parse_omp_untied();       break;
@@ -436,6 +436,7 @@ public class OmpParser {
                 case token_private      : parse_omp_private();      break;
                 case token_firstprivate : parse_omp_firstprivate(); break;
                 case token_shared       : parse_omp_shared();       break;
+                case token_depend       : parse_omp_depend();       break;
                 default : OmpParserError("Not supported clause: " + tok);
             }
         }
@@ -741,6 +742,8 @@ public class OmpParser {
      *          private(list)
      *          firstprivate(list)
      *          is_device_ptr(list)
+     *          depend(dependence-type: list)
+     *          nowait
      * --------------------------------------------------------------- */
     private static void parse_omp_target() {
         PrintTools.println("OmpParser is parsing [target] clause", 2);
@@ -762,6 +765,12 @@ public class OmpParser {
         } else if   (check("teams")) {
             eat();
             parse_omp_target_teams();
+        } else if   (check("parallel")) {
+            eat();
+            parse_omp_target_parallel();
+        } else if   (check("simd")) {
+            eat();
+            parse_omp_target_simd();
         } else {
             while (end_of_token() == false) {
             	String tok = get_token();
@@ -775,6 +784,8 @@ public class OmpParser {
                     case token_private      : parse_omp_private();      break;
                     case token_firstprivate : parse_omp_firstprivate(); break;
                     case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                    case token_depend       : parse_omp_depend();       break;
+                    case token_nowait		: parse_omp_nowait();		break;
                     default : OmpParserError("Not supported clause: " + tok);
                 }
             }
@@ -795,6 +806,8 @@ public class OmpParser {
                 case token_if           : parse_omp_if();           break;
                 case token_to           : parse_omp_to();           break;
                 case token_from         : parse_omp_from();         break;
+                case token_depend       : parse_omp_depend();       break;
+                case token_nowait		: parse_omp_nowait();		break;
                 default : OmpParserError("Not supported clause: " + tok);
             }
         }
@@ -825,6 +838,9 @@ public class OmpParser {
                     case token_shared       : parse_omp_shared();       break;
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse     : parse_omp_collapse();     break;
+                    case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                    case token_depend       : parse_omp_depend();       break;
+                    case token_nowait		: parse_omp_nowait();		break;
                     default : OmpParserError("Not supported clause: " + tok);
                 }
             }
@@ -864,6 +880,9 @@ public class OmpParser {
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse     : parse_omp_collapse();         break;
                     case token_dist_schedule: parse_omp_dist_schedule();    break;
+                    case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                    case token_depend       : parse_omp_depend();       break;
+                    case token_nowait		: parse_omp_nowait();		break;
                     default : OmpParserError("Not supported clause: " + tok);
                 }
             }
@@ -892,6 +911,9 @@ public class OmpParser {
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_collapse         : parse_omp_collapse();         break;
                 case token_dist_schedule    : parse_omp_dist_schedule();    break;
+                case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                case token_depend       : parse_omp_depend();       break;
+                case token_nowait		: parse_omp_nowait();		break;
                 default : OmpParserError("Not supported clause: " + tok);
             }
         }
@@ -923,6 +945,9 @@ public class OmpParser {
                     case token_reduction    : parse_omp_reduction();    break;
                     case token_collapse         : parse_omp_collapse();         break;
                     case token_dist_schedule    : parse_omp_dist_schedule();    break;
+                    case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                    case token_depend       : parse_omp_depend();       break;
+                    case token_nowait		: parse_omp_nowait();		break;
                     default : OmpParserError("Not supported clause: " + tok);
                 }
             }
@@ -951,6 +976,141 @@ public class OmpParser {
                 case token_reduction    : parse_omp_reduction();    break;
                 case token_collapse         : parse_omp_collapse();         break;
                 case token_dist_schedule    : parse_omp_dist_schedule();    break;
+                case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                case token_depend       : parse_omp_depend();       break;
+                case token_nowait		: parse_omp_nowait();		break;
+                default : OmpParserError("Not supported clause: " + tok);
+            }
+        }
+    }
+
+    private static void parse_omp_target_parallel() {
+        PrintTools.println("OmpParser is parsing [parallel] clause", 2);
+        addToMap("parallel", "true");
+        if (check("for")) {
+            eat();
+            parse_omp_target_parallel_for();
+        } else {
+            while (end_of_token() == false) {
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
+                PrintTools.println("clause=" + clause, 2);
+                switch (omp_clause.valueOf(clause)) {
+                    case token_if           : parse_omp_if();           break;
+                    case token_num_threads  : parse_omp_num_threads();  break;
+                    case token_default      : parse_omp_default();      break;
+                    case token_private      : parse_omp_private();      break;
+                    case token_firstprivate : parse_omp_firstprivate(); break;
+                    case token_shared       : parse_omp_shared();       break;
+                    case token_copyin       : parse_omp_copyin();       break;
+                    case token_reduction    : parse_omp_reduction();    break;
+                    case token_device       : parse_omp_device();       break;
+                    case token_map          : parse_omp_map();          break;
+                    case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                    case token_depend       : parse_omp_depend();       break;
+                    case token_nowait		: parse_omp_nowait();		break;
+                    default                 :
+                        OmpParserError("Not supported clause : " + clause);
+                }
+            }
+        }
+    }
+
+    private static void parse_omp_target_parallel_for() {
+        PrintTools.println("OmpParser is parsing [parallel for] clause", 2);
+        addToMap("for", "true");
+        if (check("simd")) {
+            eat();
+            parse_omp_target_parallel_for_simd();
+        } else {
+            while (end_of_token() == false) {
+            	String tok = get_token();
+            	if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+                String clause = "token_" + tok;
+                switch (omp_clause.valueOf(clause)) {
+                    case token_if           : parse_omp_if();           break;
+                    case token_num_threads  : parse_omp_num_threads();  break;
+                    case token_default      : parse_omp_default();      break;
+                    case token_private      : parse_omp_private();      break;
+                    case token_firstprivate : parse_omp_firstprivate(); break;
+                    case token_shared       : parse_omp_shared();       break;
+                    case token_copyin       : parse_omp_copyin();       break;
+                    case token_reduction    : parse_omp_reduction();    break;
+                    case token_lastprivate  : parse_omp_lastprivate();  break;
+                    case token_schedule     : parse_omp_schedule();     break;
+                    case token_collapse     : parse_omp_collapse();     break;
+                    case token_ordered      : parse_omp_ordered();      break;
+                    case token_device       : parse_omp_device();       break;
+                    case token_map          : parse_omp_map();          break;
+                    case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                    case token_depend       : parse_omp_depend();       break;
+                    case token_nowait		: parse_omp_nowait();		break;
+                    default : OmpParserError("Not supported clause: " + tok);
+                }
+            }
+        }
+    }
+
+    private static void parse_omp_target_parallel_for_simd() {
+        PrintTools.println("OmpParser is parsing [simd] clause", 2);
+        addToMap("simd", "true");
+
+        while (end_of_token() == false) {
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
+            switch (omp_clause.valueOf(clause)) {
+                case token_if           : parse_omp_if();           break;
+                case token_num_threads  : parse_omp_num_threads();  break;
+                case token_default      : parse_omp_default();      break;
+                case token_private      : parse_omp_private();      break;
+                case token_firstprivate : parse_omp_firstprivate(); break;
+                case token_shared       : parse_omp_shared();       break;
+                case token_copyin       : parse_omp_copyin();       break;
+                case token_reduction    : parse_omp_reduction();    break;
+                case token_lastprivate  : parse_omp_lastprivate();  break;
+                case token_schedule     : parse_omp_schedule();     break;
+                case token_collapse     : parse_omp_collapse();     break;
+                case token_ordered      : parse_omp_ordered();      break;
+                case token_safelen      : parse_omp_safelen();      break;
+                case token_linear       : parse_omp_linear();       break;
+                case token_aligned      : parse_omp_aligned();      break;
+                case token_device       : parse_omp_device();       break;
+                case token_map          : parse_omp_map();          break;
+                case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                case token_depend       : parse_omp_depend();       break;
+                case token_nowait		: parse_omp_nowait();		break;
+                default : OmpParserError("Not supported clause: " + tok);
+            }
+        }
+
+    }
+
+    private static void parse_omp_target_simd() {
+        PrintTools.println("OmpParser is parsing [simd] clause", 2);
+        addToMap("simd", "true");
+        while (end_of_token() == false) {
+            String tok = get_token();
+            if( tok.equals("") ) continue; //Skip empty string, which may occur due to macro.
+            if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
+            String clause = "token_" + tok;
+            switch (omp_clause.valueOf(clause)) {
+                case token_safelen      : parse_omp_safelen();      break;
+                case token_linear       : parse_omp_linear();       break;
+                case token_aligned      : parse_omp_aligned();      break;
+                case token_private      : parse_omp_private();      break;
+                case token_lastprivate  : parse_omp_lastprivate();  break;
+                case token_reduction    : parse_omp_reduction();    break;
+                case token_collapse     : parse_omp_collapse();     break;
+                case token_device       : parse_omp_device();       break;
+                case token_map          : parse_omp_map();          break;
+                case token_is_device_ptr : parse_omp_is_device_ptr(); break;
+                case token_depend       : parse_omp_depend();       break;
+                case token_nowait		: parse_omp_nowait();		break;
                 default : OmpParserError("Not supported clause: " + tok);
             }
         }
@@ -991,6 +1151,8 @@ public class OmpParser {
      *          device(integer-expression)
      *          map([map-type: ] list)
      *          if(scalar-expression)
+     *          depend(dependence-type: list)
+     *          nowait
      * --------------------------------------------------------------- */
     private static void parse_omp_target_enter_data() {
         PrintTools.println("OmpParser is parsing [enter data] clause", 2);
@@ -1006,6 +1168,8 @@ public class OmpParser {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
                 case token_if           : parse_omp_if();           break;
+                case token_depend       : parse_omp_depend();       break;
+                case token_nowait		: parse_omp_nowait();		break;
                 default : OmpParserError("Not supported clause: " + tok);
             }
         }
@@ -1018,6 +1182,8 @@ public class OmpParser {
      *          device(integer-expression)
      *          map([map-type: ] list)
      *          if(scalar-expression)
+     *          depend(dependence-type: list)
+     *          nowait
      * --------------------------------------------------------------- */
     private static void parse_omp_target_exit_data() {
         PrintTools.println("OmpParser is parsing [exit data] clause", 2);
@@ -1033,6 +1199,8 @@ public class OmpParser {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
                 case token_if           : parse_omp_if();           break;
+                case token_depend       : parse_omp_depend();       break;
+                case token_nowait		: parse_omp_nowait();		break;
                 default : OmpParserError("Not supported clause: " + tok);
             }
         }
@@ -1749,6 +1917,27 @@ public class OmpParser {
     	}
     }
 
+    private static void parse_omp_depend() {
+    	PrintTools.println("OmpParser is parsing [depend] clause", 2);
+    	String dependType = "inout";
+    	match("(");
+    	if( check("in") || check("out") || check("inout") || check("sink") )
+    	{
+    		dependType = get_token();
+    		match(":");
+    		Set set = new HashSet<String>();
+    		parse_commaSeparatedList(set);
+    		match(")");
+    		addToMap(dependType, set);
+    	} else if( check("source") ) {
+    		dependType = get_token();
+    		match(")");
+    		addToMap(dependType, "true");
+        } else {
+            OmpParserError("No such dependence-type" + lookahead());
+    	}
+    }
+
     private static void parse_omp_inbranch() {
         PrintTools.println("OmpParser is parsing [inbranch] clause", 2);
         addToMap("inbranch", "true");
@@ -1867,6 +2056,7 @@ public class OmpParser {
         token_notinbranch,
         token_device,
         token_map,
+        token_depend,
         token_num_teams,
         token_thread_limit,
         token_dist_schedule,

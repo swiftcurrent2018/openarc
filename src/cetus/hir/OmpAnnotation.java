@@ -22,14 +22,14 @@ public class OmpAnnotation extends PragmaAnnotation {
             // clauses
             "if", "num_threads", "default", "shared", "private", "firstprivate",
             "lastprivate", "reduction", "copyin", "copyprivate", "schedule",
-            "collapse", "nowait", "device", "map",
+            "collapse", "nowait", "device", "map", "depend",
             "num_teams", "thread_limit", "dist_schedule");
 
     // Keywords that need values
     private static final List<String> key_needs_value = Arrays.asList(
             "if", "num_threads", "default", "shared", "private", "firstprivate",
             "lastprivate", "reduction", "copyin", "copyprivate", "schedule",
-            "collapse", "flush", "threadprivate", "device", "map",
+            "collapse", "flush", "threadprivate", "device", "map", "depend",
             "num_teams", "thread_limit", "dist_schedule");
 
     // OpenMP keywords not listed here will be printed at the end.
@@ -120,6 +120,17 @@ public class OmpAnnotation extends PragmaAnnotation {
         		}
         		str.append(PrintTools.collectionToString((Collection) get(key), ", "));
         		str.append(")");
+        	} else if( key.equals("in") || key.equals("out") || key.equals("inout") || key.equals("source") ||
+        			key.equals("sink") ) {
+        		str.append(" depend(");
+        		str.append(key);
+        		if( key.equals("source") ) {
+        			str.append(")");
+        		} else {
+        			str.append(": ");
+        			str.append(PrintTools.collectionToString((Collection) get(key), ", "));
+        			str.append(")");
+        		}
         	} else {
         		str.append(" ");
         		str.append(key);

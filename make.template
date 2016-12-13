@@ -5,6 +5,36 @@
 ######################################################
 
 ##########################################################
+# Available Make targets                                 #
+##########################################################
+# CPU: compile C program using a given C compiler        #
+# CPU2: compile C/C++ program using a given C++ compiler #
+# TCPU: compile OpenARC-generated C++ program            #
+# ACC: compile OpenARC-generated CUDA/OpenCL program     #
+# COMPILE_HOST: compile the host part of                 #
+#               OpenARC-generated CUDA/OpenCL program    #              
+# COMPILE_KERNEL: compile the kernel part of             # 
+#                 OpenARC-generated CUDA/OpenCL program  #                
+# LLVM: compile nvl-C program                            #
+##########################################################
+.PHONY: ACC CPU CPU2 TCPU LLVM all COMPILE_HOST COMPILE_KERNEL makedirectories help
+ACC: $(BENCHMARK)_ACC
+CPU: $(BENCHMARK)_CPU
+CPU2: $(BENCHMARK)_CPU2
+TCPU: $(BENCHMARK)_TCPU
+LLVM: $(BENCHMARK)_LLVM
+all: ACC CPU
+help:
+	@echo "==> Available make targets:"
+	@echo "CPU: compile a C program using a given C compiler"
+	@echo "CPU2: compile a C/C++ program using a given C++ compiler"
+	@echo "TCPU: compile an OpenARC-generated C++ program"
+	@echo "ACC: compile an OpenARC-generated CUDA/OpenCL program"
+	@echo "COMPILE_HOST: compile the host part of an OpenARC-generated CUDA/OpenCL program"
+	@echo "COMPILE_KERNEL: compile the kernel part of an OpenARC-generated CUDA/OpenCL program"
+	@echo "LLVM: compile an nvl-C program"
+
+##########################################################
 # Makefile options that the user can overwrite           #
 ##########################################################
 # OMP: set to 1 to use OpenMP (default: 0)               # 
@@ -87,6 +117,7 @@ TARGET ?= ./bin
 ##############################
 BENCHMARK_OPENACC = $(TARGET)/$(BENCHMARK)_ACC
 BENCHMARK_CPU = $(TARGET)/$(BENCHMARK)_CPU
+BENCHMARK_CPU2 = $(TARGET)/$(BENCHMARK)_CPU2
 BENCHMARK_TCPU = $(TARGET)/$(BENCHMARK)_TCPU
 BENCHMARK_LLVM = $(TARGET)/$(BENCHMARK)_LLVM
 
@@ -155,18 +186,12 @@ CLIBS1 += $(CLIBS1_BASE) -L$(OPENARCLIB)
 CLIBS1_LLVM += -L$(OPENARCLIB) 
 CLIBS2 += $(CLIBS2_BASE) -l$(ACCRTLIB)
 
-################
-# Make targets #
-################
-.PHONY: ACC CPU TCPU LLVM all COMPILE_HOST COMPILE_KERNEL makedirectories
-ACC: $(BENCHMARK)_ACC
-CPU: $(BENCHMARK)_CPU
-TCPU: $(BENCHMARK)_TCPU
-LLVM: $(BENCHMARK)_LLVM
-all: ACC CPU
-
 $(BENCHMARK)_CPU: $(CSRCS) makedirectories
 	$(CC) $(DEFSET_CPU) $(CFLAGS1) -o $(BENCHMARK_CPU) $(CSRCS) $(CLIBS1)
+	$(POSTCMD)
+
+$(BENCHMARK)_CPU2: $(CSRCS) makedirectories
+	$(CXX) $(DEFSET_CPU) $(CFLAGS1) -o $(BENCHMARK_CPU2) $(CSRCS) $(CLIBS1)
 	$(POSTCMD)
 
 $(BENCHMARK)_TCPU: $($(CETUS_OUTPUT)/$(CSRCS)) makedirectories
@@ -194,7 +219,7 @@ makedirectories:
 clean:
 	rm -f *.o *.bc *~ confFile.txt Makefile*.local TuningOptions.txt;
 	if [ -d ./$(CETUS_OUTPUT) ]; then cd $(CETUS_OUTPUT); rm -rf *.o *~ *aoco *aocx openarc_kernel; cd ..; fi
-	if [ -d $(TARGET) ]; then rm -f $(BENCHMARK_CPU) $(BENCHMARK_TCPU) $(BENCHMARK_LLVM) $(BENCHMARK_OPENACC) Timer; cd $(TARGET); rm -f openarc_kernel*.ptx $(KERNEL_FILE) binBuilder_$(OPENARCLIB_SUFFIX) Timer *.aocx; fi
+	if [ -d $(TARGET) ]; then rm -f $(BENCHMARK_CPU) $(BENCHMARK_CPU2) $(BENCHMARK_TCPU) $(BENCHMARK_LLVM) $(BENCHMARK_OPENACC) Timer; cd $(TARGET); rm -f openarc_kernel*.ptx $(KERNEL_FILE) binBuilder_$(OPENARCLIB_SUFFIX) Timer *.aocx; fi
 
 purge: clean
 	rm -rf $(TARGET) $(CETUS_OUTPUT) cetus_input openarcConf.txt *.log

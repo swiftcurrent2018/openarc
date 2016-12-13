@@ -172,7 +172,7 @@ public:
     virtual HI_error_t HI_register_kernels(std::set<std::string>kernelNames) = 0;
     virtual HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args) = 0;
     virtual HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type) = 0;
-    virtual HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE) = 0;
+    virtual HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL) = 0;
     virtual HI_error_t HI_synchronize( int forcedSync = 0 )=0;
 
     // Memory Allocation
@@ -186,10 +186,10 @@ public:
     // Memory Transfer
     virtual HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType)=0;
 
-    virtual HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async)=0;
-    virtual HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async)=0;
+    virtual HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL)=0;
+    virtual HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL)=0;
     virtual HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind)=0;
-    virtual HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async)=0;
+    virtual HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL)=0;
 
     virtual void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags=HI_MEM_READ_WRITE)=0;
     virtual void HI_tempFree( void** tempPtr, acc_device_t devType)=0;
@@ -208,7 +208,7 @@ public:
     virtual HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
         return HI_success;
     }
-    virtual HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
+    virtual HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits=0, int *waits=NULL) {
         return HI_success;
     }
     virtual HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
@@ -1184,7 +1184,7 @@ extern void HI_hostinit(int numhostthreads);
 //////////////////////
 extern HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
 extern HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
-extern HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE);
+extern HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
 extern HI_error_t HI_synchronize( int forcedSync = 0);
 
 /////////////////////////////
@@ -1204,20 +1204,20 @@ extern void HI_tempFree( void** tempPtr, acc_device_t devType);
 extern HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
                                   HI_MemcpyKind_t kind, int trType);
 extern HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
-                                        HI_MemcpyKind_t kind, int trType, int async);
+                                        HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
 extern HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
-                                        HI_MemcpyKind_t kind, int trType, int async);
+                                        HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
 extern HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
                                     size_t widthInBytes, size_t height, HI_MemcpyKind_t kind);
 extern HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
-        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async);
+        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
 //extern HI_error_t HI_memcpy3D(void *dst, size_t dpitch, const void *src, size_t spitch,
 //	size_t widthInBytes, size_t height, size_t depth, HI_MemcpyKind_t kind);
 //extern HI_error_t HI_memcpy3D_async(void *dst, size_t dpitch, const void *src,
 //	size_t spitch, size_t widthInBytes, size_t height, size_t depth,
-//	HI_MemcpyKind_t kind, int async);
+//	HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
 extern HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
-extern HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async);
+extern HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits=0, int *waits=NULL);
 extern HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
 
 ////////////////////////////////////////////////
@@ -1277,6 +1277,10 @@ extern double HI_get_localtime();
 extern void HI_waitS1(int asyncId);
 extern void HI_waitS2(int asyncId);
 
+///////////////////////////////////////////
+//Functions used for OpenMP4 translation //
+///////////////////////////////////////////
+#include "omp_helper.h"
 
 ///////////////////////////////////////
 //Functions used for resilience test //

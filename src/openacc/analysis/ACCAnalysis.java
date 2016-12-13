@@ -1298,7 +1298,7 @@ public class ACCAnalysis extends AnalysisPass
 	}
 
 
-	protected static void updateSymbolsInSubArray(SubArray sArray, Traversable at, Map<String, String> nameChangeMap,
+	public static void updateSymbolsInSubArray(SubArray sArray, Traversable at, Map<String, String> nameChangeMap,
 			PragmaAnnotation annot)
 	{
 		if( (sArray == null) || (at == null) ) return;
@@ -1409,7 +1409,7 @@ public class ACCAnalysis extends AnalysisPass
 			sym = SymbolTools.getSymbolOfName(newName, at);
 			if( sym == null ) {
 				//OpenARC internal variables (HI_*) don't need to be updated.
-				if( !newName.startsWith("HI_") ) {
+				if( !newName.startsWith("HI_") && !newName.startsWith("openarc_") ) {
 					Tools.exit("[ERROR in ACCAnalysis.updateSymbolsInExpression()] variable, " + newName + 
 							", in the following OpenACC annotatin is not visible in the current scope; " +
 							"please check whether the declaration of the variable is visible.\n" +

@@ -23,6 +23,7 @@ $(BUILD_CFG): $(COMMON_DEPS)
 	echo 'llvmTargetDataLayout = $(LLVM_TARGET_DATA_LAYOUT)' >> $@
 	echo 'mpi_includes = $(MPI_INCLUDES)' >> $@
 	echo 'mpi_libdir = $(MPI_LIBDIR)' >> $@
+	echo 'mpi_exec = $(MPI_EXEC)' >> $@
 	echo 'fc = $(call cmd2abs, $(FC))' >> $@
 	echo 'spec_cpu2006 = $(SPEC_CPU2006)' >> $@
 	echo 'spec_cfg = $(SPEC_CFG)' >> $@

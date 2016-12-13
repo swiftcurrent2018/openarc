@@ -770,7 +770,7 @@ HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t
 	return return_status;
 }
 
-HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async) {
+HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async, int num_waits, int *waits) {
 	HI_error_t return_status;
 	const char *kernelName = kernel_name.c_str();
 #ifdef _OPENARC_PROFILE_
@@ -787,7 +787,14 @@ HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSiz
         return HI_success;
 	}
     HostConf_t* tconf = getHostConf();
-    return_status = tconf->device->HI_kernel_call(kernel_name, gridSize, blockSize, async+tconf->asyncID_offset);
+	int *waitslist = NULL;
+	if( num_waits > 0 ) {
+		waitslist = (int *)malloc(num_waits*sizeof(int));
+		for( int i=0; i<num_waits; i++ ) {
+			waitslist[i] = waits[i]+tconf->asyncID_offset;
+		}
+	}
+    return_status = tconf->device->HI_kernel_call(kernel_name, gridSize, blockSize, async+tconf->asyncID_offset, num_waits, waitslist);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_kernel_call(%d): %s\n", async, kernelName);
@@ -1175,7 +1182,7 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
 }
 
 HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
-                                 HI_MemcpyKind_t kind, int trType, int async) {
+                                 HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1197,7 +1204,14 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
         	fprintf(stderr, "[ERROR in HI_memcpy_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
     	}    
-    	return_status = tconf->device->HI_memcpy_async(dst, src, count, kind, trType, async+tconf->asyncID_offset);
+		int *waitslist = NULL;
+		if( num_waits > 0 ) {
+			waitslist = (int *)malloc(num_waits*sizeof(int));
+			for( int i=0; i<num_waits; i++ ) {
+				waitslist[i] = waits[i]+tconf->asyncID_offset;
+			}
+		}
+    	return_status = tconf->device->HI_memcpy_async(dst, src, count, kind, trType, async+tconf->asyncID_offset, num_waits, waitslist);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1209,7 +1223,7 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
 }
 
 HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
-                                 HI_MemcpyKind_t kind, int trType, int async) {
+                                 HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1227,7 +1241,14 @@ HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
 	}
 	if( count > 0 ) {
     	HostConf_t * tconf = getHostConf();
-    	return_status = tconf->device->HI_memcpy_asyncS(dst, src, count, kind, trType, async+tconf->asyncID_offset);
+		int *waitslist = NULL;
+		if( num_waits > 0 ) {
+			waitslist = (int *)malloc(num_waits*sizeof(int));
+			for( int i=0; i<num_waits; i++ ) {
+				waitslist[i] = waits[i]+tconf->asyncID_offset;
+			}
+		}
+    	return_status = tconf->device->HI_memcpy_asyncS(dst, src, count, kind, trType, async+tconf->asyncID_offset, num_waits, waitslist);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1309,7 +1330,7 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
 }
 
 HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
-                                   size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async) {
+                                   size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1331,7 +1352,14 @@ HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
         	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
     	}    
-    	return_status = tconf->device->HI_memcpy2D_async(dst, dpitch, src, spitch, widthInBytes, height, kind, async+tconf->asyncID_offset);
+		int *waitslist = NULL;
+		if( num_waits > 0 ) {
+			waitslist = (int *)malloc(num_waits*sizeof(int));
+			for( int i=0; i<num_waits; i++ ) {
+				waitslist[i] = waits[i]+tconf->asyncID_offset;
+			}
+		}
+    	return_status = tconf->device->HI_memcpy2D_async(dst, dpitch, src, spitch, widthInBytes, height, kind, async+tconf->asyncID_offset, num_waits, waitslist);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1902,7 +1930,7 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
 	return return_status;
 }
 
-HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async) {
+HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits, int *waits) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1920,7 +1948,14 @@ HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_Memcpy
         	fprintf(stderr, "[ERROR in HI_memcpy_const_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
     	}    
-    	return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async+tconf->asyncID_offset);
+		int *waitslist = NULL;
+		if( num_waits > 0 ) {
+			waitslist = (int *)malloc(num_waits*sizeof(int));
+			for( int i=0; i<num_waits; i++ ) {
+				waitslist[i] = waits[i]+tconf->asyncID_offset;
+			}
+		}
+    	return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async+tconf->asyncID_offset, num_waits, waitslist);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {

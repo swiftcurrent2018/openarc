@@ -1300,6 +1300,27 @@ void* acc_present_or_create_const(h_void* hostPtr, size_t size) {
 	return acc_pcreate_const(hostPtr, size);
 }
 
+void* acc_copyin_async(h_void* hostPtr, size_t size, int async) {
+	void* devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyin_async_wait()\n");
+	}
+#endif
+	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
+	if( async == acc_async_sync ) {
+		HI_memcpy(devPtr, hostPtr, size, HI_MemcpyHostToDevice, 0);
+	} else {
+		HI_memcpy_async(devPtr, hostPtr, size, HI_MemcpyHostToDevice, 0, async);
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_copyin_async_wait()\n");
+	}
+#endif
+	return devPtr;
+}
+
 void* acc_copyin_async_wait(h_void* hostPtr, size_t size, int async, int arg) {
 	void* devPtr;
 #ifdef _OPENARC_PROFILE_
@@ -1354,6 +1375,22 @@ void* acc_present_or_copyin_async_wait(h_void* hostPtr, size_t size, int async, 
 	return acc_pcopyin_async_wait(hostPtr, size, async, arg);
 }
 
+void* acc_create_async(h_void* hostPtr, size_t size, int async) {
+	void* devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_create_async_wait()\n");
+	}
+#endif
+	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_create_async_wait()\n");
+	}
+#endif
+	return devPtr;
+}
+
 void* acc_create_async_wait(h_void* hostPtr, size_t size, int async, int arg) {
 	void* devPtr;
 #ifdef _OPENARC_PROFILE_
@@ -1400,6 +1437,33 @@ void* acc_present_or_create_async_wait(h_void* hostPtr, size_t size, int async, 
 
 //[FIXME] A call to this routine is NOT alloed within a data region for
 //the specified data, but the current runtime does not check this.
+
+void acc_copyout_async(h_void* hostPtr, size_t size, int async) {
+	void* devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyout_async_wait()\n");
+	}
+#endif
+	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
+		fprintf(stderr, "[OPENARCRT-ERROR] the argument data of acc_copyout_async_wait() is not present on the device; exit!\n");
+		exit(1);
+	} else {
+		if( async == acc_async_sync ) {
+			HI_memcpy(hostPtr, devPtr, size, HI_MemcpyDeviceToHost, 0);
+			HI_free(hostPtr, DEFAULT_QUEUE);
+		} else {
+			HI_memcpy_async(hostPtr, devPtr, size, HI_MemcpyDeviceToHost, 0, async);
+			HI_free_async(hostPtr, async);
+		}
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_copyout_async_wait()\n");
+	}
+#endif
+}
+
 void acc_copyout_async_wait(h_void* hostPtr, size_t size, int async, int arg) {
 	void* devPtr;
 #ifdef _OPENARC_PROFILE_
@@ -1433,6 +1497,30 @@ void acc_copyout_async_wait(h_void* hostPtr, size_t size, int async, int arg) {
 //the specified data, but the current runtime does not check this.
 //        - The current implementation does not consider size parameter;
 //        free the whole data.
+void acc_delete_async(h_void* hostPtr, size_t size, int async) {
+	void* devPtr;
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_delete_async_wait()\n");
+	}
+#endif
+	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
+		fprintf(stderr, "[OPENARCRT-ERROR] the argument data of acc_delete_async_wait() is not present on the device; exit!\n");
+		exit(1);
+	} else {
+		if( async == acc_async_sync ) {
+			HI_free(hostPtr, DEFAULT_QUEUE);
+		} else {
+			HI_free_async(hostPtr, async);
+		}
+	}
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 0 ) {
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_delete_async_wait()\n");
+	}
+#endif
+}
+
 void acc_delete_async_wait(h_void* hostPtr, size_t size, int async, int arg) {
 	void* devPtr;
 #ifdef _OPENARC_PROFILE_

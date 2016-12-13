@@ -41,6 +41,8 @@ endif
 
 RESLIB = $(TARGET)/libresilience.a
 
+OMPHELPLIB = $(TARGET)/libomphelper.a
+
 PRINT_LOG ?= 0
 OMP ?= 0
 DEFSET ?= -DPRINT_LOG=$(PRINT_LOG) -DOMP=$(OMP)
@@ -57,20 +59,26 @@ all: $(OBJS)
 res: resilience.o
 	$(AR) $(ARFLAGS) $(RESLIB) resilience.o
 
+omphelp: omp_helper.o
+	$(AR) $(ARFLAGS) $(OMPHELPLIB) omp_helper.o
+
 openacc.o: openacc.cpp openacc.h openaccrt.h
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o openacc.o openacc.cpp -c
 
-openaccrt.o: openaccrt.cpp openacc.h openaccrt.h resilience.cpp
+openaccrt.o: openaccrt.cpp openacc.h openaccrt.h resilience.cpp omp_helper.cpp
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o openaccrt.o openaccrt.cpp -c
 
-opencldriver.o: opencldriver.cpp openacc.h openaccrt.h resilience.cpp
+opencldriver.o: opencldriver.cpp openacc.h openaccrt.h resilience.cpp omp_helper.cpp
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o opencldriver.o opencldriver.cpp -c
 
-cudadriver.o: cudadriver.cpp openacc.h openaccrt.h resilience.cpp
+cudadriver.o: cudadriver.cpp openacc.h openaccrt.h resilience.cpp omp_helper.cpp
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o cudadriver.o cudadriver.cpp -c
 
 resilience.o: resilience.cpp
 	$(CXX) $(DEFSET) -o resilience.o resilience.cpp -c
+
+omp_helper.o: omp_helper.cpp
+	$(CXX) $(DEFSET) -o omp_helper.o omp_helper.cpp -c
 	
 binUtil: binBuilder.cpp
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o ./binBuilder_$(OPENARCLIB_SUFFIX) binBuilder.cpp $(CLIBS)
@@ -79,4 +87,4 @@ clean:
 	rm -f *.o *~
 
 purge:
-	rm -f *.o *~ libopenaccrt_$(OPENARCLIB_SUFFIX).a libopenaccrtomp_$(OPENARCLIB_SUFFIX).a libopenaccrt_$(OPENARCLIB_SUFFIX)pf.a libopenaccrtomp_$(OPENARCLIB_SUFFIX)pf.a binBuilder_$(OPENARCLIB_SUFFIX) libresilience.a Timer
+	rm -f *.o *~ libopenaccrt_$(OPENARCLIB_SUFFIX).a libopenaccrtomp_$(OPENARCLIB_SUFFIX).a libopenaccrt_$(OPENARCLIB_SUFFIX)pf.a libopenaccrtomp_$(OPENARCLIB_SUFFIX)pf.a binBuilder_$(OPENARCLIB_SUFFIX) libresilience.a libomphelper.a Timer

@@ -797,12 +797,13 @@ public abstract class TransformTools {
 		} else {
 			if( inSym instanceof VariableDeclarator ) {
 				VariableDeclarator varSym = (VariableDeclarator)inSym;
-				specs = varSym.getTypeSpecifiers();
-				if( removeSpecs != null ) {
-					specs.removeAll(removeSpecs);
-				}
+				specs = new LinkedList();
 				if( addSpecs != null ) {
 					specs.addAll(addSpecs);
+				}
+				specs.addAll(varSym.getTypeSpecifiers());
+				if( removeSpecs != null ) {
+					specs.removeAll(removeSpecs);
 				}
 				// Separate declarator/declaration specifiers.
 				List declaration_specs = new ArrayList(specs.size());

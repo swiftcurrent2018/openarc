@@ -25,6 +25,7 @@ public class ACCAnnotation extends PragmaAnnotation
  * where clause is one of the following:
  *      if( condition )
  *      async [( scalar-integer-expression )]
+ *      wait ( scalar-integer-expression-list )
  *      num_gangs( scalar-integer-expression )
  *      num_workers( scalar-integer-expression )
  *      vector_length( scalar-integer-expression )
@@ -53,6 +54,7 @@ public class ACCAnnotation extends PragmaAnnotation
  * where clause is one of the following:
  *      if( condition )
  *      async [( scalar-integer-expression )]
+ *      wait ( scalar-integer-expression-list )
  * 		copy( list ) 
  * 		copyin( list ) 
  * 		copyout( list ) 
@@ -145,13 +147,14 @@ public class ACCAnnotation extends PragmaAnnotation
  *      device( list )
  *      if( condition )
  *      async [( scalar-integer-expression )]
+ *      wait [( scalar-integer-expression-list )]
  * <p>     
  * #pragma acc enter data clause[[,] clause]...
  * <p>     
  * where clause is one of the following:
  *      if( condition )
  *      async [( scalar-integer-expression )]
- *      wait [( scalar-integer-expression )]
+ *      wait [( scalar-integer-expression-list )]
  *      copyin( list )
  *      present_or_copyin( list )
  *      present_or_create( list )
@@ -161,12 +164,12 @@ public class ACCAnnotation extends PragmaAnnotation
  * where clause is one of the following:
  *      if( condition )
  *      async [( scalar-integer-expression )]
- *      wait [( scalar-integer-expression )]
+ *      wait [( scalar-integer-expression-list )]
  *      copyout( list )
  *      delete( list )
  *      finalize
  * <p>     
- * #pragma acc wait [( scalar-integer-expression )]
+ * #pragma acc wait [( scalar-integer-expression-list )]
  * <p>     
  * #pragma acc routine [clause[[,] clause]...]
  * <p>     
@@ -520,8 +523,15 @@ public class ACCAnnotation extends PragmaAnnotation
 			str.append(" "+key);
 			Object tVal = get(key);
 			if ( tVal != null && (!tVal.equals("true") && !tVal.equals("_directive") 
-					&& !tVal.equals("_clause")) )
-				str.append("("+tVal+")");
+					&& !tVal.equals("_clause")) ) {
+				if( tVal instanceof List ) {
+					str.append("("+PrintTools.listToString((List)tVal, ", ")+")");
+				} else if( tVal instanceof Collection) {
+					str.append("("+PrintTools.collectionToString((Collection)tVal, ", ")+")");
+				} else {
+					str.append("("+tVal+")");
+				}
+			}
 		}
 		else
 		{

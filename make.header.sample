@@ -40,6 +40,7 @@
 #       MPI_FLAGS       : compiler flags for MPI                   #
 #       MPI_INCLUDES    : include path for MPI                     #
 #       MPI_LIBDIR      : library path for MPI                     #
+#       MPI_EXEC        : mpiexec command                          #
 #       FC              : fortran compiler                         #
 #       SPEC_CPU2006    : SPEC CPU 2006 installation directory     #
 #       SPEC_CFG        : SPEC CPU 2006 config file (if value does #
@@ -104,6 +105,9 @@ CETUS_OUTPUT = cetus_output
 # Newark: Linux system with NVIDIA GPUs and an Altera FPGA             #
 # Atlanta: LInux system with AMD GPUs                                  #
 # MacBookPro: OS X system with an AMD GPU                              #
+# MacBookPro_LLVM: MacBookPro but for LLVM backend on macOS 10.12      #
+# Megatron_LLVM: Linux system with fusion-io ioScale2 SSD;             #
+#                configuration is for LLVM backend                     #
 # Kold: a mini cluster consisting of four HP SL250 nodes used for      #
 #       pilot studies within the Keeneland project.                    #
 # Cooley: ALCF NVIDIA GPU cluster                                      #
@@ -162,6 +166,7 @@ endif
 MPI_FLAGS = -craympich-mt
 #MPI_INCLUDES =
 #MPI_LIBDIR =
+#MPI_EXEC =
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =
@@ -231,6 +236,7 @@ PERL = perl
 #MPI_FLAGS =
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+#MPI_EXEC =
 FC = gfortran
 #SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-newark.cfg.in
@@ -287,6 +293,7 @@ PERL = perl
 #MPI_FLAGS =
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+#MPI_EXEC =
 FC = gfortran
 #SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-newark.cfg.in
@@ -329,6 +336,7 @@ PERL = perl
 #MPI_FLAGS =
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+#MPI_EXEC =
 FC = gfortran
 #SPEC_CPU2006 = /spec/cpu2006/1.0.1
 SPEC_CFG = spec-newark.cfg.in
@@ -379,14 +387,101 @@ PERL = perl
 #MPI_FLAGS =
 MPI_INCLUDES = /opt/local/include/mpich-mp
 MPI_LIBDIR = /opt/local/lib/mpich-mp
+#MPI_EXEC =
 FC = gfortran-mp-4.9
-SPEC_CPU2006 = /spec/cpu2006/1.0.1
+#SPEC_CPU2006 =
 SPEC_CFG = spec-osx.cfg.in
 #JUNIT_CLASSPATH =
 #NVM_TESTDIR =
 
 #PMEM_INCLUDES =
 #PMEM_LIBDIR =
+
+endif
+
+###################################################################
+# Target System: macOS 10.12 (Sierra) configured for LLVM backend #
+###################################################################
+ifeq ($(TARGET_SYSTEM),MacBookPro_LLVM)
+
+OPENARC_ARCH = 1
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = /opt/local/bin/gcc-mp-6
+CXX = /opt/local/bin/g++-mp-6
+CPP = $(CC) -E -std=c99
+GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D_OPENARC_PROFILE_=1
+BACKENDCXX = $(CXX)
+CC_FLAGS_PREFIX = 
+GBACKEND_FLAGS = -arch x86_64
+GBACKEND_INCLUDES = 
+GBACKEND_LIBS = -framework OpenCL
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB) -arch x86_64
+GFRONTEND_LIBS = -L$(OPENARCLIB) -framework OpenCL
+GFRONTEND_DEBUG = -g
+
+LLVM_TARGET_TRIPLE = x86_64-apple-macosx10.12.0
+LLVM_TARGET_DATA_LAYOUT = e-m:o-i64:64-f80:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
+PERL = perl
+
+MPI_FLAGS =
+MPI_INCLUDES = /opt/local/include/openmpi-mp
+MPI_LIBDIR = /opt/local/lib/openmpi-mp
+MPI_EXEC = /opt/local/bin/mpirun-openmpi-mp
+FC = gfortran-mp-6
+SPEC_CPU2006 = ${HOME}/installs/spec/cpu2006/1.0.1
+SPEC_CFG = spec-osx.cfg.in
+JUNIT_CLASSPATH = ${HOME}/installs/junit-4.11.jar:${HOME}/installs/hamcrest-core-1.3.jar:${HOME}/installs/system-rules/system-rules-1.9.0.jar
+#NVM_TESTDIR =
+
+PMEM_INCLUDES = ${HOME}/ornl/pmem-git/src/include
+#PMEM_LIBDIR =
+
+endif
+
+################################
+# Target System: Megatron_LLVM #
+################################
+ifeq ($(TARGET_SYSTEM),Megatron_LLVM)
+
+OPENARC_ARCH = 0
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = gcc
+CXX = g++
+CPP = $(CC) -E
+GMACROS = -D OPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D _OPENARC_PROFILE_=1
+BACKENDCXX = g++
+CC_FLAGS_PREFIX = 
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/opt/AMDAPPSDK-3.0/include
+GBACKEND_LIBS = -L/opt/AMDAPPSDK-3.0/lib/x86_64 -lOpenCL
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/AMDAPPSDK-3.0/lib/x86_64 -lOpenCL
+GFRONTEND_DEBUG = -g
+
+LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
+LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
+PERL = perl
+
+MPI_FLAGS =
+MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.10.4-rhel7-gnu/include
+MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.10.4-rhel7-gnu/lib
+MPI_EXEC = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.10.4-rhel7-gnu/bin/mpiexec
+FC = gfortran
+SPEC_CPU2006 = /opt/proj-local/jum/spec-cpu2006-v1.0.1
+SPEC_CFG = spec-newark.cfg.in
+JUNIT_CLASSPATH = /opt/proj-local/jum/junit-4.11.jar:/opt/proj-local/jum/hamcrest-core-1.3.jar:/opt/proj-local/jum/system-rules-1.9.0.jar
+NVM_TESTDIR = /opt/fio/scratch/jum
+
+PMEM_INCLUDES = /opt/proj-local/jum/pmem-git/src/include
+PMEM_LIBDIR = /opt/proj-local/jum/pmem-git/src/nondebug
 
 endif
 
@@ -422,6 +517,7 @@ GFRONTEND_DEBUG = -g
 #MPI_FLAGS =
 #MPI_INCLUDES =
 #MPI_LIBDIR =
+#MPI_EXEC =
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =
@@ -474,8 +570,10 @@ endif
 #LLVM_TARGET_DATA_LAYOUT =
 #PERL = perl
 
+#MPI_FLAGS =
 #MPI_INCLUDES =
 #MPI_LIBDIR =
+#MPI_EXEC =
 #FC =
 #SPEC_CPU2006 =
 #SPEC_CFG =

@@ -123,7 +123,7 @@ public class KernelFunctionCall extends FunctionCall
 		Declarator paramDeclarator = (Declarator)paramDecl.getChildren().get(0);
 		List<Specifier> specifierList = paramDecl.getSpecifiers();
 		boolean isPointer = false;
-		if( paramDeclarator instanceof NestedDeclarator ) {
+/*		if( paramDeclarator instanceof NestedDeclarator ) {
 			isPointer = true;
 		} else if( paramDeclarator instanceof VariableDeclarator ) {
 			VariableDeclarator vDeclr = (VariableDeclarator)paramDeclarator;
@@ -132,6 +132,12 @@ public class KernelFunctionCall extends FunctionCall
 			}
 		} else {
 			Tools.exit("[ERROR in KernelFunctionCall] Unexpected parameter type");
+		}*/
+		int symType = AnalysisTools.checkSymbolType((Symbol)paramDeclarator, call, false);
+		if( symType == -1 ) {
+			Tools.exit("[ERROR in KernelFunctionCall] Unexpected parameter type");
+		} else if( symType> 1 ) {
+			isPointer = true;
 		}
 
 		//Special case for OpenCL
@@ -181,21 +187,35 @@ public class KernelFunctionCall extends FunctionCall
 	}
     //p.print(")");
 
+	List conflist = call.getConfArguments();
     p.print("HI_kernel_call(");
 	p.print("\"" + call.getName() + "\",");
-	p.print(call.getConfArgument(0));
+	p.print(conflist.get(0));
 	p.print(",");
-	p.print(call.getConfArgument(1));
-	if(call.getConfArgument(3) != null)
+	p.print(conflist.get(1));
+	//argument for shared memory size
+	//p.print(",");
+	//p.print(conflist.get(2));
+	if(conflist.get(3) != null)
     {
         p.print(",");
-        p.print(call.getConfArgument(3));
+        p.print(conflist.get(3));
     } else {
         p.print(",");
         p.print("DEFAULT_QUEUE");
 	}
+	if( conflist.size() > 4 ) {
+		IntegerLiteral num_waits = (IntegerLiteral)conflist.get(4);
+		long num_waits_value = num_waits.getValue();
+		if( num_waits_value > 0 ) {
+			p.print(",");
+			p.print(num_waits.toString());
+			p.print(",");
+			p.print("openarc_waits");
+		}
+	}
 	p.println(");");
-	if(call.getConfArgument(3) == null)
+	if(conflist.get(3) == null)
 	{
 		if( forcedSyncCall == 0) {
 			p.print("HI_synchronize(0)");

@@ -123,8 +123,14 @@ public class DeclarationInitSeparator extends TransformPass {
 							Tools.exit("[ERROR in DeclarationInitSeparator] unexpected type of declarator: " + declr);
 						}
 						initValue.setParent(null);
-						AssignmentExpression lAssignExp = new AssignmentExpression(new Identifier((Symbol)declr),AssignmentOperator.NORMAL,
+						AssignmentExpression lAssignExp = null;
+						if( dimsize == 0 ) {
+							lAssignExp = new AssignmentExpression(new Identifier((Symbol)declr),AssignmentOperator.NORMAL,
 								initValue);
+						} else {
+							lAssignExp = new AssignmentExpression(new UnaryExpression(UnaryOperator.DEREFERENCE, new Identifier((Symbol)declr)),AssignmentOperator.NORMAL,
+								initValue);
+						}
 						Statement lAssignStmt = new ExpressionStatement(lAssignExp);
 						cStmt.addStatementAfter(declStmt, lAssignStmt);
 						/*

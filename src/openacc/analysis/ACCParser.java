@@ -1237,6 +1237,7 @@ public class ACCParser {
 	 *		where clause is one of the following
 	 *      if( condition )
 	 *      async [( scalar-integer-expression )]
+	 *      wait [( scalar-integer-expression-list )]
 	 *      num_gangs( scalar-integer-expression )
 	 *      num_workers( scalar-integer-expression )
 	 *      vector_length( scalar-integer-expression )
@@ -1279,6 +1280,7 @@ public class ACCParser {
 					switch (acc_clause.valueOf(clause)) {
 					case acc_if		:	parse_acc_confclause(tok); break;
 					case acc_async	:	parse_acc_optionalconfclause(tok); break;
+					case acc_wait	:	parse_acc_optionalconflistclause(tok); break;
 					case acc_num_gangs		:	parse_acc_confclause(tok); break;
 					case acc_num_workers	:	parse_acc_confclause(tok); break;
 					case acc_vector_length		:	parse_acc_confclause(tok); break;
@@ -1319,6 +1321,7 @@ public class ACCParser {
 	 *		where clause is one of the following
 	 *      if( condition )
 	 *      async [( scalar-integer-expression )]
+	 *      wait [( scalar-integer-expression-list )]
 	 *      num_gangs( scalar-integer-expression )
 	 *      num_workers( scalar-integer-expression )
 	 *      vector_length( scalar-integer-expression )
@@ -1363,6 +1366,7 @@ public class ACCParser {
 				switch (acc_clause.valueOf(clause)) {
 				case acc_if		:	parse_acc_confclause(tok); break;
 				case acc_async	:	parse_acc_optionalconfclause(tok); break;
+				case acc_wait	:	parse_acc_optionalconflistclause(tok); break;
 				case acc_num_gangs		:	parse_acc_confclause(tok); break;
 				case acc_num_workers	:	parse_acc_confclause(tok); break;
 				case acc_vector_length		:	parse_acc_confclause(tok); break;
@@ -1409,6 +1413,7 @@ public class ACCParser {
 	 *		where clause is one of the following
 	 *      if( condition )
 	 *      async [( scalar-integer-expression )]
+	 *      wait [( scalar-integer-expression-list )]
 	 * 		copy( list ) 
 	 * 		copyin( list ) 
 	 * 		copyout( list ) 
@@ -1445,6 +1450,7 @@ public class ACCParser {
 					switch (acc_clause.valueOf(clause)) {
 					case acc_if		:	parse_acc_confclause(tok); break;
 					case acc_async	:	parse_acc_optionalconfclause(tok); break;
+					case acc_wait	:	parse_acc_optionalconflistclause(tok); break;
 					case acc_copy		:	parse_acc_dataclause(tok); break;
 					case acc_copyin 		:	parse_acc_dataclause(tok); break;
 					case acc_copyout 		:	parse_acc_dataclause(tok); break;
@@ -1479,6 +1485,7 @@ public class ACCParser {
 	 *		where clause is one of the following
 	 *      if( condition )
 	 *      async [( scalar-integer-expression )]
+	 *      wait [( scalar-integer-expression-list )]
 	 * 		copy( list ) 
 	 * 		copyin( list ) 
 	 * 		copyout( list ) 
@@ -1519,6 +1526,7 @@ public class ACCParser {
 				switch (acc_clause.valueOf(clause)) {
 				case acc_if		:	parse_acc_confclause(tok); break;
 				case acc_async	:	parse_acc_optionalconfclause(tok); break;
+				case acc_wait	:	parse_acc_optionalconflistclause(tok); break;
 				case acc_copy		:	parse_acc_dataclause(tok); break;
 				case acc_copyin 		:	parse_acc_dataclause(tok); break;
 				case acc_copyout 		:	parse_acc_dataclause(tok); break;
@@ -1698,7 +1706,7 @@ public class ACCParser {
 				case acc_present_or_create	:	parse_acc_dataclause("pcreate"); break;
 				case acc_pcreate	:	parse_acc_dataclause(tok); break;
 				case acc_async	:	parse_acc_optionalconfclause(tok); break;
-				case acc_wait	:	parse_acc_optionalconfclause(tok); break;
+				case acc_wait	:	parse_acc_optionalconflistclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -1736,7 +1744,7 @@ public class ACCParser {
 				case acc_if		:	parse_acc_confclause(tok); break;
 				case acc_copyout 		:	parse_acc_dataclause(tok); break;
 				case acc_async	:	parse_acc_optionalconfclause(tok); break;
-				case acc_wait	:	parse_acc_optionalconfclause(tok); break;
+				case acc_wait	:	parse_acc_optionalconflistclause(tok); break;
 				case acc_finalize		: parse_acc_noargclause(tok); break;
 				case acc_delete 		:	parse_acc_dataclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
@@ -1894,6 +1902,8 @@ public class ACCParser {
 	 *
 	 *		where clause is one of the following
 	 * 		use_device( list ) 
+	 *      async [( scalar-integer-expression )]
+	 *      wait [( scalar-integer-expression-list )]
 	 * --------------------------------------------------------------- */
 	private static void parse_acc_update()
 	{
@@ -1914,7 +1924,7 @@ public class ACCParser {
 				case acc_device	:	parse_acc_dataclause(tok); clauseexist = true; break;
 				case acc_if		:	parse_acc_confclause(tok); break;
 				case acc_async	:	parse_acc_optionalconfclause(tok); break;
-				case acc_wait	:	parse_acc_optionalconfclause(tok); break;
+				case acc_wait	:	parse_acc_optionalconflistclause(tok); break;
 				default : ACCParserError("NoSuchOpenACCConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -2303,6 +2313,7 @@ public class ACCParser {
 				case token_unroll		:	parse_acc_confclause(tok); break;
 				case token_if		:	parse_acc_confclause(tok); break;
 				case token_async	:	parse_acc_optionalconfclause(tok); break;
+				case token_wait	:	parse_acc_optionalconflistclause(tok); break;
 				case token_num_gangs		:	parse_acc_confclause(tok); break;
 				case token_num_workers	:	parse_acc_confclause(tok); break;
 				case token_vector_length		:	parse_acc_confclause(tok); break;
@@ -2931,6 +2942,25 @@ public class ACCParser {
 				ACCParserError("No valid argument is found for the clause, " + clause);
 			} else {
 				addToMap(clause, exp);
+			}
+		} else {
+			addToMap(clause, "_clause");
+		}
+	}
+
+	private static void parse_acc_optionalconflistclause(String clause)
+	{
+		PrintTools.println("ACCParser is parsing ["+clause+"] clause", 3);
+		if( check("(") ) {
+			match("(");
+			List<Expression> elist = new LinkedList<Expression>(); 
+			parse_commaSeparatedExpressionList(elist);
+			match(")");
+			if( elist.isEmpty() ) {
+				//addToMap(clause, "_clause");
+				ACCParserError("No valid argument list is found for the clause, " + clause);
+			} else {
+				addToMap(clause, elist);
 			}
 		} else {
 			addToMap(clause, "_clause");
@@ -4203,6 +4233,7 @@ public class ACCParser {
 	{
 		token_if,
 		token_async,
+		token_wait,
 		token_num_gangs,
 		token_num_workers,
 		token_vector_length,
