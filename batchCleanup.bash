@@ -122,6 +122,6 @@ do
 		echo "==> Clean up OpenARC runtime"
 		cd $openarc/openarcrt
 		make purge
-		rm -f binBuilder_* libopenaccrt_* libopenaccrtomp_* libresilience.a libompheler.a
+		rm -f binBuilder_* libopenaccrt_* libopenaccrtomp_* libresilience.a libomphelper.a
 	fi
 done

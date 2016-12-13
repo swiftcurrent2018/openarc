@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.7 (Nov. 01, 2016)
+OpenARC V0.8 (Dec. 13, 2016)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -222,6 +222,19 @@ This OpenARC release has the following contents.
 * llvm                   - LLVM sources
 * jllvm                  - Java bindings for LLVM
 * test                   - Examples showing how to use OpenARC
+
+
+-------------------------------------------------------------------------------
+REFERENCE
+-------------------------------------------------------------------------------
+To cite OpenARC, please use the following papers:
+
+Seyong Lee and Jeffrey S. Vetter, OpenARC: Open Accelerator Research Compiler for Directive-Based, Efficient Heterogeneous Computing, HPDC: International ACM Symposium on High-Performance Parallel and Distributed Computing, Short Paper, June 2014
+
+Seyong Lee and Jeffrey S. Vetter, OpenARC: Extensible OpenACC Compiler Framework for Directive-Based Accelerator Programming Study, WACCPD: Workshop on Accelerator Programming Using Directives in Conjunction with SC'14, November 2014
+
+Bibtex files for the above papers and other OpenARC-related research can be found
+in the OpenARC website (http://ft.ornl.gov/research/openarc).
 
 
 -------------------------------------------------------------------------------
