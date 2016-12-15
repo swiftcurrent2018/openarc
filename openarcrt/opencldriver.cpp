@@ -1534,6 +1534,8 @@ HI_error_t OpenCLDriver::HI_memcpy_async(void *dst, const void *src, size_t coun
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+    HI_wait_for_events(async, num_waits, waits);
+
     //err = cudaMemcpy(dst, src, count, toCudaMemcpyKind(kind));
     cl_int  err = CL_SUCCESS;
     cl_command_queue queue = getQueue(async);
@@ -1646,6 +1648,8 @@ HI_error_t OpenCLDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t cou
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+    HI_wait_for_events(async, num_waits, waits);
+
     //err = cudaMemcpy(dst, src, count, toCudaMemcpyKind(kind));
     cl_int  err;
     cl_command_queue queue = getQueue(async);
@@ -1858,6 +1862,8 @@ HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, int gridSize[3]
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+    HI_wait_for_events(async, num_waits, waits);
+
     size_t globalSize[3];
     globalSize[0] = gridSize[0]*blockSize[0];
     globalSize[1] = gridSize[1]*blockSize[1];
@@ -2352,6 +2358,39 @@ int OpenCLDriver::HI_async_test_all() {
 	}
 #endif
     return 1;
+}
+
+void OpenCLDriver::HI_wait_for_events(int async, int num_waits, int* waits) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_for_events()\n");
+	}
+#endif
+    cl_int  err;
+    HostConf_t * tconf = getHostConf();
+    if (num_waits > 0 && async != DEFAULT_QUEUE+tconf->asyncID_offset) {
+        cl_command_queue queue = getQueue(async);
+        cl_event* event_wait_list = new cl_event[num_waits];
+        cl_uint num_events_in_wait_list = 0;
+        for (int i = 0; i < num_waits; i++) {
+            if (waits[i] == async) continue;
+            event_wait_list[num_events_in_wait_list++] = *getEvent(waits[i]);
+        }
+        if (num_events_in_wait_list > 0) {
+            err = clEnqueueMarkerWithWaitList(queue, num_events_in_wait_list, event_wait_list, NULL);
+            if( err != CL_SUCCESS ) {
+                fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_for_events()] :failed error %d (%s)\n", err, opencl_error_code(err));
+                exit(1);
+            }
+        }
+        //TODO: delete[] event_wait_list;
+    }
+
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_wait_for_events()\n");
+	}
+#endif
 }
 
 void OpenCLDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {

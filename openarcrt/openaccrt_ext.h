@@ -133,6 +133,7 @@ public:
     int HI_async_test(int asyncId);
     int HI_async_test_ifpresent(int asyncId);
     int HI_async_test_all();
+    void HI_wait_for_events(int async, int num_waits, int* waits);
     CUstream getQueue(int async) {
 		if( queueMap.count(async + 2) == 0 ) {
 			fprintf(stderr, "[ERROR in getQueue()] queue does not exist for async ID = %d\n", async);
@@ -224,6 +225,7 @@ public:
     int HI_async_test(int asyncId);
     int HI_async_test_ifpresent(int asyncId);
     int HI_async_test_all();
+    void HI_wait_for_events(int async, int num_waits, int* waits);
 
     cl_command_queue getQueue(int async) {
 		if( queueMap.count(async + 2) == 0 ) {

@@ -88,6 +88,10 @@ do
 					else
 						make purge
 					fi
+					echo "${example}" | grep "npb" > /dev/null
+					if [ $? -eq 0 ]; then
+						rm -f npbparams.h
+					fi
 				fi
 			done
 			cd $openarc/test/benchmarks

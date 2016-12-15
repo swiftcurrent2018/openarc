@@ -226,6 +226,7 @@ public:
     virtual int HI_async_test(int asyncId)=0;
     virtual int HI_async_test_ifpresent(int asyncId)=0;
     virtual int HI_async_test_all()=0;
+    virtual void HI_wait_for_events(int async, int num_waits, int* waits)=0;
 
     virtual void HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags=HI_MEM_READ_WRITE) = 0;
     virtual void HI_free(void *devPtr) = 0;

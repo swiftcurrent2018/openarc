@@ -1638,6 +1638,8 @@ HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constNam
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_const_async(%d, %lu)\n", async, count);
 	}
 #endif
+    HI_wait_for_events(async, num_waits, waits);
+
     HostConf_t * tconf = getHostConf();
     CUresult cuResult;
     HI_error_t result = HI_success;
@@ -1748,6 +1750,8 @@ HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+    HI_wait_for_events(async, num_waits, waits);
+
     CUresult cuResult = CUDA_SUCCESS;
     CUstream stream = getQueue(async);
     CUevent event = getEvent(async);
@@ -1841,6 +1845,8 @@ HI_error_t CudaDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+    HI_wait_for_events(async, num_waits, waits);
+
     CUresult cuResult;
     CUstream stream = getQueue(async);
     CUevent event = getEvent(async);
@@ -2233,6 +2239,9 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+
+    HI_wait_for_events(async, num_waits, waits);
+
     CUresult err;
     //fprintf(stderr, "[HI_kernel_call()] GRIDSIZE %d %d %d\n", gridSize[2], gridSize[1], gridSize[0]);
     CUstream stream = getQueue(async);
@@ -2761,6 +2770,32 @@ int CudaDriver::HI_async_test_all() {
     return 1;
 }
 
+void CudaDriver::HI_wait_for_events(int async, int num_waits, int* waits) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_for_events()\n");
+	}
+#endif
+    CUresult cuResult = CUDA_SUCCESS;
+    HostConf_t * tconf = getHostConf();
+    if (num_waits > 0 && async != DEFAULT_QUEUE+tconf->asyncID_offset) {
+        CUstream stream = getQueue(async);
+        for (int i = 0; i < num_waits; i++) {
+            if (waits[i] == async) continue;
+            CUevent event = getEvent(waits[i]);
+            cuResult = cuStreamWaitEvent(stream, event, 0);
+            if(cuResult != CUDA_SUCCESS) {
+                fprintf(stderr, "[ERROR in CudaDriver::HI_wait_for_events()] failed to call cuStreamWaitEvent %d (%s)\n", cuResult, cuda_error_code(cuResult));
+                exit(1);
+            }
+        }
+    }
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_wait_for_events()\n");
+	}
+#endif
+}
 
 void CudaDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {
 #ifdef _OPENARC_PROFILE_
