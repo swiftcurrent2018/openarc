@@ -208,12 +208,19 @@ ifeq ($(OPENARC_ARCH), 3)
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
+# Altera OpenCL 15.0
 GBACKEND_INCLUDES = -I/opt/altera/15.0/hld/host/include -I/opt/altera/15.0/hld/board/nalla_pcie/include
 GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+# Altera OpenCL 16.1
+#GBACKEND_INCLUDES = -I/opt/altera/16.1/hld/host/include -I/opt/altera/16.1/hld/board/a10_ref/include
+#GBACKEND_LIBS = -L/opt/altera/16.1/hld/board/a10_ref/linux64/lib -L/opt/altera/16.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -laltera_a10_ref_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+# Altera OpenCL 15.0
 GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+# Altera OpenCL 16.1
+#GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/16.1/hld/board/a10_ref/linux64/lib -L/opt/altera/16.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -laltera_a10_ref_mmd -lelf -lrt -ldl -lstdc++ 
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
