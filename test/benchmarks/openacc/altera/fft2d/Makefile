@@ -43,7 +43,9 @@ DEFSET_ACC = -DVERIFICATION=$(VERIFICATION) -DLOGN=$(LOGN)
 # AOCL_BOARD: set a target Altera FPGA board             #
 #    - "--board $(AOCL_BOARD)" will be added to the AOC  #
 #     in addition to the above flags                     # 
-#    (default: p385_hpc_a7)                              #
+#    - Examples                                          #
+#    p385_hpc_d5 //for Stratix V (default)               #
+#    p510t_sch_ax115 //for Arria 10 (Nallatech 510T)     #
 ##########################################################
 OMP ?= 0
 MODE ?= normal

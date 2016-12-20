@@ -2369,10 +2369,10 @@ void OpenCLDriver::HI_wait_for_events(int async, int num_waits, int* waits) {
     cl_int  err;
     HostConf_t * tconf = getHostConf();
     if (num_waits > 0 && async != DEFAULT_QUEUE+tconf->asyncID_offset) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
-		fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_for_events()] :not supported on Altera FPGAs with Altera OpenCL SDK version 16.1 or less\n");
-		exit(1);
-#else
+//#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
+//		fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_for_events()] :not supported on Altera FPGAs with Altera OpenCL SDK version 16.1 or less\n");
+//		exit(1);
+//#else
         cl_command_queue queue = getQueue(async);
         cl_event* event_wait_list = new cl_event[num_waits];
         cl_uint num_events_in_wait_list = 0;
@@ -2381,14 +2381,18 @@ void OpenCLDriver::HI_wait_for_events(int async, int num_waits, int* waits) {
             event_wait_list[num_events_in_wait_list++] = *getEvent(waits[i]);
         }
         if (num_events_in_wait_list > 0) {
+#ifdef CL_VERSION_1_2
             err = clEnqueueMarkerWithWaitList(queue, num_events_in_wait_list, event_wait_list, NULL);
+#else
+            err = clEnqueueWaitForEvents(queue, num_events_in_wait_list, event_wait_list);
+#endif
             if( err != CL_SUCCESS ) {
                 fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_for_events()] :failed error %d (%s)\n", err, opencl_error_code(err));
                 exit(1);
             }
         }
         //TODO: delete[] event_wait_list;
-#endif
+//#endif
     }
 
 #ifdef _OPENARC_PROFILE_

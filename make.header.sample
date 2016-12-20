@@ -111,6 +111,8 @@ CETUS_OUTPUT = cetus_output
 # Kold: a mini cluster consisting of four HP SL250 nodes used for      #
 #       pilot studies within the Keeneland project.                    #
 # Cooley: ALCF NVIDIA GPU cluster                                      #
+# Oswald: Heterogeneous mini cluster with NVIDIA Tesla K80m and        #
+#         Nallatech 510T FPGA                                          #
 ########################################################################
 TARGET_SYSTEM = Newark
 
@@ -209,18 +211,18 @@ BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
 # Altera OpenCL 15.0
-GBACKEND_INCLUDES = -I/opt/altera/15.0/hld/host/include -I/opt/altera/15.0/hld/board/nalla_pcie/include
-GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+#GBACKEND_INCLUDES = -I/opt/altera/15.0/hld/host/include
+#GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 # Altera OpenCL 16.1
-#GBACKEND_INCLUDES = -I/opt/altera/16.1/hld/host/include -I/opt/altera/16.1/hld/board/a10_ref/include
-#GBACKEND_LIBS = -L/opt/altera/16.1/hld/board/a10_ref/linux64/lib -L/opt/altera/16.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -laltera_a10_ref_mmd -lelf -lrt -ldl -lstdc++
+GBACKEND_INCLUDES = -I/opt/altera/16.1/standard/hld/host/include
+GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
 # Altera OpenCL 15.0
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+#GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
 # Altera OpenCL 16.1
-#GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/16.1/hld/board/a10_ref/linux64/lib -L/opt/altera/16.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -laltera_a10_ref_mmd -lelf -lrt -ldl -lstdc++ 
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ -lOpenCL
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
@@ -254,6 +256,79 @@ SPEC_CFG = spec-newark.cfg.in
 #PMEM_LIBDIR = /pmem-git/src/debug
 
 endif
+
+#########################
+# Target System: Oswald #
+#########################
+ifeq ($(TARGET_SYSTEM),Oswald)
+
+OPENARC_ARCH = 3
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = gcc
+CXX = g++
+CPP = $(CC) -E
+GMACROS = -D OPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D _OPENARC_PROFILE_=1
+
+ifeq ($(OPENARC_ARCH), 0)
+BACKENDCXX = nvcc
+CC_FLAGS_PREFIX = -Xcompiler
+GBACKEND_FLAGS = -arch sm_20 -O3
+GBACKEND_INCLUDES = -I/opt/cuda/8.0/cuda/include
+GBACKEND_LIBS = -lcuda -lOpenCL
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB) -lcuda
+GFRONTEND_DEBUG = -g
+else
+ifeq ($(OPENARC_ARCH), 3)
+BACKENDCXX = g++
+CC_FLAGS_PREFIX = 
+GBACKEND_FLAGS = -O3
+# Altera OpenCL 16.1
+GBACKEND_INCLUDES = -I/opt/altera/16.1/hld/host/include
+GBACKEND_LIBS = -L/opt/altera/16.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+# Altera OpenCL 16.1
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/16.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+GFRONTEND_DEBUG = -g
+else
+BACKENDCXX = g++
+CC_FLAGS_PREFIX = 
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/opt/cuda/8.0/cuda/include
+GBACKEND_LIBS = -lOpenCL
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB) -lOpenCL
+GFRONTEND_DEBUG = -g
+endif
+endif
+
+LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
+LLVM_TARGET_DATA_LAYOUT = e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128-p1:192:64:64-p2:192:64:64
+PERL = perl
+
+#MPI_FLAGS =
+MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
+MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+#MPI_EXEC =
+FC = gfortran
+#SPEC_CPU2006 = /spec/cpu2006/1.0.1
+SPEC_CFG = spec-newark.cfg.in
+#JUNIT_CLASSPATH = /junit-4.11.jar:/hamcrest-core-1.3.jar:/system-rules-1.9.0.jar
+#NVM_TESTDIR =
+
+#PMEM_INCLUDES = /pmem-git/src/include
+#PMEM_LIBDIR = /pmem-git/src/debug
+
+endif
+
 
 #########################
 # Target System: Kold #

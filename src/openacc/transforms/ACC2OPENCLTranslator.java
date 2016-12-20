@@ -1796,8 +1796,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			}
 		}
 
-        if((asyncExp != null) && (dataClauseT != DataClauseType.Pipe) && (dataClauseT != DataClauseType.PipeIn) &&
-        		(dataClauseT != DataClauseType.PipeOut) )
+//[DEBUG] HI_set_async call shoulde be called whenever async clause is present.
+//        if((asyncExp != null) && (dataClauseT != DataClauseType.Pipe) && (dataClauseT != DataClauseType.PipeIn) &&
+//        		(dataClauseT != DataClauseType.PipeOut) )
+		if(asyncExp != null)
         {
             FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
             setAsyncCall.addArgument(asyncExp.clone());
