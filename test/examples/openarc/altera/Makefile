@@ -48,7 +48,7 @@ DEFSET_ACC = -D_N_=$(_N_)
 OMP ?= 0
 MODE ?= normal
 AOCL_BOARD ?= p385_hpc_d5
-#AOCL_BOARD ?= p385_hpc_a7
+#AOCL_BOARD ?= p510t_sch_ax115 
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
 #AOCL_FLAGS ?= -v -g -c --report
