@@ -37,15 +37,21 @@ public class CompoundStatement extends Statement implements SymbolTable {
     * Adds a declaration after the last declaration; this models the C
     * language's requirement that all declarations appear at the beginning of a
     * block.
+    * 
+    * <p>
+    * [line parameter added by Joel E. Denny.]
+    * </p>
     *
     * @param decl The declaration to add.
+    * @param line The line number of the declaration.
     * @throws NotAnOrphanException if <b>decl</b> has a parent.
     */
-    public void addDeclaration(Declaration decl) {
+    public void addDeclaration(Declaration decl, int line) {
         if (decl.getParent() != null) {
             throw new NotAnOrphanException();
         }
         DeclarationStatement stmt = new DeclarationStatement(decl);
+        stmt.setLineNumber(line);
         int i = 0;
         int size = children.size();
         while (i < size &&
@@ -56,6 +62,9 @@ public class CompoundStatement extends Statement implements SymbolTable {
         children.add(i, stmt);
         stmt.setParent(this);
         SymbolTools.addSymbols(this, decl);
+    }
+    public void addDeclaration(Declaration decl) {
+      addDeclaration(decl, -1);
     }
 
     /* SymbolTable interface */

@@ -1,12 +1,22 @@
 package cetus.analysis;
 
+import cetus.hir.Expression;
+import cetus.hir.IntegerLiteral;
+import cetus.hir.NameID;
 import cetus.hir.PrintTools;
+import cetus.hir.SomeExpression;
 import cetus.hir.Tools;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import openacc.analysis.ACCParser.ExpressionParser;
+import openacc.analysis.SubArray;
 
 /**
  * an OpenMP directive parser
@@ -17,6 +27,7 @@ public class OmpParser {
     private static int token_index;
     private static HashMap omp_map;
     private int debug_level;
+	private static final int infiniteLoopCheckTh = 1024; //used to detect possible infinite loop due to incorrect parsing.
 
     public OmpParser() {
     }
@@ -1669,7 +1680,8 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [shared] clause", 2);
         match("(");
         Set set = new HashSet<String>();
-        parse_commaSeparatedList(set);
+        parse_commaSeparatedSubArrayList(set, 0);
+//        parse_commaSeparatedList(set);
         match(")");
         addToMap("shared", set);
     }
@@ -1739,7 +1751,8 @@ public class OmpParser {
         if (set == null) {
             set = new HashSet<String>();
         }
-        parse_commaSeparatedList(set);
+        parse_commaSeparatedSubArrayList(set, 0);
+//        parse_commaSeparatedList(set);
         match(")");
         reduction_map.put(op, set);
         addToMap("reduction", reduction_map);
@@ -1795,6 +1808,122 @@ public class OmpParser {
             }
         }*/
     }
+
+	/**
+		* This function reads a list of comma-separated subarrays
+		* It checks the right parenthesis to end the parsing, but does not consume it.
+		* 
+		*/
+	private static void parse_commaSeparatedSubArrayList(Set collect, int limit)
+	{
+		String tok;
+		int counter = 0;
+//		try {
+			for (;;) {
+				tok = get_token();
+				Expression aName = ExpressionParser.parse(tok);
+				if( aName == null ) {
+					OmpParserError("null is returned where SubArray name is expected!");
+				}
+				//"*" is special variable used in resilience ftdata clause.
+				if( aName.toString().equals("(*)") ) {
+					aName = new NameID("*");
+				} else if( (aName instanceof SomeExpression) ) {
+					OmpParserError("Current implementation supports only simple scalar or array variables (but not class members) in OpenACC data clauses.");
+				}
+				SubArray subArr = new SubArray(aName);
+				if ( check(")") )
+				{
+					collect.add(subArr.toString());
+					counter++;
+					break;
+				}
+				else if ( check("[") ) 
+				{
+					tok = lookahead();
+					while( tok.equals("[") ) {
+						eat();
+						List<Expression> range = new ArrayList<Expression>(2);
+						//Find start index expression
+						tok = get_token();
+						if( tok.equals(":") ) {
+							range.add(0, new IntegerLiteral(0));
+						} else {
+							StringBuilder sb = new StringBuilder(32);
+							int cnt1 = 0;
+							while ( !tok.equals(":") && !tok.equals("]") ) {
+								sb.append(tok);
+								tok = get_token();
+								cnt1++;
+								if( cnt1 > infiniteLoopCheckTh ) {
+									OmpParserError("Can't find : token in the Subarray expressions");
+									System.exit(0);
+								}
+							}
+							if( tok.equals(":") ) {
+								range.add(0, ExpressionParser.parse(sb.toString()));
+							} else if( tok.equals("]") ) {
+								//AA[n] => AA[0:n]
+								range.add(0, new IntegerLiteral(0));
+								range.add(1, ExpressionParser.parse(sb.toString()));
+							}
+						}
+						if( tok.equals(":") ) {
+							//Find length expression
+							tok = get_token();
+							if( tok.equals("]") ) {
+								range.add(1, null);
+							} else {
+								StringBuilder sb = new StringBuilder(32);
+								int cnt1 = 0;
+								while ( !tok.equals("]") ) {
+									sb.append(tok);
+									tok = get_token();
+									cnt1++;
+									if( cnt1 > infiniteLoopCheckTh ) {
+										OmpParserError("Can't find ] token in the Subarray expressions");
+										System.exit(0);
+									}
+								}
+								range.add(1, ExpressionParser.parse(sb.toString()));
+							}
+						}
+						subArr.addRange(range);
+						tok = lookahead();
+					}
+					if( tok.equals(")") ) {
+						collect.add(subArr.toString());
+						counter++;
+						break;
+					} else if( tok.equals(",") ) {
+						collect.add(subArr.toString());
+						counter++;
+						eat();
+						if( (limit > 0) && (counter == limit) ) {
+							break;
+						}
+					} else {
+						OmpParserError("comma expected in comma separated list");
+					}
+				}
+				else if ( check(",") )
+				{
+					collect.add(subArr.toString());
+					counter++;
+					eat();
+					if( (limit > 0) && (counter == limit) ) {
+						break;
+					}
+				}
+				else 
+				{
+					OmpParserError("comma expected in comma separated list");
+				}
+			}
+/*		} catch( Exception e) {
+			OmpParserError("unexpected error in parsing comma-separated SubArray list");
+		}*/
+	}
 
     private static void notSupportedWarning(String text) {
         System.out.println("Not Supported OpenMP feature: " + text); 
@@ -1908,7 +2037,8 @@ public class OmpParser {
     		match(":");
     	}
         Set set = new HashSet<String>();
-        parse_commaSeparatedList(set);
+        parse_commaSeparatedSubArrayList(set, 0);
+//        parse_commaSeparatedList(set);
     	match(")");
     	if( mapType_prefix == null ) {
     		addToMap(mapType, set);
@@ -1926,7 +2056,8 @@ public class OmpParser {
     		dependType = get_token();
     		match(":");
     		Set set = new HashSet<String>();
-    		parse_commaSeparatedList(set);
+    		parse_commaSeparatedSubArrayList(set, 0);
+//        parse_commaSeparatedList(set);
     		match(")");
     		addToMap(dependType, set);
     	} else if( check("source") ) {
@@ -1983,7 +2114,8 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [to] clause", 2);
         match("(");
         Set set = new HashSet<String>();
-        parse_commaSeparatedList(set);
+        parse_commaSeparatedSubArrayList(set, 0);
+//        parse_commaSeparatedList(set);
         match(")");
         addToMap("to", set);
     }
@@ -1992,7 +2124,8 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [from] clause", 2);
         match("(");
         Set set = new HashSet<String>();
-        parse_commaSeparatedList(set);
+        parse_commaSeparatedSubArrayList(set, 0);
+//        parse_commaSeparatedList(set);
         match(")");
         addToMap("from", set);
     }
@@ -2001,7 +2134,8 @@ public class OmpParser {
         PrintTools.println("OmpParser is parsing [link] clause", 2);
         match("(");
         Set set = new HashSet<String>();
-        parse_commaSeparatedList(set);
+        parse_commaSeparatedSubArrayList(set, 0);
+//        parse_commaSeparatedList(set);
         match(")");
         addToMap("link", set);
     }

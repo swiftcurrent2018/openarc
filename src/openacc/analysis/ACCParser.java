@@ -3959,6 +3959,7 @@ public class ACCParser {
 				case nvl_backup_writeFirst : parse_acc_dataclause(token); break;
 				case nvl_clobber : parse_acc_dataclause(token); break;
 				case nvl_readonly : parse_acc_dataclause(token); break;
+				case nvl_mpiGroup : parse_acc_confclause(token); break;
 				default : ACCParserError("NoSuchNVLConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -4346,6 +4347,7 @@ public class ACCParser {
 		nvl_backup_writeFirst,
 		nvl_clobber,
 		nvl_readonly,
+		nvl_mpiGroup,
 	}
 
 

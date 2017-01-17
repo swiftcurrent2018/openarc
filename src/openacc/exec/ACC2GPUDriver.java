@@ -89,6 +89,10 @@ public class ACC2GPUDriver extends Driver
         "Generate debug output for BuildLLVM pass. Has no effect if BuildLLVM"
         + " pass is not enabled (see -emitLLVM)");
 
+      options.add(options.UTILITY, "disableLineLLVM",
+        "Do not include line numbers in error messages from BuildLLVM pass."
+        + " Has no effect if BuildLLVM pass is not enabled (see -emitLLVM)");
+
       options.add(options.UTILITY, "WerrorLLVM",
         "Report all BuildLLVM warnings as errors. Has no effect if BuildLLVM"
         + " pass is not enabled (see -emitLLVM)");
@@ -846,6 +850,9 @@ public class ACC2GPUDriver extends Driver
 		value = getOptionValue("debugLLVM");
 		final boolean debugLLVM = value != null && Integer.valueOf(value) != 0;
 		
+		value = getOptionValue("disableLineLLVM");
+		final boolean disableLineLLVM = value != null && Integer.valueOf(value) != 0;
+		
 		value = getOptionValue("WerrorLLVM");
 		final boolean WerrorLLVM = value != null && Integer.valueOf(value) != 0;
 		
@@ -873,7 +880,8 @@ public class ACC2GPUDriver extends Driver
 			ACCAnalysis.updateSymbolsInACCAnnotations(program, null);
 			try {
 				buildLLVM = BuildLLVMDelegate.make(
-				  targetTriple, targetDataLayout, program, debugLLVM, WerrorLLVM,
+				  targetTriple, targetDataLayout, program,
+				  debugLLVM, !disableLineLLVM, WerrorLLVM,
 				  getOptionValue("enableFaultInjection") != null);
 			} catch (BuildLLVMDelegate.BuildLLVMDisabledException e) {
 				System.err.println("-emitLLVM is disabled because OpenARC was built"

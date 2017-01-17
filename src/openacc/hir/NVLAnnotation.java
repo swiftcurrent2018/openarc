@@ -32,7 +32,8 @@ public class NVLAnnotation extends PragmaAnnotation
  *   [heap(heap-pointer)] \
  *   [default(backup|backup_writeFirst|clobber|readonly)] \
  *   [backup(NVM-pointer)] [backup_writeFirst(NVM-pointer)] \
- *   [clobber(NVM-pointer)] [readonly(NVM-pointer)]
+ *   [clobber(NVM-pointer)] [readonly(NVM-pointer)] \
+ *   [mpiGroup(mpi-group-handle)]
  */
 
   // NVL directives
@@ -47,7 +48,7 @@ public class NVLAnnotation extends PragmaAnnotation
   private static final Set<String> collection_values =
     new HashSet<String>(Arrays.asList("heap", "default",
                                       "backup", "backup_writeFirst",
-                                      "clobber", "readonly"));
+                                      "clobber", "readonly", "mpiGroup"));
 
   // Pragmas used with optional value
   private static final Set<String> optional_values = 
@@ -58,7 +59,7 @@ public class NVLAnnotation extends PragmaAnnotation
   private static final List<String> print_order =
     new ArrayList<String>(Arrays.asList( "atomic", "heap", "default",
                                          "backup", "backup_writeFirst",
-                                         "clobber", "readonly" ));
+                                         "clobber", "readonly", "mpiGroup" ));
 
   /**
    * Constructs an empty NVL annotation.

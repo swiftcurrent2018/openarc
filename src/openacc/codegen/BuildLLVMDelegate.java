@@ -52,6 +52,12 @@ public abstract class BuildLLVMDelegate extends CodeGenPass {
    *          the program for which to build LLVM IR
    * @param debugOutput
    *          whether to produce debug output
+   * @param reportLine
+   *          whether to include statement line numbers in error messages.
+   *          This is an experimental feature, so the line numbers might be
+   *          wrong. Moreover, expected error messages in the test suite
+   *          were originally written before this feature was implemented,
+   *          and we don't want to take the time to update them.
    * @param warningsAsErrors
    *          whether to report warnings as errors
    * @param enableFaultInjection
@@ -64,43 +70,46 @@ public abstract class BuildLLVMDelegate extends CodeGenPass {
    */
   public static BuildLLVMDelegate make(
     String llvmTargetTriple, String llvmTargetDataLayout, Program program,
-    boolean debugOutput, boolean warningsAsErrors,
+    boolean debugOutput, boolean reportLine, boolean warningsAsErrors,
     boolean enableFaultInjection) throws BuildLLVMDisabledException
   {
     if (ctor == null) {
       Class <?> clazz;
       try {
-        clazz = ClassLoader.getSystemClassLoader().loadClass(BUILD_LLVM_CLASS);
-      } catch (ClassNotFoundException e) {
+        clazz = ClassLoader.getSystemClassLoader()
+                .loadClass(BUILD_LLVM_CLASS);
+      }
+      catch (ClassNotFoundException e) {
         throw new BuildLLVMDisabledException();
       }
       if (!BuildLLVMDelegate.class.isAssignableFrom(clazz)) {
-        throw new IllegalStateException(BUILD_LLVM_CLASS
-                                        + " is not a subclass of "
-                                        + BuildLLVMDelegate.class.getName());
+        throw new IllegalStateException(
+          BUILD_LLVM_CLASS+" is not a subclass of "
+          +BuildLLVMDelegate.class.getName());
       }
       @SuppressWarnings("unchecked")
       Class<BuildLLVMDelegate> clazz1 = (Class<BuildLLVMDelegate>)clazz;
       try {
-        ctor = clazz1.getDeclaredConstructor(String.class, String.class,
-                                             Program.class, boolean.class,
-                                             boolean.class, boolean.class);
-      } catch (NoSuchMethodException | SecurityException e) {
+        ctor = clazz1.getDeclaredConstructor(
+          String.class, String.class, Program.class, boolean.class,
+          boolean.class, boolean.class, boolean.class);
+      }
+      catch (NoSuchMethodException | SecurityException e) {
         throw new IllegalStateException(
-                    BUILD_LLVM_CLASS + " does not have the expected constructor",
-                    e);
+          BUILD_LLVM_CLASS+" does not have the expected constructor", e);
       }
       System.loadLibrary("jllvm");
     }
     try {
-      return ctor.newInstance(llvmTargetTriple, llvmTargetDataLayout, program,
-                              debugOutput, warningsAsErrors,
-                              enableFaultInjection);
-    } catch (InstantiationException | IllegalAccessException
-             | IllegalArgumentException | InvocationTargetException e)
+      return ctor.newInstance(llvmTargetTriple, llvmTargetDataLayout,
+                              program, debugOutput, reportLine,
+                              warningsAsErrors, enableFaultInjection);
+    }
+    catch (InstantiationException | IllegalAccessException
+           | IllegalArgumentException | InvocationTargetException e)
     {
-      throw new IllegalStateException(BUILD_LLVM_CLASS + " constructor failed",
-                                      e);
+      throw new IllegalStateException(
+        BUILD_LLVM_CLASS+" constructor failed", e);
     }
   }
 

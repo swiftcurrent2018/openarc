@@ -1048,6 +1048,8 @@ spec = null;
 }
         :
         "enum"^
+        // [Attributes added by Joel E. Denny]
+        (attributeDecl)?
         (
         ( ID LCURLY ) => i:ID
         {putPragma(i,symtab);}
@@ -1114,6 +1116,8 @@ enumerator returns[Declarator decl]
 val = i.getText();
 decl = new VariableDeclarator(new NameID(val));
 }
+        // [Attributes added by Joel E. Denny]
+        (attributeDecl)?
         /* Initializer */
         (
         ASSIGN expr2=constExpr
@@ -1804,6 +1808,7 @@ List<Attribute> attrs;
         ;
 
 
+// [Modified by Joel E. Denny to set line number on declaration.]
 declarationList
 {Declaration decl=null;List tlist = new ArrayList();}
         :
@@ -1815,7 +1820,7 @@ declarationList
         |
         ( declarationPredictor )=>
         decl=declaration
-{if(decl != null ) curr_cstmt.addDeclaration(decl);}
+{if(decl != null ) curr_cstmt.addDeclaration(decl, LT(-1).getLine());}
         )+
         ;
 
@@ -1908,6 +1913,7 @@ nestedFunctionDef
         ;
 
 
+// [Modified by Joel E. Denny to set line number on DeclarationStatement.]
 statementList
 {Statement statb = null; Declaration decl = null;}
         :
@@ -1919,14 +1925,22 @@ statementList
             {isTypedefName (LT(1).getText())}?
             decl = declaration
 //{curr_cstmt.addDeclaration(decl);}
-{curr_cstmt.addStatement(new DeclarationStatement(decl));}
+{
+DeclarationStatement declStat = new DeclarationStatement(decl);
+declStat.setLineNumber(LT(-1).getLine());
+curr_cstmt.addStatement(declStat);
+}
             |
             statb = statement
 {curr_cstmt.addStatement(statb);}
             
             |
             decl = declaration
-{curr_cstmt.addStatement(new DeclarationStatement(decl));}
+{
+DeclarationStatement declStat = new DeclarationStatement(decl);
+declStat.setLineNumber(LT(-1).getLine());
+curr_cstmt.addStatement(declStat);
+}
 //{curr_cstmt.addDeclaration(decl);}
 // C99 extension that allows mixed statements and declarations; the parsed
 // declarations are inserted into the current scope and printed as ANSI C
@@ -1968,6 +1982,7 @@ putPragma(tsemi,symtab);
         /* CompoundStatement */
         statb=compoundStatement
         |
+        // [Modified by Joel E. Denny to set line number.]
         /* ExpressionStatement */
         stmtb_expr=expr exprsemi:SEMI!
 {
@@ -1975,6 +1990,7 @@ sline = exprsemi.getLine();
 putPragma(exprsemi,symtab);
 /* I really shouldn't do this test */
 statb = new ExpressionStatement(stmtb_expr);
+statb.setLineNumber(sline);
 }
         /* Iteration statements */
         |
@@ -2011,9 +2027,17 @@ putPragma(tfor,symtab);
 }
         LPAREN
         (
+            // [Modified by Joel E. Denny: Copied semantic predicate from
+            // statementList to handle for loop declaration starting with
+            // typedef name.]
+            {isTypedefName (LT(1).getText())}?
+            decl=declaration // support of C99 block scope
+            |
             (expr1=expr)? SEMI
             |
-            (decl=declaration)? // support of C99 block scope
+            // [Modified by Joel E. Denny: Made declaration non-optional
+            // so that missing semicolon isn't permitted.]
+            decl=declaration // support of C99 block scope
         )
         (expr2=expr)? SEMI
         (expr3=expr)?

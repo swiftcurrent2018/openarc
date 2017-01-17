@@ -50,6 +50,7 @@ public class AnnotationParser extends TransformPass {
                 // Convert the text of the old annotation to add spaces in order
                 // for token creation
                 old_annot = modifyAnnotationString(old_annot);
+                //System.out.println("old_annot: " + old_annot);
                 // -------------------------------------------------------------
                 // STEP 1:
                 // Find the annotation type by parsing the text in the input
@@ -230,9 +231,10 @@ public class AnnotationParser extends TransformPass {
     private String modifyAnnotationString(String old_annotation_str) {
         String str = null;
         old_annotation_str = old_annotation_str.replace("#pragma", "# pragma");
-        old_annotation_str = old_annotation_str.replace("/*", "/ * ");
-        old_annotation_str = old_annotation_str.replace("//", "/ / ");
-        if (old_annotation_str.contains("# pragma")) {
+        if( old_annotation_str.startsWith("/*") || old_annotation_str.startsWith("//") ) {
+        	old_annotation_str = old_annotation_str.replace("/*", "/ * ");
+        	old_annotation_str = old_annotation_str.replace("//", "/ / ");
+        } else if (old_annotation_str.contains("# pragma") ) {
             // The delimiter for split operation is white space(\s).
             // Parenthesis, comma, and colon are delimiters, too. However, we
             // want to leave them in the pragma token array. Thus, we append a
@@ -242,6 +244,18 @@ public class AnnotationParser extends TransformPass {
             old_annotation_str = old_annotation_str.replace(")", " ) ");
             old_annotation_str = old_annotation_str.replace(":", " : ");
             old_annotation_str = old_annotation_str.replace(",", " , ");
+            //[DEBUG] Added by Seyong Lee.
+            // Binary operators (+, -, *, /, %) are also used as a delimiter for macro preprocessing.
+            // FIXME: below split will not work on class/struct member access expression.
+            old_annotation_str = old_annotation_str.replace("[", " [ ");
+            old_annotation_str = old_annotation_str.replace("]", " ] ");
+            old_annotation_str = old_annotation_str.replace("+", " + ");
+            old_annotation_str = old_annotation_str.replace("-", " - ");
+            old_annotation_str = old_annotation_str.replace("*", " * ");
+            old_annotation_str = old_annotation_str.replace("/", " / ");
+            old_annotation_str = old_annotation_str.replace("%", " % ");
+            old_annotation_str = old_annotation_str.replace("<", " < ");
+            old_annotation_str = old_annotation_str.replace(">", " > ");
         }
         str = old_annotation_str;
         return str;

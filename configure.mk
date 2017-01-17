@@ -27,6 +27,7 @@ $(BUILD_CFG): $(COMMON_DEPS)
 	echo 'fc = $(call cmd2abs, $(FC))' >> $@
 	echo 'spec_cpu2006 = $(SPEC_CPU2006)' >> $@
 	echo 'spec_cfg = $(SPEC_CFG)' >> $@
+	echo 'pmem_includes = $(PMEM_INCLUDES)' >> $@
 	echo 'pmem_libdir = $(PMEM_LIBDIR)' >> $@
 	echo 'nvm_testdir = $(NVM_TESTDIR)' >> $@
 

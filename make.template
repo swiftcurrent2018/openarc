@@ -65,6 +65,8 @@ help:
 #    - Examples                                          #
 #    p385_hpc_d5 //for Stratix V (default)               #
 #    p510t_sch_ax115 //for Arria 10 (Nallatech 510T)     #
+# POSTCMD: optional commands to be executed after the    #
+#    main compilation                                    #
 ##########################################################
 OMP ?= 0
 MODE ?= normal
@@ -86,7 +88,8 @@ endif
 # Set the input C source files (CSRCS) #
 ########################################
 #CSRCS = matmul.c
-CXXSRCS = $(CSRCS:.c=.cpp)
+CXXSRCS1 = $(CSRCS:.c=.cpp)
+CXXSRCS = $(notdir $(CXXSRCS1))
 
 #########################################
 # Set macros used for the input program #
@@ -99,8 +102,12 @@ DEFSET_ACC += -DOMP=$(OMP)
 # Use the following macros to add program-specific      #
 # compiler flags and libraries                          #
 # - CFLAGS1 and CLIBS1 to compile the input C program   #
+#   - To use relative paths, assume that the directory  #
+#   containing the Makefile is the current directory.   #
 # - CFLAGS2 and CLIBS2 to compile the OpenARC-generated #
 #   output C++ program                                  # 
+#   - To use relative paths, assume that cetus_output   #
+#   is the current directory.                           #
 #########################################################
 #CFLAGS1 =  
 #CFLAGS1_LLVM =  
@@ -186,7 +193,7 @@ endif
 # Libraries
 CLIBS1 += $(CLIBS1_BASE) -L$(OPENARCLIB) 
 CLIBS1_LLVM += -L$(OPENARCLIB) 
-CLIBS2 += $(CLIBS2_BASE) -l$(ACCRTLIB)
+CLIBS2 += $(CLIBS2_BASE) -l$(ACCRTLIB) -lomphelper
 
 $(BENCHMARK)_CPU: $(CSRCS) makedirectories
 	$(CC) $(DEFSET_CPU) $(CFLAGS1) -o $(BENCHMARK_CPU) $(CSRCS) $(CLIBS1)

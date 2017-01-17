@@ -118,7 +118,13 @@ public class DeclarationInitSeparator extends TransformPass {
 						if( declr instanceof VariableDeclarator ) {
 							((VariableDeclarator)declr).setInitializer(null);
 						} else if( declr instanceof NestedDeclarator ) {
+							if( dimsize > 0 ) {
+								//Do not separate declaration of a pointer-to-arrays.
+								return;
+							} else {
 							((NestedDeclarator)declr).setInitializer(null);
+							}
+
 						} else {
 							Tools.exit("[ERROR in DeclarationInitSeparator] unexpected type of declarator: " + declr);
 						}

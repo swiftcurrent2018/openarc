@@ -56,10 +56,11 @@
 #                         to a directory on a RAM disk or on an    #
 #                         actual NVM device will accelerate the    #
 #                         NVM tests significantly.                 #
-#   - Modify target-specific location of Intel's pmem libraries    #
-#     (required only for NVL support):                             #
-#       PMEM_INCLUDES : include path for pmem                      #
-#       PMEM_LIBDIR   : library path for pmem                      #
+#   - Specify availability of Intel's NVML libraries from pmem     #
+#     (required only for NVL runtime support):                     #
+#       HAVE_PMEM_NVML : whether OpenARC's nvl/pmem-nvml submodule #
+#                        has been cloned and built (1 for true and #
+#                        otherwise false)                          #
 #                                                                  #
 # When specifying CPP, you must specify a C preprocessor and       #
 # command-line options that disable C language extensions that     #
@@ -85,6 +86,9 @@
 #                                                                  #
 #   http://llvm.org/docs/LangRef.html#target-triple                #
 #   http://llvm.org/docs/LangRef.html#data-layout                  #
+#                                                                  #
+# MPI_INCLUDES and MPI_LIBDIR are required to build MPI support    #
+# into the NVL runtime.                                            #
 #                                                                  #
 ####################################################################
 ###################
@@ -175,8 +179,7 @@ MPI_FLAGS = -craympich-mt
 #JUNIT_CLASSPATH =
 #NVM_TESTDIR =
 
-#PMEM_INCLUDES =
-#PMEM_LIBDIR =
+#HAVE_PMEM_NVML =
 
 endif
 
@@ -252,8 +255,7 @@ SPEC_CFG = spec-newark.cfg.in
 #JUNIT_CLASSPATH = /junit-4.11.jar:/hamcrest-core-1.3.jar:/system-rules-1.9.0.jar
 #NVM_TESTDIR =
 
-#PMEM_INCLUDES = /pmem-git/src/include
-#PMEM_LIBDIR = /pmem-git/src/debug
+#HAVE_PMEM_NVML =
 
 endif
 
@@ -382,8 +384,7 @@ SPEC_CFG = spec-newark.cfg.in
 #JUNIT_CLASSPATH = /junit-4.11.jar:/hamcrest-core-1.3.jar:/system-rules-1.9.0.jar
 #NVM_TESTDIR =
 
-#PMEM_INCLUDES = /home/f6l/work/tools/nvml/src/include
-#PMEM_LIBDIR = /home/f6l/work/tools/nvml/src/debug
+#HAVE_PMEM_NVML =
 
 endif
 
@@ -425,8 +426,7 @@ SPEC_CFG = spec-newark.cfg.in
 #JUNIT_CLASSPATH = /junit-4.11.jar:/hamcrest-core-1.3.jar:/system-rules-1.9.0.jar
 #NVM_TESTDIR =
 
-#PMEM_INCLUDES = /pmem-git/src/include
-#PMEM_LIBDIR = /pmem-git/src/debug
+#HAVE_PMEM_NVML =
 
 endif
 
@@ -476,8 +476,7 @@ SPEC_CFG = spec-osx.cfg.in
 #JUNIT_CLASSPATH =
 #NVM_TESTDIR =
 
-#PMEM_INCLUDES =
-#PMEM_LIBDIR =
+HAVE_PMEM_NVML = 0
 
 endif
 
@@ -519,8 +518,7 @@ SPEC_CFG = spec-osx.cfg.in
 JUNIT_CLASSPATH = ${HOME}/installs/junit-4.11.jar:${HOME}/installs/hamcrest-core-1.3.jar:${HOME}/installs/system-rules/system-rules-1.9.0.jar
 #NVM_TESTDIR =
 
-PMEM_INCLUDES = ${HOME}/ornl/pmem-git/src/include
-#PMEM_LIBDIR =
+HAVE_PMEM_NVML = 0
 
 endif
 
@@ -562,8 +560,7 @@ SPEC_CFG = spec-newark.cfg.in
 JUNIT_CLASSPATH = /opt/proj-local/jum/junit-4.11.jar:/opt/proj-local/jum/hamcrest-core-1.3.jar:/opt/proj-local/jum/system-rules-1.9.0.jar
 NVM_TESTDIR = /opt/fio/scratch/jum
 
-PMEM_INCLUDES = /opt/proj-local/jum/pmem-git/src/include
-PMEM_LIBDIR = /opt/proj-local/jum/pmem-git/src/nondebug
+HAVE_PMEM_NVML = 1
 
 endif
 
@@ -606,8 +603,7 @@ GFRONTEND_DEBUG = -g
 #JUNIT_CLASSPATH =
 #NVM_TESTDIR =
 
-#PMEM_INCLUDES =
-#PMEM_LIBDIR =
+#HAVE_PMEM_NVML =
 
 endif
 
@@ -662,8 +658,7 @@ endif
 #JUNIT_CLASSPATH =
 #NVM_TESTDIR =
 
-#PMEM_INCLUDES =
-#PMEM_LIBDIR =
+#HAVE_PMEM_NVML =
 
 endif
 
@@ -688,3 +683,12 @@ cmd2abs = $(strip $(if $(findstring /, $(filter-out /%, \
                             $(shell type -P $(firstword $(1)) </dev/null), \
                             $(firstword $(1)))) \
                   $(wordlist 2, $(words $(1)), $(1)))
+
+##############################################
+# Intel's NVML libraries from pmem           #
+##############################################
+
+ifeq ($(HAVE_PMEM_NVML), 1)
+  PMEM_INCLUDES=$(openarc)/nvl/pmem-nvml/src/include
+  PMEM_LIBDIR=$(openarc)/nvl/pmem-nvml/src/nondebug
+endif
