@@ -174,16 +174,31 @@ HI_error_t CudaDriver::init() {
         system(command.c_str());
     }
 
+	//[INFO] If a context is created by the CUDA runtime API, instead of CUDA driver 
+	//API, the runtime API uses a hidden API to create what is called a primary 
+	//context, which can't be accessed directly by the driver API.
+	//
+	//If a standard context is created by the driver API, the following CUDA runtime
+	//API called by the same host thread will not create the primary context.
 
-	//Default flag (0) uses CU_CTX_SCHED_AUTO, but to make cuCtxSynchronize()
-	//blocking, CU_CTX_SCHED_BLOCKING_SYNC should be used instead.
-    //err = cuCtxCreate(&cuContext, 0, cuDevice);
-    err = cuCtxCreate(&cuContext, CU_CTX_SCHED_BLOCKING_SYNC, cuDevice);
-    if(err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::init()] failed to create CUDA context with error %d (%s)\n", err, cuda_error_code(err));
-		exit(1);
-    }
+	//Check whether the current host thread has a CUDA context.
+	err = cuCtxGetCurrent(&cuContext);
+    if((err == CUDA_SUCCESS) && (cuContext != NULL)) {
+		//If existing, use the current CUDA context.
+		cuCtxSetCurrent(cuContext);
+	} else {
+		//Create a new CUDA context.
+		//Default flag (0) uses CU_CTX_SCHED_AUTO, but to make cuCtxSynchronize()
+		//blocking, CU_CTX_SCHED_BLOCKING_SYNC should be used instead.
+    	//err = cuCtxCreate(&cuContext, 0, cuDevice);
+    	err = cuCtxCreate(&cuContext, CU_CTX_SCHED_BLOCKING_SYNC, cuDevice);
+    	if(err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::init()] failed to create CUDA context with error %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+	}
 
+/*
     std::string ptx_source;
     FILE *fp = fopen(ptxName.c_str(), "rb");
     if(fp == NULL) {
@@ -217,16 +232,17 @@ HI_error_t CudaDriver::init() {
     jitOptVals[1] = jitLogBuffer;
 
     // set up pointer to set the Maximum # of registers for a particular kernel
-    /*jitOptions[2] = CU_JIT_MAX_REGISTERS;
-    int jitRegCount = 32;
-    jitOptVals[2] = (void *)(size_t)jitRegCount;
+    //jitOptions[2] = CU_JIT_MAX_REGISTERS;
+    //int jitRegCount = 32;
+    //jitOptVals[2] = (void *)(size_t)jitRegCount;
 
-    jitOptions[2] = CU_JIT_TARGET;
-    int nullVal = 0;
-    jitOptVals[2] = (void *)(uintptr_t)CU_TARGET_COMPUTE_30;
-    */
+    //jitOptions[2] = CU_JIT_TARGET;
+    //int nullVal = 0;
+    //jitOptVals[2] = (void *)(uintptr_t)CU_TARGET_COMPUTE_30;
 
     err = cuModuleLoadDataEx(&cuModule, ptx_source.c_str(), jitNumOptions, jitOptions, (void **)jitOptVals);
+*/
+	err = cuModuleLoad(&cuModule, ptxName.c_str());
     if (err != CUDA_SUCCESS) {
         fprintf(stderr, "[ERROR in CudaDriver::init()] Module Load FAIL with error = %d (%s)\n", err, cuda_error_code(err));
 		exit(1);

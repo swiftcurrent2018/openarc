@@ -39,6 +39,15 @@ public class StandardLibrary {
     }
 
     /**
+    * Checks if the given function name is a standard library function.
+    * @param fName the function name to be examined.
+    * @return true if the function call exists in the entries.
+    */
+    public static boolean contains(String fName) {
+        return (std.catalog.get(fName) != null);
+    }
+
+    /**
     * Checks if the given function call may have side effects.
     * @param fcall the function call to be examined.
     * @return true if the function call is standard library call and does not have a side effect.

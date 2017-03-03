@@ -11,8 +11,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
 
+import openacc.hir.OpenMPLibrary;
 import openacc.transforms.ACCAnnotationParser;
-
 import cetus.analysis.CallGraph.Node;
 import cetus.hir.AccessExpression;
 import cetus.hir.Annotatable;
@@ -469,8 +469,9 @@ public class InlineExpansion {
 	    			}
 	    		}
 	    	}
-//		    for (Procedure p : inlinedFunctions) {
-		    for (Procedure p : allProcs) {
+	    	//[DEBUG by Seyong Lee] use inlinedFunctions instead of allProcs.
+//		    for (Procedure p : allProcs) {
+		    for (Procedure p : inlinedFunctions) {
 		    	if(!procs.contains(p)) {
 		    		p.getParent().removeChild(p);
 		    	}
@@ -655,7 +656,7 @@ public class InlineExpansion {
     			if(function2BInlined == null){
     				if(makeLog){
     					//[DEBUG] if-statement is added by Seyong Lee.
-    					if( !StandardLibrary.contains(fc) ) {
+    					if( !StandardLibrary.contains(fc) && !OpenMPLibrary.contains(fc) ) {
     					if( !complementFunctions || !functionNames.contains(fc.getName().toString()) ) {
     						System.out.println("function call in following statement in function \'" + enclosingFunctionName + "\' calls unrecognized or library function, or possibly involves function pointer(s) so we are not inlining it");
     						System.out.println(getStatement(fc).toString());

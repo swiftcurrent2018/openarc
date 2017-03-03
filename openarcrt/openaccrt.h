@@ -482,11 +482,13 @@ public:
             addressmap_t *emptyMap = new addressmap_t();
         	addresstable_entity_t *aet = new addresstable_entity_t(devPtr, size);
 			(*emptyMap)[hostPtr] = (void *) aet;
+			//emptyMap->insert(std::pair<const void*, void*>(hostPtr, (void *) aet));
             masterAddressTable->insert(std::pair<int, addressmap_t *> (asyncID, emptyMap));
             //it = masterAddressTable->find(asyncID);
         } else {
         	addresstable_entity_t *aet = new addresstable_entity_t(devPtr, size);
         	(*(it->second))[hostPtr] = (void*) aet;
+        	//(it->second)->insert(std::pair<const void*, void*>(hostPtr, (void*) aet));
 		}
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
@@ -1020,6 +1022,7 @@ public:
         //fprintf(stderr, "[in set_device_mem_handle()] Setting address\n");
         addresstable_entity_t *aet = new addresstable_entity_t(handle, size);
         (*myHandleMap)[devPtr] = (void*) aet;
+        //myHandleMap->insert(std::pair<const void*, void*>(devPtr, (void*) aet));
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
     	if( HI_openarcrt_verbosity > 3 ) {

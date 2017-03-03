@@ -573,6 +573,14 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 			List<ACCAnnotation> gangAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "gang", null);
 			if( gangAnnots != null ) {
 				for( ACCAnnotation gAnnot : gangAnnots ) {
+					Annotatable ttGAt = gAnnot.getAnnotatable();
+					if( !(ttGAt instanceof ForLoop) ) {
+						Procedure pProc = IRTools.getParentProcedure(ttGAt);
+						Tools.exit("[ERROR] Gang clause is allowed only to a for-loop, but the following compute region uses the " +
+								"gang clause to non-loop structure.\n" +
+								"Enclosing procedure: " + pProc.getSymbolName() +"\nEnclosing " + computeRegion + " region: " +
+								ttGAt);
+					}
 					ForLoop gloop = (ForLoop)gAnnot.getAnnotatable();
 					//Check1: if multiple gang loops exist in nested loops, all gang loops should be directly nested together.
 					List<ForLoop> nestedGLoops = AnalysisTools.findDirectlyNestedLoopsWithClause(gloop, "gang");

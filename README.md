@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.8 (Dec. 13, 2016)
+OpenARC V0.10 (Mar. 03, 2017)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -188,11 +188,14 @@ FEATURES/UPDATES
 -------------------------------------------------------------------------------
 * New features
 
+	- Add new flags: expand-user-source and inlineFunctionTransformation
+
 	- Add Altera FPGAs as a new target device
 
 	- Add a fake virtual device address space for OpenCL targets, which allows pointer-arithmetics on the virtual device address for both CUDA and OpenCL devices.
 
 * Updates
+    - Update CUDA runtime to allow intermixing of both OpenACC and CUDA. (See example in [openarc-path]/test/examples/openarc/matmul_openacc_cuda)
 
 * Bug fixes and improvements
 

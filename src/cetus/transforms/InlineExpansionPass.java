@@ -8,7 +8,7 @@ import cetus.exec.Driver;
 import cetus.hir.Program;
 
 /**
- * Transforms a program by performing simple subroutine in-line expansion in its main function.
+ * Transforms a program by performing simple subroutine in-line expansion for C procedures with inline qualifiers. 
  */
 
 public class InlineExpansionPass extends TransformPass {

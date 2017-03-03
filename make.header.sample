@@ -115,7 +115,7 @@ CETUS_OUTPUT = cetus_output
 # Kold: a mini cluster consisting of four HP SL250 nodes used for      #
 #       pilot studies within the Keeneland project.                    #
 # Cooley: ALCF NVIDIA GPU cluster                                      #
-# Oswald: Heterogeneous mini cluster with NVIDIA Tesla K80m and        #
+# Oswald: Heterogeneous mini cluster with NVIDIA Tesla P100 and        #
 #         Nallatech 510T FPGA                                          #
 ########################################################################
 TARGET_SYSTEM = Newark
@@ -276,7 +276,7 @@ GPROFILEMACROS = -D _OPENARC_PROFILE_=1
 ifeq ($(OPENARC_ARCH), 0)
 BACKENDCXX = nvcc
 CC_FLAGS_PREFIX = -Xcompiler
-GBACKEND_FLAGS = -arch sm_20 -O3
+GBACKEND_FLAGS = -arch sm_60 -O3
 GBACKEND_INCLUDES = -I/opt/cuda/8.0/cuda/include
 GBACKEND_LIBS = -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G

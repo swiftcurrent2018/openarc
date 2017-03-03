@@ -344,6 +344,11 @@
 #Expand user (non-standard) header file #includes into code
 #
 ########################################
+#Option: expand-user-source
+########################################
+#expand-user-source
+#Expand user-included C source file #includes into code
+########################################
 #Option: extractTuningParameters
 ########################################
 #extractTuningParameters=filename
@@ -703,6 +708,18 @@
 #      (Note 2: It is used with "complement" sub-option to determine which functions should be considered.)
 #
 ########################################
+#Option: inlineFunctionTransformation
+########################################
+#inlineFunctionTransformation=debug=0|1:foronly=0|1
+#(Experimental) Inline functions with inline qualifiers; use tinline option for more complex inline expansion.
+#   debug
+#      =0 remove inlined (and other) functions if they are no longer executed (default)
+#      =1 do not remove the inlined (and other) functions even if they are no longer executed
+#   foronly
+#      =0 try to inline all function calls depending on other options (default)
+#      =1 try to inline function calls inside for loops only 
+#
+########################################
 #Option: tsingle-call
 ########################################
 #tsingle-call
@@ -865,6 +882,7 @@ shrdSclrCachingOnSM
 #debug_preprocessor_command
 #expand-all-header
 #expand-user-header
+#expand-user-source
 #printConfigurations
 #noPrintCode
 #enableFaultInjection
@@ -896,6 +914,7 @@ shrdSclrCachingOnSM
 #normalize-return-stmt
 #profile-loops=N
 #tinline=mode=0|1|2|3|4:depth=0|1:pragma=0|1:debug=0|1:foronly=0|1:complement=0|1:functions=foo,bar,...
+#inlineFunctionTransformation
 #tsingle-call
 #tsingle-declarator
 #tsingle-return

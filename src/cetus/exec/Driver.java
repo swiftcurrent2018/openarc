@@ -68,6 +68,9 @@ public class Driver {
             "load-options",
             "Load options from file options.cetus");
         options.add(options.UTILITY,
+            "expand-user-source",
+            "Expand user-included C source file #includes into code");
+        options.add(options.UTILITY,
             "expand-user-header",
             "Expand user (non-standard) header file #includes into code");
         options.add(options.UTILITY,
@@ -460,14 +463,31 @@ public class Driver {
             CetusParser cparser =
                     (CetusParser)class_parser.getConstructor().newInstance();
             for (String file : filenames) {
-                program.addTranslationUnit(cparser.parseFile(file,options));
+            	int dot = file.lastIndexOf(".");
+            	boolean knownfiletype = true;
+            	if( dot == -1 ) {
+            		knownfiletype = false;
+            	} else {
+            		String fileExt = file.substring(dot);
+            		if( !fileExt.equals(".c") && !fileExt.equals(".h") ) {
+            			knownfiletype = false;
+            		}
+            	}
+            	if( knownfiletype ) {
+            		program.addTranslationUnit(cparser.parseFile(file,options));
+            	} else {
+            		System.err.println("[ERROR] Unsupported file type: " + file + 
+            				"\nOpenARC uses the GCC preprocessor by default, which accepts only *.c and *.h files as valid input C source files.\n"
+            				+ "The input file, " + file + " should be either renamed or removed from the OpenARC inputs; exit!\n");
+            		Tools.exit(1);
+            	}
             }
         } catch (ClassNotFoundException e) {
-            System.err.println("Failed to load parser: " +
+            System.err.println("[ERROR] Failed to load parser: " +
                                getOptionValue("parser"));
             Tools.exit(1);
         } catch(Exception e) {
-            System.err.println("Failed to initialize parser");
+            System.err.println("[ERROR] Failed to initialize parser");
             Tools.exit(1);
         }
         // It is more natural to include these two steps in this method.

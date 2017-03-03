@@ -135,7 +135,7 @@ public final class TranslationUnit implements SymbolTable, Traversable {
                     firstdecl = (Declaration)child;
                 } else {
                     System.err.println(
-                            "cetus: Unknown class type in TranslationUnit");
+                            "[ERROR] Unknown class type in TranslationUnit: " + input_filename + "; exit!");
                     Tools.exit(1);
                 }
                 foundHeaderEnd = false;
@@ -148,14 +148,21 @@ public final class TranslationUnit implements SymbolTable, Traversable {
             }
         }
         if (firstdecl == null) {
-            Object firstchild = children.get(0);
-            if (firstchild instanceof Declaration) {
-                firstdecl = (Declaration)firstchild;
-            } else {
-                System.err.println(
-                        "cetus: Unknown class type in TranslationUnit");
-                Tools.exit(1);
-            }
+        	if( children_size == 0 ) {
+        		System.err.println(
+        				"[ERROR] Empty TranslationUnit: " + input_filename + "; exit!");
+        		Tools.exit(1);
+
+        	} else {
+        		Object firstchild = children.get(0);
+        		if (firstchild instanceof Declaration) {
+        			firstdecl = (Declaration)firstchild;
+        		} else {
+        			System.err.println(
+                            "[ERROR] Unknown class type in TranslationUnit: " + input_filename + "; exit!");
+        			Tools.exit(1);
+        		}
+        	}
         }
         return firstdecl;
     }
@@ -253,9 +260,13 @@ public final class TranslationUnit implements SymbolTable, Traversable {
     }
 
     public static void defaultPrint(TranslationUnit tu, PrintWriter o) {
-        final int USER_HEADER = 1;
-        final int SYS_HEADER = 2;
+        final int USER_SOURCE = 1;
+        final int USER_HEADER = 2;
+        final int SYS_HEADER = 3;
         int expand = 0;
+        if (Driver.getOptionValue("expand-user-source") != null) {
+            expand = USER_SOURCE;
+        }
         if (Driver.getOptionValue("expand-user-header") != null) {
             expand = USER_HEADER;
         }
@@ -273,7 +284,11 @@ public final class TranslationUnit implements SymbolTable, Traversable {
                 String p_name = p.getName();
                 if (p_name.startsWith("startinclude")) {
                     if (p_name.contains("\"")) {
-                        state.add(0, USER_HEADER);
+                    	if (p_name.contains(".c")) {
+                    		state.add(0, USER_SOURCE);
+                    	} else {
+                    		state.add(0, USER_HEADER);
+                    	}
                     } else {
                         state.add(0, SYS_HEADER);
                     }

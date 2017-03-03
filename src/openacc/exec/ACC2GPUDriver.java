@@ -12,6 +12,7 @@ import openacc.analysis.ACCAnalysis;
 import openacc.analysis.ACCParser;
 import openacc.codegen.*;
 import openacc.transforms.ACCAnnotationParser;
+import openacc.transforms.InlineFunctionTransformation;
 
 /**
  * <b> ACC2GPUDriver </b> implements the command line parser and controls pass ordering.
@@ -373,6 +374,17 @@ public class ACC2GPUDriver extends Driver
 		options.add(options.UTILITY, "printConfigurations",
 				"Generate output codes to print applied configurations/optimizations at the program exit");
 		
+        options.add(options.TRANSFORM,
+            "inlineFunctionTransformation",
+            "debug=0|1:foronly=0|1",
+            "(Experimental) Inline functions with inline qualifiers; use tinline option for more complex inline expansion.\n"
+            + "   debug\n"
+            + "      =0 remove inlined (and other) functions if they are no longer executed (default)\n"
+            + "      =1 do not remove the inlined (and other) functions even if they are no longer executed\n"
+            + "   foronly\n"
+            + "      =0 try to inline all function calls depending on other options (default)\n"
+            + "      =1 try to inline function calls inside for loops only \n");
+		
 		
 		////////////////////////////////////////////
 		//Add Cuda-Specific command-line options. //
@@ -468,6 +480,13 @@ public class ACC2GPUDriver extends Driver
 					setOptionValue("acc2gpu", "1");
 				}
 			}
+		}
+
+		//By default, user-included C source file is 
+		//expanded, while header files are not.
+		value = getOptionValue("expand-user-source");
+		if( value == null ) {
+			setOptionValue("expand-user-source", "1");
 		}
 		
 		value = getOptionValue("defaultNumWorkers");
@@ -716,6 +735,9 @@ public class ACC2GPUDriver extends Driver
         if (getOptionValue("tinline") != null) {
             TransformPass.run(new InlineExpansionPass(program));
         }
+        if (getOptionValue("inlineFunctionTransformation") != null) {
+            TransformPass.run(new InlineFunctionTransformation(program));
+        }
         if (getOptionValue("normalize-loops") != null) {
             TransformPass.run(new LoopNormalization(program));
         }
@@ -815,6 +837,12 @@ public class ACC2GPUDriver extends Driver
 		if( getOptionValue("emitLLVM") == null )
 		{
 			preprocessorString += " -D_OPENACC=" + openacc_version;
+		}
+		value = getOptionValue("omp2acc");
+		if( value != null ) {
+			if( Integer.valueOf(value).intValue() == 1 ) {
+				preprocessorString += " -D_OPENMP";
+			}
 		}
 		//_OPENARC_ internal macro is always added.
 		preprocessorString += " -D_OPENARC_";

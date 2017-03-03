@@ -199,6 +199,7 @@ public class KernelCallingProcCloning extends TransformPass {
 						while (Fiter.hasNext())
 						{
 							TranslationUnit cTu = (TranslationUnit)Fiter.next();
+							//System.out.println("Current translation unit: " + cTu.getInputFilename());
 							Declaration firstDecl = cTu.getFirstDeclaration();
 							DFIterator<ProcedureDeclarator> iter = new DFIterator<ProcedureDeclarator>(cTu, ProcedureDeclarator.class);
 							iter.pruneOn(ProcedureDeclarator.class);

@@ -64,6 +64,7 @@ public class acc2gpu extends CodeGenPass
 	private int tNumComputeUnits = 0;
 	private int tNumSIMDWorkItems = 0;
 	private int OPENARC_ARCH = 0;
+	private int defaultNumAsyncQueues = 4;
 	
 	public acc2gpu(Program program, HashMap<String, HashMap<String, Object>> uDirectives,
 			HashMap<String, Object> tConfigs)
@@ -119,6 +120,10 @@ public class acc2gpu extends CodeGenPass
 				value = env.get("OPENARC_ARCH");
 				OPENARC_ARCH = Integer.valueOf(value).intValue();
 			}
+		}
+		value = Driver.getOptionValue("defaultNumAsyncQueues");
+		if( value != null ) {
+			defaultNumAsyncQueues = Integer.valueOf(value).intValue();
 		}
 		value = Driver.getOptionValue("acc2gpu");
 		if( value != null ) {
@@ -301,7 +306,7 @@ public class acc2gpu extends CodeGenPass
 
         if(convertOpenMPtoOpenACC)
         {
-            OMP2ACCTranslator omp2ACCTranslator = new OMP2ACCTranslator(program);
+            OMP2ACCTranslator omp2ACCTranslator = new OMP2ACCTranslator(program, defaultNumAsyncQueues);
             TransformPass.run(omp2ACCTranslator);
         }
 
