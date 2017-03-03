@@ -264,7 +264,7 @@ endif
 #########################
 ifeq ($(TARGET_SYSTEM),Oswald)
 
-OPENARC_ARCH = 3
+OPENARC_ARCH = 0
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
 CC = gcc
