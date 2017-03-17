@@ -27,6 +27,7 @@ import cetus.hir.ForLoop;
 import cetus.hir.Statement;
 import cetus.hir.Symbol;
 import cetus.hir.SymbolTools;
+import cetus.hir.Tools;
 import cetus.hir.Traversable;
 import cetus.hir.VariableDeclaration;
 import cetus.hir.VariableDeclarator;
@@ -199,10 +200,16 @@ public class PostParserProcessor extends TransformPass {
             					pp = p.getParent();
             				}
             			}
-            			CompoundStatement cpStmt = (CompoundStatement)p;
-            			Set<Symbol> symbols = cpStmt.getSymbols();
-            			if( !AnalysisTools.containsSymbol(symbols, indexVar.toString()) ) {
-            				cpStmt.addDeclaration(lastDecl);
+            			if( !(p instanceof CompoundStatement) ) {
+            				Tools.exit("[ERROR in the PostParserProcessor()] The following statement is parsed wrongly.\n"
+            						+ "For correct parsing, an if-statement or for-loop, which contains a single child statement with an attached directive, "
+            						+ "should use brackets to include the single body statement.\n" + AnalysisTools.getEnclosingContext(p));
+            			} else {
+            				CompoundStatement cpStmt = (CompoundStatement)p;
+            				Set<Symbol> symbols = cpStmt.getSymbols();
+            				if( !AnalysisTools.containsSymbol(symbols, indexVar.toString()) ) {
+            					cpStmt.addDeclaration(lastDecl);
+            				}
             			}
             		}
             	}

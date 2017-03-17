@@ -312,11 +312,12 @@ extending OpenARC.  A workaround is to forward-declare such a struct or
 union before referencing it.
 
 - In current implementation, C parser recognizes all directives as standalone 
-annotations, and then following OpenACC/OpenMP parsers will attach non-standalone 
-directives to structured blocks. Therefore, the following example will be parsed
-incorrectly:
+annotations, which will be incorrect if they are non-standalone types. This error is corrected by the following OpenACC/OpenMP parsers, which re-attaches non-standalone 
+directives to structured blocks. The two-step parsing may not work if either for-loop or if-statement has only one child statement without using bracket. Therefore, the following examples will be parsed incorrectly:
 
-	//C parser will incorrectly parse the i-loop having the OpenACC directive as its body. 
+	//Example1
+
+	//C parser will incorrectly parse the i-loop having the OpenACC directive as its body, since the C parser recognizes all directives as standalone types.
 
 		for(i=0; i<N; i++)
 	
@@ -334,6 +335,25 @@ incorrectly:
 	
 		}
 
+	//Example2
+
+	//C parser will incorrectly parse the if-statement.
+
+		if(cond) 
+
+			#pragma acc parallel loop
+
+			for(j=0; j<M; j++) { ...//kernel loop body }
+
+	//C parser will correctly parse the if-statement.
+
+		if(cond) {
+
+			#pragma acc parallel loop
+
+			for(j=0; j<M; j++) { ...//kernel loop body }
+
+		}
 
 The OpenARC Team
 

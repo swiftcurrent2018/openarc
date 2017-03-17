@@ -4609,10 +4609,21 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         //e.g., __attribute__((reqd_work_group_size(128,1,1))
         //Used for Altera OpenCL.
         List<Expression> wg_size = new ArrayList<Expression>(3);
+        boolean nonIntLiteral = false;
         for( int m=0; m<3; m++ ) {
-        	wg_size.add(num_workers.get(m).clone());
+        	Expression tExp = num_workers.get(m);
+        	if( tExp instanceof IntegerLiteral ) {
+        		wg_size.add(tExp.clone());
+        	} else {
+        		nonIntLiteral = true;
+        		break;
+        	}
         }
-        AttributeSpecifier kernel_attributes = new AttributeSpecifier(new AttributeSpecifier.Attribute("reqd_work_group_size", wg_size));
+        AttributeSpecifier kernel_attributes = new AttributeSpecifier();
+        if( !nonIntLiteral ) {
+        	//reqd_work_group_size attribute accepts integer literal as arguments only.
+        	kernel_attributes.addAttribute(new AttributeSpecifier.Attribute("reqd_work_group_size", wg_size));
+        }
         if( targetArch == 3 ) {
         	//Add num_simd_work_items and num_compute_unit attributes, which are used only for Altera OpenCL.
         	if( (num_simd_work_items != null) && (num_simd_work_items instanceof IntegerLiteral) ) {

@@ -240,11 +240,11 @@ public class AttributeSpecifier extends Specifier {
 	 */
 	@Override
 	public void print(PrintWriter o) {
-		o.print("__attribute__((");
 		if( !attributeList.isEmpty() ) {
+			o.print("__attribute__((");
 			PrintTools.printListWithComma(attributeList, o);
+			o.print("))");
 		}
-		o.print("))");
 	}
 
     public boolean equals(Object o) {

@@ -1838,6 +1838,13 @@ public class ASPENModelGen extends TransformPass {
 					}
 				} else if( aspenAnnotData1.aspenDeclare ) {
 					for( ASPENParam aParam : aspenAnnotData1.paramSet ) {
+						if( aParam.getParent() != null ) {
+							Tools.exit("\n[ERROR in ASPENModelGen] Duplicated declaration of the Aspen parameter, " +
+									aParam + " in the following statement; exit!\n" +
+									"Statement: " + at + 
+									"\nEnclosing Procedure: " + proc.getSymbolName() +"\n" +
+									"Enclosing Translation Unit: " + ((TranslationUnit)proc.getParent()).getOutputFilename() + "\n");
+						}
 						ASPENParamDeclaration paramDecl = new ASPENParamDeclaration(aParam);
 						IDExpression ID = paramDecl.getDeclaredID();
 						if( aspenModel.containsParam(ID) ) {
@@ -1868,6 +1875,13 @@ public class ASPENModelGen extends TransformPass {
 						}
 					}
 					for( ASPENData aData : aspenAnnotData1.dataSet ) {
+						if( aData.getParent() != null ) {
+							Tools.exit("\n[ERROR in ASPENModelGen] Duplicated declaration of the Aspen data, " +
+									aData + " in the following statement; exit!\n" +
+									"Statement: " + at + 
+									"\nEnclosing Procedure: " + proc.getSymbolName() +"\n" +
+									"Enclosing Translation Unit: " + ((TranslationUnit)proc.getParent()).getOutputFilename() + "\n");
+						}
 						ASPENDataDeclaration dataDecl = new ASPENDataDeclaration(aData);
 						IDExpression ID = dataDecl.getDeclaredID();
 						if( aspenModel.containsData(ID) ) {
