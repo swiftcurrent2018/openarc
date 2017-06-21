@@ -1037,6 +1037,99 @@ public abstract class AnalysisTools {
         }
         return ret;
     }
+
+	/**
+	 * Returns the first pragma annotation that contains the specified string key
+	 * and is attached to annotatable objects in the parent of traversable object
+	 * {@code t}. 
+	 *
+	 * @param input the traversable object to be searched.
+	 * @param pragma_cls the type of pragmas to be searched for.
+	 * @param searchKey the keyword to be searched for.
+	 * @return a matching pragma annotation found first.
+	 */
+	public static <T extends PragmaAnnotation> T
+	findFirstPragmaInParent(Traversable input, Class<T> pragma_cls, String searchKey)
+	{
+		T ret = null;
+		if( input == null ) {
+			return ret;
+		}
+		Traversable t = input.getParent();
+		while( t != null ) {
+			if( t instanceof Annotatable ) {
+				Annotatable at  = (Annotatable)t;
+				T tAnnot = null;
+				tAnnot = at.getAnnotation(pragma_cls, searchKey);
+				if( tAnnot != null ) {
+					ret = tAnnot;
+					break;
+				}
+			}
+			if( t instanceof Procedure ) {
+				break;
+			} else {
+				t = t.getParent();
+			}
+		}
+		return ret;
+	}
+
+	/**
+	 * Returns the first pragma annotation that contains the specified string keys
+	 * and is attached to annotatable objects in the parent of traversable object
+	 * {@code t}. 
+	 * If {@code includeAll} is true, check whether all keys in the {@code searchKeys} are included,
+	 * and otherwise, check whether any key in the {@code searchKeys} is included. 
+	 *
+	 * @param input the traversable object to be searched.
+	 * @param pragma_cls the type of pragmas to be searched for.
+	 * @param searchKeys the keywords to be searched for.
+	 * @param includeAll if true, search pragmas containing all keywords; otherwise search pragma containing any keywords
+	 * in the {@code searchKeys} set.
+	 * @return a matching pragma annotation found first.
+	 */
+	public static <T extends PragmaAnnotation> T
+	findFirstPragmaInParent(Traversable input, Class<T> pragma_cls, Set<String> searchKeys, boolean includeAll)
+	{
+		T ret = null;
+		if( input == null ) {
+			return ret;
+		}
+		Traversable t = input.getParent();
+		while( t != null ) {
+			if( t instanceof Annotatable ) {
+				Annotatable at  = (Annotatable)t;
+				T tAnnot = null;
+				boolean found = false;
+				for( String key: searchKeys ) {
+					tAnnot = at.getAnnotation(pragma_cls, key);
+					if( tAnnot != null ) {
+						found = true;
+					} else {
+						found = false;
+					}
+					if( includeAll ) {
+						if( !found ) {
+							break;
+						}
+					} else if( found ) {
+						break;
+					}
+				}
+				if( found ) {
+					ret = tAnnot;
+					break;
+				}
+			}
+			if( t instanceof Procedure ) {
+				break;
+			} else {
+				t = t.getParent();
+			}
+		}
+		return ret;
+	}
     
     /**
     * Returns a list of pragma annotations that contain the specified string
@@ -1309,7 +1402,7 @@ public abstract class AnalysisTools {
 
 	/**
 	 * Returns the first pragma annotation that contains the specified string keys
-	 * and are attached to annotatable objects in the parent of traversable object
+	 * and is attached to annotatable objects in the parent of traversable object
 	 * {@code t}. 
 	 * If the function enclosing the traversable object (@code t) is called in
 	 * other functions, the calling functions are recursively searched.
@@ -1383,7 +1476,7 @@ public abstract class AnalysisTools {
 	
 	/**
 	 * Returns the first pragma annotation that contains the specified string keys
-	 * and are attached to annotatable objects in the parent of traversable object
+	 * and is attached to annotatable objects in the parent of traversable object
 	 * {@code t}. 
 	 * If the function enclosing the traversable object (@code t) is called in
 	 * other functions, the calling functions are recursively searched.
@@ -1662,6 +1755,7 @@ public abstract class AnalysisTools {
 	 *
 	 * @param t the traversable object to be searched.
 	 * @param pragma_cls the type of pragmas to be removed.
+	 * @param key if not null, only pragmas containing the key will be deleted; otherwise, all pragmas of the pragma_cls type will be deleted.
 	 */
     public static <T extends PragmaAnnotation> void removePragmas(
     		Traversable t, Class<T> pragma_cls, String key) {

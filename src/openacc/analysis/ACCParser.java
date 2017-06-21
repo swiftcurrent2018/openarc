@@ -2141,6 +2141,37 @@ public class ACCParser {
 			}
 		}
 	}
+
+	/** ---------------------------------------------------------------
+	 *		OpenARC devicetask Construct
+	 *
+	 *		#pragma openarc devicetask map(task-mapping-scheme) schedule(task-scheduling-scheme) new-line
+	 *			structured-block
+	 *
+	 * --------------------------------------------------------------- */
+	private static void parse_arc_devicetask()
+	{
+		PrintTools.println("ACCParser is parsing [devicetask] directive", 3);
+		addToMap("devicetask", "_directive");
+
+		while (end_of_token() == false) 
+		{
+			String token = get_token();
+			if( token.equals("") ) continue; //Skip empty string, which may occur due to macro.
+			String clause = "token_" + token;
+			if( token.equals(",") ) continue; //Skip comma between clauses, if existing.
+			PrintTools.println("clause=" + clause, 3);
+			try {
+				switch (devicetask_clause.valueOf(clause)) {
+				case token_map		:	parse_acc_stringargclause(token); break;
+				case token_schedule		:	parse_acc_stringargclause(token); break;
+				default : ACCParserError("NoSuchAinfoConstruct : " + clause);
+				}
+			} catch( Exception e) {
+				ACCParserError("unexpected or wrong token found (" + token + ")");
+			}
+		}
+	}
 	
     /**
      * Parse OpenARC pragmas, which are stored as raw text after Cetus parsing.
@@ -2175,6 +2206,7 @@ public class ACCParser {
 			case arc_enter 	: parse_arc_enter(); return false;
 			case arc_exit 	: parse_arc_exit(); return false;
 			case arc_impacc 		: parse_arc_impacc(); return false;
+			case arc_devicetask 		: parse_arc_devicetask(); return true;
 			//		default : throw new NonOmpDirectiveException();
 			default : ACCParserError("Not Supported Construct");
 			}
@@ -3711,7 +3743,25 @@ public class ACCParser {
 				tok = lookahead();
 				if( tok.equals(":") ) {
 					eat();
-					InitExp = parse_expression("(", ")", ",", 0);
+					tok = lookahead();
+					if( tok.equals("{") ) {
+						//Handle initial value list using SomeExpression for now.
+						int ParenCnt = 1;
+						StringBuilder sb = new StringBuilder(64);
+						while( ParenCnt > 0 ) {
+							sb.append(get_token());
+							tok = lookahead();
+							if( tok.equals("{") ) {
+								ParenCnt++;
+							} else if( tok.equals("}") ) {
+								ParenCnt--;
+							}
+						}
+						sb.append(get_token());
+						InitExp = new SomeExpression(sb.toString(), new ArrayList<Traversable>(0));
+					} else {
+						InitExp = parse_expression("(", ")", ",", 0);
+					}
 					tok = lookahead();
 					if( tok.equals(")") ) {
 						inProgress = false;
@@ -4096,7 +4146,8 @@ public class ACCParser {
 		arc_enter,
 		arc_exit,
 		arc_transform,
-		arc_impacc
+		arc_impacc,
+		arc_devicetask
 	}
 
 	public static enum acc_clause
@@ -4228,6 +4279,12 @@ public class ACCParser {
 		token_induction,
 		token_verbosity,
 		token_profcond
+	}
+
+	public static enum devicetask_clause
+	{
+		token_map,
+		token_schedule
 	}
 	
 	public static enum user_clause

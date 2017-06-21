@@ -19,8 +19,4 @@ extern int q_wait_bits[OMP_HELPER_QUEUE_DEPTH];
 extern int q_last_used[OMP_HELPER_QUEUE_DEPTH];
 extern int q_cur;
 
-#ifdef _OPENMP
-#pragma omp threadprivate(depends, depends_args, queues, depth, q_waits_bits, q_last_used, q_cur)
-#endif
-
 #endif /* _OMP_HELPER_EXT_H_ */

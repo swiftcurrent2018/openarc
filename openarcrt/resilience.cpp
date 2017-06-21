@@ -782,7 +782,6 @@ void HI_checkpoint_backup(void * target) {
 	long int size;
 	int option;
 	void *cp_data;
-	long int i;
 	if( (cp_sizemap.count(target) == 0) || (cp_optionmap.count(target) == 0) ) {
 		fprintf(stderr, "[ERROR in HI_checkpoint_backup()]\n");
 		exit(1);
@@ -801,7 +800,6 @@ void HI_checkpoint_restore(void * target) {
 	long int size;
 	int option;
 	void *cp_data;
-	long int i;
 	if( (cp_sizemap.count(target) == 0) || (cp_optionmap.count(target) == 0) ) {
 		fprintf(stderr, "[ERROR in HI_checkpoint_restore()]\n");
 		exit(1);

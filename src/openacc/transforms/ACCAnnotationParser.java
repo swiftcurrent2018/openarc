@@ -313,6 +313,8 @@ public class ACCAnnotationParser extends TransformPass
 		old_annotation_str = old_annotation_str.replace("%", " % ");
 		old_annotation_str = old_annotation_str.replace("<", " < ");
 		old_annotation_str = old_annotation_str.replace(">", " > ");
+		old_annotation_str = old_annotation_str.replace("{", " { ");
+		old_annotation_str = old_annotation_str.replace("}", " } ");
 
 		str = old_annotation_str;
 		return str;

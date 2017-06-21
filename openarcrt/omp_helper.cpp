@@ -13,6 +13,10 @@ int q_wait_bits[OMP_HELPER_QUEUE_DEPTH];
 int q_last_used[OMP_HELPER_QUEUE_DEPTH];
 int q_cur;
 
+#ifdef _OPENMP
+#pragma omp threadprivate(depends, depends_args, queues, depth, q_wait_bits, q_last_used, q_cur)
+#endif
+
 void omp_helper_set_queue_max(int max) {
     q_max = max;
 }

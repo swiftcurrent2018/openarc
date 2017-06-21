@@ -21,8 +21,8 @@ find more details on OpenARC.
 -------------------------------------------------------------------------------
 REQUIREMENTS
 -------------------------------------------------------------------------------
-* JAVA SE 7
-* GCC
+* JAVA SE 7 or later
+* GCC 4.2 or later
 * ANTLRv2 
 	- Default antlr.jar file is included in this distribution (./lib)
 	
@@ -39,7 +39,10 @@ INSTALLATION
 * Build
 
     First, copy make.header.sample to make.header and adjust the
-    configuration there for your platform.  Next, there are several options
+    configuration there for your platform. (To target a Linux system with NVIDIA
+	GPUs, choose LCUDA as TARGET_SYSTEM and adjust variables in the LCUDA section 
+	as necessary.)    
+	Next, there are several options
     for building OpenARC:
 
     - For Apache Ant users
@@ -51,7 +54,7 @@ INSTALLATION
 
     - For Linux/Unix command line users
         
-        If LLVM support is desired, first build LLVM and jllvm as described in jllvm/README-openarc.  (LLVM support is NOT included in the release version.)
+        If LLVM support is desired, first build LLVM and jllvm as described in jllvm/README-openarc.  (LLVM support is necessary only for NVL-C and FITL, and NOT included in the release version.)
 
         Run the script build.sh (e.g., $ build.sh bin #compile and create a wrapper script)
 
@@ -60,7 +63,7 @@ INSTALLATION
         First, run "make -f configure.mk base", and build the parser with the
         Antlr tool.
 
-        Then, if LLVM support is desired, run "make -f configure.mk llvm" and build LLVM and jllvm as described in jllvm/README-openarc.  (LLVM support is NOT included in the release version.)
+        Then, if LLVM support is desired, run "make -f configure.mk llvm" and build LLVM and jllvm as described in jllvm/README-openarc.  (LLVM support is necessary only for NVL-C and FITL, and NOT included in the release version.)
 
         Then, follow the instructions of each SDK to set up a project.
 

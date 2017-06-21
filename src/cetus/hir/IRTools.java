@@ -676,7 +676,10 @@ public final class IRTools {
             List<T> pragmas = at.getAnnotations(pragma_cls);
             for (int i = 0; i < pragmas.size(); i++) {
                 T pragma = pragmas.get(i);
-                if (pragma.containsKey(key)) {
+                if( key == null ) {
+                	//[DEBUG] if key is null, return all pragmas of the given type.
+                	ret.add(pragma);
+                } else if (pragma.containsKey(key)) {
                     ret.add(pragma);
                 }
             }

@@ -134,6 +134,12 @@ public class ARCAnnotation extends PragmaAnnotation
  * <p>
  * where clause is one of the following
  * ignoreglobal(list) //a list of global variables to be ignored by IMPACC.
+ * <p>
+ * #pragma openarc devicetask [clause [[,] clause] ...]
+ * <p>
+ * where clause is one of the following
+ * map (task-mapping-scheme) //task-mapping-scheme: included, coarse_grained, or fine_grained
+ * schedule (task-scheduling-scheme) //task-scheduling-scheme: LRR, GRR, LF
  * 
  * 
  */
@@ -144,7 +150,7 @@ public class ARCAnnotation extends PragmaAnnotation
 				"noploopswap", "noloopcollapse", "transform",
 				"resilience", "ftinject", "ftregion",
 				"enter", "exit", "profile", "region", "measure", "track",
-				"impacc"));
+				"impacc", "devicetask"));
 	
 
 	// Pragmas used with collection of values
@@ -158,7 +164,7 @@ public class ARCAnnotation extends PragmaAnnotation
 		"ftdata", "ftkind", "mode", "event", 
 		"transpose", "redim", "expand", "redim_transpose", "expand_transpose",
 		"transpose_expand", "num_simd_work_items", "num_compute_units",
-		"ignoreglobal", "window"));
+		"ignoreglobal", "window", "map", "schedule"));
 	
 
 	// Pragmas used with optional value
@@ -179,11 +185,11 @@ public class ARCAnnotation extends PragmaAnnotation
 	// List of OpenARC directives.
 	public static final Set<String> OpenARCDirectiveSet = new HashSet(Arrays.asList(
 			"ainfo", "cuda", "opencl", "enter", "exit", "profile", "datalayout", 
-			"ftregion", "ftinject", "resilience", "transform", "impacc"));
+			"ftregion", "ftinject", "resilience", "transform", "impacc", "devicetask"));
 	
 	// Directives attached to structured blocks
 	public static final Set<String> directivesForStructuredBlock = new HashSet(Arrays.asList(
-			"ainfo", "cuda", "opencl", "profile", "resilience", "ftregion", "transform" )); 
+			"ainfo", "cuda", "opencl", "profile", "resilience", "ftregion", "transform", "devicetask" )); 
 	
 	// Clauses that have a list as arguments.
 	public static final Set<String> collectionClauses = collection_values;
@@ -237,6 +243,11 @@ public class ARCAnnotation extends PragmaAnnotation
 	private static final Set<String> profileClauses = new HashSet(Arrays.asList(
 		"region", "track", "measure", "mode", "label", "event", "induction",
 		"verbosity", "profcond"
+		));
+
+	// devicetask clauses 
+	private static final Set<String> deviceTaskClauses = new HashSet(Arrays.asList(
+		"map", "schedule"
 		));
 
     /**

@@ -5,11 +5,15 @@ package openacc.hir;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.List;
 
 import cetus.hir.IDExpression;
 import cetus.hir.Expression;
 import cetus.hir.IntegerLiteral;
 import cetus.hir.NameID;
+import cetus.hir.SomeExpression;
+import cetus.hir.Traversable;
 import cetus.hir.TraversableVisitor;
 
 /**
@@ -57,6 +61,15 @@ public class ASPENParam extends ASPENExpression {
 	}
 
 	public void setInitVal(Expression nInitVal) {
+		if( nInitVal instanceof SomeExpression ) {
+			//Remove the enclosing parenthesis inserted by the annotation parser (ACCParser).
+			String nInitValString = nInitVal.toString();
+			if( nInitValString.charAt(0) == '(' ) {
+				nInitValString = nInitValString.substring(1, nInitValString.length()-1);
+				List<Traversable> children = new ArrayList<Traversable>();
+				nInitVal = new SomeExpression(nInitValString, children);
+			}
+		}
 		if( children.size() == 2 ) {
 			setChild(1, nInitVal);
 		} else if( children.size() == 1 ) {
@@ -83,7 +96,18 @@ public class ASPENParam extends ASPENExpression {
 	public void printASPENModel(PrintWriter o) {
 		o.print(children.get(0));
 		if( children.size() == 2 ) {
-			o.print(" = ");
+			Traversable initVal = children.get(1);
+			boolean arrayParam = false;
+			if( initVal instanceof SomeExpression ) {
+				if( initVal.toString().charAt(0) == '{' ) {
+					arrayParam = true;
+				}
+			}
+			if( arrayParam ) {
+				o.print("[] = ");
+			} else {
+				o.print(" = ");
+			}
 			o.print(children.get(1));
 		}
 	}

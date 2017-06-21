@@ -1839,19 +1839,27 @@ public class ASPENModelGen extends TransformPass {
 				} else if( aspenAnnotData1.aspenDeclare ) {
 					for( ASPENParam aParam : aspenAnnotData1.paramSet ) {
 						if( aParam.getParent() != null ) {
-							Tools.exit("\n[ERROR in ASPENModelGen] Duplicated declaration of the Aspen parameter, " +
-									aParam + " in the following statement; exit!\n" +
-									"Statement: " + at + 
-									"\nEnclosing Procedure: " + proc.getSymbolName() +"\n" +
-									"Enclosing Translation Unit: " + ((TranslationUnit)proc.getParent()).getOutputFilename() + "\n");
+							if( aParam.toString().startsWith("_ret_val_") ) {
+								continue;
+							} else {
+								Tools.exit("\n[ERROR in ASPENModelGen] Duplicated declaration of the Aspen parameter, " +
+										aParam + " in the following statement; exit!\n" +
+										"Statement: " + at + 
+										"\nEnclosing Procedure: " + proc.getSymbolName() +"\n" +
+										"Enclosing Translation Unit: " + ((TranslationUnit)proc.getParent()).getOutputFilename() + "\n");
+							}
 						}
 						ASPENParamDeclaration paramDecl = new ASPENParamDeclaration(aParam);
 						IDExpression ID = paramDecl.getDeclaredID();
 						if( aspenModel.containsParam(ID) ) {
 							if( !ASPENModelAnalysis.isInternalParam(ID.getName()) ) {
-								PrintTools.println("\n[WARNING in ASPENModelGen] duplicate ASPEN parameter is found:\n" +
-										"ASPEN Parameter: " + aParam.toString() + 
-										" Enclosing Procedure: " + proc.getSymbolName() +"\n", 1);
+								if( aParam.toString().startsWith("_ret_val_") ) {
+									continue;
+								} else {
+									PrintTools.println("\n[WARNING in ASPENModelGen] duplicate ASPEN parameter is found:\n" +
+											"ASPEN Parameter: " + aParam.toString() + 
+											" Enclosing Procedure: " + proc.getSymbolName() +"\n", 1);
+								}
 							}
 							ASPENParamDeclaration cParamDecl = aspenModel.getParamDeclaration(ID);
 							ASPENParam tParam = cParamDecl.getASPENParam();

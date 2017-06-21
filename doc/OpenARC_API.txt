@@ -267,6 +267,14 @@ noloopcollapse
 //Internally used by the compiler to label each compute region.
 
 
+#pragma openarc devicetask [clause[[,] clause]...]
+	structured block
+
+where clause is one of the following
+map(task-mapping-scheme) //task-mapping-scheme: included, coarse_grained, fine_grained
+schedule(task-scheduling-scheme) //task-scheduling-scheme: LRR, GRR, LF
+
+
 #pragma openarc resilience [clause[[,] clause]...]
 	structured block
 

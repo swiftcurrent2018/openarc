@@ -71,10 +71,14 @@ public abstract class ACC2GPUTranslationTools {
 					ArrayAccess aAccess = new ArrayAccess(RHS.clone(), indices);
 					RHS.swapWith(aAccess);
 					accessEx = accEx;
+				} else if( IDEx instanceof UnaryExpression ) {
+					accessEx = new ArrayAccess(IDEx.clone(), indices);
 				}
-				cudaRegisterSet.add(accessEx.toString());
-				if( ROShrdArryOnRegSet.contains(tSubA) ) {
-					cudaRegisterROSet.add(accessEx.toString());
+				if( accessEx != null ) {
+					cudaRegisterSet.add(accessEx.toString());
+					if( ROShrdArryOnRegSet.contains(tSubA) ) {
+						cudaRegisterROSet.add(accessEx.toString());
+					}
 				}
 			}
 		}

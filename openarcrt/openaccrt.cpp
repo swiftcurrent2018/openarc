@@ -993,7 +993,7 @@ HI_error_t HI_free_unified( const void *hostPtr, int asyncID) {
 
 //Unlike HI_free(), this method does not do actual memory deallocation;
 //instead, it tells that following synchronization calls (acc_wait,
-//acc_async_test, etc.) dellocate GPU memory for the variable.
+//acc_async_test, etc.) deallocate the device memory for the variable.
 HI_error_t HI_free_async( const void *hostPtr, int asyncID ) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_

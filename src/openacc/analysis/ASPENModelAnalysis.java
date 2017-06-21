@@ -1156,11 +1156,16 @@ public class ASPENModelAnalysis extends AnalysisPass {
 								Expression loadSize = new BinaryExpression(statusMap.get(tstatus).clone(), 
 										BinaryOperator.MULTIPLY, nParamID.clone());
 								if( tstatus instanceof StringLiteral ) {
+									List<ASPENTrait> traitList = null;
+									if( ((StringLiteral)tstatus).getValue().equals("RandomAccess") ) {
+										traitList = new ArrayList<ASPENTrait>(1);
+										traitList.add(new ASPENTrait("random", null));
+									}
 									ASPENResource lRSC = null;
 									if( removeSyms.contains(lSym) ) {
-										lRSC = new ASPENResource(loadSize, null); 
+										lRSC = new ASPENResource(loadSize, traitList); 
 									} else {
-										lRSC = new ASPENResource(loadSize, null, "from", new Identifier(lSym)); 
+										lRSC = new ASPENResource(loadSize, traitList, "from", new Identifier(lSym)); 
 									}
 									//If duplicate ASPENResources exist, we have to manually multiply  them;
 									//otherwise, they will be overwritten.
@@ -1169,9 +1174,9 @@ public class ASPENModelAnalysis extends AnalysisPass {
 										loadSize = Symbolic.simplify(new BinaryExpression(new IntegerLiteral(2),
 												BinaryOperator.MULTIPLY, loadSize.clone()));
 										if( removeSyms.contains(lSym) ) {
-											lRSC = new ASPENResource(loadSize, null); 
+											lRSC = new ASPENResource(loadSize, traitList); 
 										} else {
-											lRSC = new ASPENResource(loadSize, null, "from", new Identifier(lSym)); 
+											lRSC = new ASPENResource(loadSize, traitList, "from", new Identifier(lSym)); 
 										}
 									}
 									aspenLoadsSet.add(lRSC);
@@ -1300,20 +1305,25 @@ public class ASPENModelAnalysis extends AnalysisPass {
 								if( tstatus instanceof StringLiteral ) {
 									if( !((StringLiteral)tstatus).getValue().equals("PointerAssignment") ) {
 										//Simple pointer assignment is excluded.
+										List<ASPENTrait> traitList = null;
+										if( ((StringLiteral)tstatus).getValue().equals("RandomAccess") ) {
+											traitList = new ArrayList<ASPENTrait>(1);
+											traitList.add(new ASPENTrait("random", null));
+										}
 										ASPENResource lRSC = null;
 										if( removeSyms.contains(lSym) ) {
-											lRSC = new ASPENResource(storeSize, null); 
+											lRSC = new ASPENResource(storeSize, traitList); 
 										} else {
-											lRSC = new ASPENResource(storeSize, null, "to", new Identifier(lSym)); 
+											lRSC = new ASPENResource(storeSize, traitList, "to", new Identifier(lSym)); 
 										}
 										while ( aspenStoresSet.contains(lRSC) ) {
 											aspenStoresSet.remove(lRSC);
 											storeSize = Symbolic.simplify(new BinaryExpression(new IntegerLiteral(2),
 													BinaryOperator.MULTIPLY, storeSize.clone()));
 											if( removeSyms.contains(lSym) ) {
-												lRSC = new ASPENResource(storeSize, null); 
+												lRSC = new ASPENResource(storeSize, traitList); 
 											} else {
-												lRSC = new ASPENResource(storeSize, null, "to", new Identifier(lSym)); 
+												lRSC = new ASPENResource(storeSize, traitList, "to", new Identifier(lSym)); 
 											}
 										}
 										aspenStoresSet.add(lRSC);
@@ -2063,7 +2073,10 @@ public class ASPENModelAnalysis extends AnalysisPass {
 										if( indexVar != null ) {
 											ArrayAccess tAccess = (ArrayAccess)tID.getParent();
 											Expression tIndex = tAccess.getIndex(tAccess.getNumIndices()-1);
-											if( tIndex instanceof IntegerLiteral ) {
+											List<ArrayAccess> arrayAccessList = IRTools.getExpressionsOfType(tIndex, ArrayAccess.class);
+											if( (arrayAccessList != null) && !arrayAccessList.isEmpty() ) {
+												retMap.put(symbol, new StringLiteral("RandomAccess"));
+											} else if( tIndex instanceof IntegerLiteral ) {
 												List<Expression> indices = tAccess.getIndices();
 												int i=0;
 												boolean foundIndexDim = false;
@@ -2082,6 +2095,10 @@ public class ASPENModelAnalysis extends AnalysisPass {
 												//A[i];
 												retMap.put(symbol, new IntegerLiteral(1));
 													isSIMDizable = true;
+											} else if( tIndex instanceof ArrayAccess ) {
+												retMap.put(symbol, new StringLiteral("RandomAccess"));
+											} else if( tIndex instanceof FunctionCall ) {
+												retMap.put(symbol, new StringLiteral("RandomAccess"));
 											} else if( tIndex instanceof BinaryExpression ) {
 												BinaryExpression bExp = (BinaryExpression)tIndex;
 												if( bExp.getLHS().equals(indexVar) || bExp.getRHS().equals(indexVar) ) {
@@ -2205,7 +2222,10 @@ public class ASPENModelAnalysis extends AnalysisPass {
 									if( indexVar != null ) {
 										ArrayAccess tAccess = (ArrayAccess)tID.getParent();
 										Expression tIndex = tAccess.getIndex(tAccess.getNumIndices()-1);
-										if( tIndex instanceof IntegerLiteral ) {
+										List<ArrayAccess> arrayAccessList = IRTools.getExpressionsOfType(tIndex, ArrayAccess.class);
+										if( (arrayAccessList != null) && !arrayAccessList.isEmpty() ) {
+											retMap.put(symbol, new StringLiteral("RandomAccess"));
+										} else if( tIndex instanceof IntegerLiteral ) {
 											List<Expression> indices = tAccess.getIndices();
 											int i=0;
 											boolean foundIndexDim = false;
@@ -2224,6 +2244,10 @@ public class ASPENModelAnalysis extends AnalysisPass {
 											//A[i];
 											retMap.put(symbol, new IntegerLiteral(1));
 											isSIMDizable = true;
+										} else if( tIndex instanceof ArrayAccess ) {
+											retMap.put(symbol, new StringLiteral("RandomAccess"));
+										} else if( tIndex instanceof FunctionCall ) {
+											retMap.put(symbol, new StringLiteral("RandomAccess"));
 										} else if( tIndex instanceof BinaryExpression ) {
 											BinaryExpression bExp = (BinaryExpression)tIndex;
 											if( bExp.getLHS().equals(indexVar) || bExp.getRHS().equals(indexVar) ) {

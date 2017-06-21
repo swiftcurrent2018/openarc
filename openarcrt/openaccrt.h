@@ -1186,8 +1186,11 @@ extern void HI_hostinit(int numhostthreads);
 //////////////////////
 // Kernel Execution //
 //////////////////////
+//Set the number of arguments to be passed to a kernel.
 extern HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
+//Register an argument to be passed to a kernel.
 extern HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
+//Launch a kernel.
 extern HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
 extern HI_error_t HI_synchronize( int forcedSync = 0);
 
@@ -1244,15 +1247,17 @@ extern HI_error_t HI_get_host_address(const void *devPtr, void** hostPtr, int as
 extern HI_error_t HI_get_temphost_address(const void * hostPtr, void ** temphostPtr, int asyncID);
 //extern HI_error_t HI_set_temphost_address(const void * hostPtr, void * temphostPtr, int asyncID);
 //extern HI_error_t HI_remove_temphost_address(const void * hostPtr);
+//Get and increase an internal reference counter of the present table mapping for the host variable. (It also returns the corresponding device pointer.)
 extern int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID);
+//Decrease and get an internal reference counter of the present table mapping for the host variable. (It also returns the corresponding device pointer.)
 extern int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID);
 
 /////////////////////////////////////////////////////////////////////////
 //async integer argument => internal handler (ex: CUDA stream) mapping //
 /////////////////////////////////////////////////////////////////////////
-extern HI_error_t HI_create_async_handle( int async);
-extern int HI_contain_async_handle( int async );
-extern HI_error_t HI_delete_async_handle( int async );
+//extern HI_error_t HI_create_async_handle( int async);
+//extern int HI_contain_async_handle( int async );
+//extern HI_error_t HI_delete_async_handle( int async );
 extern void HI_set_async(int asyncId);
 ////////////////////////////////
 //Memory management functions //

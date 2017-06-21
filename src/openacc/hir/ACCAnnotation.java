@@ -228,11 +228,11 @@ public class ACCAnnotation extends PragmaAnnotation
 	private static final List<String> print_order =
 			new ArrayList<String>(Arrays.asList( "parallel", "kernels", "enter", "exit", "mpi",
 					"data", "loop", "declare", "update", "atomic", "host_data", "cuda", "internal", "tempinternal",
-					"routine", "if", "async", "refname", "num_gang", "num_workers", "vector_length", 
+					"routine", "if", "refname", "num_gang", "num_workers", "vector_length", 
 					"collapse", "gang", "worker", "vector", "seq", "independent", "tile",
 					"reduction", "copy", "copyin", "copyout", "create", "present", "pcopy", "pcopyin",
 					"pcopyout", "pcreate", "pipe", "pipein", "pipeout", "deviceptr", "device_resident", 
-					"private", "firstprivate", "finalize", "sendbuf", "recvbuf"
+					"private", "firstprivate", "finalize", "sendbuf", "recvbuf", "async", "wait"
 					));
 	
 	// List of OpenACC directives.

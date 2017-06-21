@@ -4,6 +4,8 @@
 package openacc.transforms;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
@@ -1236,6 +1238,457 @@ public abstract class TransformTools {
 		return wLoop;
 	}
 	
+	public static Procedure outlining(Statement target, String new_func_name, List<Specifier> funcReturnTypes, List<Annotation> funcCallAnnots, 
+			TranslationUnit targetTu, Declaration refDecl, boolean parametrizeGlobalSymbols, boolean IRSymbolOnly ) {
+		Procedure cProc = IRTools.getParentProcedure(target);
+		TranslationUnit parentTu = IRTools.getParentTranslationUnit(target);
+		if( (target == null) || (target.getParent() == null) ) {
+			return null;
+		}
+		if( targetTu == null ) {
+			Traversable tt = target.getParent();
+			while( (tt != null) && !(tt instanceof Procedure ) ) {
+				tt = tt.getParent();
+			}
+			if( tt instanceof Procedure ) {
+				refDecl = (Declaration)tt;
+			}
+			tt = target.getParent();
+			while( (tt != null) && !(tt instanceof TranslationUnit ) ) {
+				tt = tt.getParent();
+			}
+			if( tt instanceof TranslationUnit ) {
+				targetTu = (TranslationUnit)tt;
+			} else {
+				return null;
+			}
+		}
+
+		//Find shared symbols interprocedurally, and put them in the shared set.
+		// shared set = symbols accessed in the region - local symbols 
+		//                 + global symbols accessed in functions called in the region 
+		//Step1: find symbols accessed in the region, and add them to shared set.
+		Set<Symbol> sharedSymbols = new HashSet<Symbol>();
+		Set<Symbol> tempSet = AnalysisTools.getAccessedVariables(target, true);
+		if( tempSet != null ) {
+			sharedSymbols.addAll(tempSet);
+		}
+		//Step2: find local symbols defined in the region, and remove them from the shared set.
+		tempSet = SymbolTools.getLocalSymbols(target);
+		if( tempSet != null ) {
+			sharedSymbols.removeAll(tempSet);
+		}
+		if( parametrizeGlobalSymbols ) {
+			//Step3: find global symbols accessed in the functions called in the region, and add them 
+			//to the shared set.
+			Map<String, Symbol> gSymMap = null;
+			List<FunctionCall> calledFuncs = IRTools.getFunctionCalls(target);
+			for( FunctionCall call : calledFuncs ) {
+				Procedure called_procedure = call.getProcedure();
+				if( called_procedure != null ) {
+					if( gSymMap == null ) {
+						Set<Symbol> tSet = SymbolTools.getGlobalSymbols(target);
+						gSymMap = new HashMap<String, Symbol>();
+						for( Symbol gS : tSet ) {
+							if( !(gS.getDeclaration() instanceof Enumeration) ) {
+								//Skip member symbols of an enumeration.
+								gSymMap.put(gS.getSymbolName(), gS);
+							}
+						}
+					} 
+					CompoundStatement body = called_procedure.getBody();
+					Set<Symbol> procAccessedSymbols = AnalysisTools.getIpAccessedGlobalSymbols(body, gSymMap, null);
+					for( Symbol tgSym : procAccessedSymbols ) {
+						if( !gSymMap.containsValue(tgSym) ) {
+							//tgSym is not visible in the current scope.
+							Declaration tgSymDecl = tgSym.getDeclaration();
+							if( (tgSymDecl instanceof VariableDeclaration) && !(tgSym instanceof ProcedureDeclarator) ) {
+								VariableDeclaration newDecl = TransformTools.addExternVariableDeclaration((VariableDeclaration)tgSymDecl, parentTu);
+								Declarator newExtSym = newDecl.getDeclarator(0);
+								if( newExtSym instanceof Symbol ) {
+									gSymMap.put(((Symbol) newExtSym).getSymbolName(), (Symbol)newExtSym);
+								}
+							} else {
+								PrintTools.println("\n[WARNING in TransformTools.outlining()] an unexpected type of global symbol (" + 
+										tgSym.getSymbolName() + ") is" +
+										" accessed by a function called in the following region to outline:\n" +
+										target + AnalysisTools.getEnclosingContext(target), 0);
+							}
+						}
+					}
+					sharedSymbols.addAll(procAccessedSymbols);
+				}
+			}
+		}
+
+		List<Specifier> new_proc_ret_type = new LinkedList<Specifier>();
+		new_proc_ret_type.add(Specifier.VOID);
+		if( funcReturnTypes != null ) {
+			new_proc_ret_type.addAll(funcReturnTypes);
+		}
+		Procedure new_proc = new Procedure(new_proc_ret_type,
+				new ProcedureDeclarator(new NameID(new_func_name),
+						new LinkedList()), new CompoundStatement());
+		List<Expression> kernelConf = new ArrayList<Expression>();
+		KernelFunctionCall call_to_new_proc = new KernelFunctionCall(new NameID(
+				new_func_name), new LinkedList(), kernelConf);
+        call_to_new_proc.setLinkedProcedure(new_proc);
+		Statement kernelCall_stmt = new ExpressionStatement(call_to_new_proc);
+
+		//////////////////////////////////////////////////////////////
+		// Extract CUDA directives attached to this target region. //
+		//////////////////////////////////////////////////////////////
+		Set<Symbol> cudaRegisterROSet = new HashSet<Symbol>();
+		Set<Symbol> cudaRegisterSet = new HashSet<Symbol>();
+		Set<Symbol> cudaNoRegisterSet = new HashSet<Symbol>();
+		Set<Symbol> cudaSharedROSet = new HashSet<Symbol>();
+		Set<Symbol> cudaSharedSet = new HashSet<Symbol>();
+		Set<Symbol> cudaNoSharedSet = new HashSet<Symbol>();
+		Set<Symbol> cudaTextureSet = new HashSet<Symbol>();
+		Set<Symbol> cudaNoTextureSet = new HashSet<Symbol>();
+		Set<Symbol> cudaConstantSet = new HashSet<Symbol>();
+		Set<Symbol> cudaNoConstantSet = new HashSet<Symbol>();
+		Map<Symbol, Set<SubArray>> shrdArryOnRegMap = new HashMap<Symbol, Set<SubArray>>();
+		Set<SubArray> ROShrdArryOnRegSet = new HashSet<SubArray>();
+
+		ACCAnnotation kannot = AnalysisTools.findFirstPragmaInParent(target, ACCAnnotation.class, ACCAnnotation.computeRegions, false);
+		if( kannot != null ) {
+			List<ARCAnnotation> arcAnnots = kannot.getAnnotatable().getAnnotations(ARCAnnotation.class);
+			if( arcAnnots != null ) {
+				for( ARCAnnotation cannot : arcAnnots ) {
+					HashSet<SubArray> dataSet = (HashSet<SubArray>)cannot.get("registerRO");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							Symbol tSym = sym;
+							if( sym instanceof AccessSymbol ) {
+								tSym = ((AccessSymbol)sym).getMemberSymbol();
+							}
+							if( SymbolTools.isArray(tSym) || SymbolTools.isPointer(tSym) ) {
+								Set<SubArray> sSet = null;
+								if( shrdArryOnRegMap.containsKey(tSym) ) {
+									sSet = shrdArryOnRegMap.get(tSym);
+								} else {
+									sSet = new HashSet<SubArray>();
+									shrdArryOnRegMap.put(tSym, sSet);
+								}
+								sSet.add(sArray);
+								ROShrdArryOnRegSet.add(sArray);
+							}
+							cudaRegisterSet.add(sym);
+							cudaRegisterROSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("registerRW");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							Symbol tSym = sym;
+							if( sym instanceof AccessSymbol ) {
+								tSym = ((AccessSymbol)sym).getMemberSymbol();
+							}
+							if( SymbolTools.isArray(tSym) || SymbolTools.isPointer(tSym) ) {
+								Set<SubArray> sSet = null;
+								if( shrdArryOnRegMap.containsKey(tSym) ) {
+									sSet = shrdArryOnRegMap.get(tSym);
+								} else {
+									sSet = new HashSet<SubArray>();
+									shrdArryOnRegMap.put(tSym, sSet);
+								}
+								sSet.add(sArray);
+							}
+							cudaRegisterSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("noregister");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							cudaNoRegisterSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("sharedRO");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							cudaSharedSet.add(sym);
+							cudaSharedROSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("sharedRW");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							cudaSharedSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("noshared");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							cudaNoSharedSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("texture");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							cudaTextureSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("notexture");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							cudaNoTextureSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("constant");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							cudaConstantSet.add(sym);
+						}
+					}
+					dataSet = (HashSet<SubArray>)cannot.get("noconstant");
+					if( dataSet != null ) {
+						for( SubArray sArray : dataSet ) {
+							Symbol sym = AnalysisTools.subarrayToSymbol(sArray, IRSymbolOnly);
+							cudaNoConstantSet.add(sym);
+						}
+					}
+				}
+			}
+		}
+		cudaRegisterSet.removeAll(cudaNoRegisterSet);
+		cudaRegisterROSet.removeAll(cudaNoRegisterSet);
+		cudaSharedSet.removeAll(cudaNoSharedSet);
+		cudaSharedROSet.removeAll(cudaNoSharedSet);
+		cudaTextureSet.removeAll(cudaNoTextureSet);
+		cudaConstantSet.removeAll(cudaNoConstantSet);
+		for( Symbol tSm : cudaNoRegisterSet ) {
+			Set<SubArray> sSet = shrdArryOnRegMap.remove(tSm);
+			if( sSet != null ) {
+				ROShrdArryOnRegSet.removeAll(sSet);
+			}
+		}
+
+		///////////////////////////////////////////////
+		// Handle array-element-caching on register. //
+		///////////////////////////////////////////////
+		Set<Symbol> arrayElmtCacheSymbols = ACC2GPUTranslationTools.arrayCachingOnRegister(target, shrdArryOnRegMap, ROShrdArryOnRegSet);
+
+		Collection<Symbol> sortedSet = AnalysisTools.getSortedCollection(sharedSymbols);
+		for( Symbol sharedSym : sortedSet ) {
+			SubArray sArray = AnalysisTools.createSubArray(sharedSym, true, null);
+			Expression hostVar = sArray.getArrayName();
+
+			List<Specifier> removeSpecs = new ArrayList<Specifier>();
+			removeSpecs.add(Specifier.STATIC);
+			//removeSpecs.add(Specifier.CONST);
+			removeSpecs.add(Specifier.EXTERN);
+			List<Specifier> typeSpecs = new ArrayList<Specifier>();
+			Boolean isStruct = false;
+			Symbol IRSym = sharedSym;
+			if( sharedSym instanceof PseudoSymbol ) {
+				IRSym = ((PseudoSymbol)sharedSym).getIRSymbol();
+			}
+			if( IRSymbolOnly ) {
+				hostVar = new Identifier(IRSym);
+				typeSpecs.addAll(((VariableDeclaration)IRSym.getDeclaration()).getSpecifiers());
+				isStruct = SymbolTools.isStruct(IRSym, target);
+			} else {
+				Symbol tSym = sharedSym;
+				while( tSym instanceof AccessSymbol ) {
+					tSym = ((AccessSymbol)tSym).getMemberSymbol();
+				}
+				typeSpecs.addAll(((VariableDeclaration)tSym.getDeclaration()).getSpecifiers());
+				isStruct = SymbolTools.isStruct(tSym, target);
+			}
+			typeSpecs.removeAll(removeSpecs);
+			//Replace C restrict keyword to CUDA __restrict__ keyword.
+/*			if( typeSpecs.remove(Specifier.RESTRICT) ) {
+				typeSpecs.add(CUDASpecifier.RESTRICT);
+			}*/
+
+			Boolean isArray = SymbolTools.isArray(sharedSym);
+			Boolean isPointer = SymbolTools.isPointer(sharedSym);
+			if( sharedSym instanceof NestedDeclarator ) {
+				isPointer = true;
+			}
+			for( Object tObj : typeSpecs ) {
+				if( tObj instanceof UserSpecifier ) {
+					IDExpression tExp = ((UserSpecifier)tObj).getIDExpression();
+					String tExpStr = tExp.getName();
+					if( !tExpStr.startsWith("struct") && !tExpStr.startsWith("enum") ) {
+						Declaration tDecl = SymbolTools.findSymbol(parentTu, tExp);
+						if( tDecl != null ) {
+							if( tDecl instanceof VariableDeclaration ) {
+								if( ((VariableDeclaration)tDecl).getSpecifiers().contains(Specifier.TYPEDEF) ) {
+									Declarator tDeclr = ((VariableDeclaration)tDecl).getDeclarator(0);
+									if( tDeclr instanceof NestedDeclarator ) {
+										isPointer =  true;
+										break;
+									} else if( tDeclr instanceof VariableDeclarator ) {
+										if( SymbolTools.isArray((VariableDeclarator)tDeclr) ) {
+											isArray= true;
+											break;
+										} else if( SymbolTools.isPointer((VariableDeclarator)tDeclr) ) {
+											isPointer= true;
+											break;
+										}
+									}
+								}
+							}
+						}
+					}
+					break;
+				}
+			}
+
+			Boolean isScalar = !isArray && !isPointer;
+			
+			List<Expression> startList = new LinkedList<Expression>();
+			List<Expression> lengthList = new LinkedList<Expression>();
+			boolean foundDimensions = AnalysisTools.extractDimensionInfo(sArray, startList, lengthList, IRSymbolOnly, target);
+/*			int dimension = lengthList.size();
+			if( (!foundDimensions) && (dimension>1) ) {
+				//It's OK to miss the left-most dimension.
+				boolean missingDimFound = false;
+				for(int m=1; m<dimension; m++) {
+					if( lengthList.get(m) == null ) {
+						missingDimFound = true;
+						break;
+					}
+				}
+				if( missingDimFound ) {
+					Tools.exit("[ERROR in TransformTools.outlining()] Dimension information of the following variable is" +
+							"unknown: " + sArray.getArrayName() + "\nRegion to outline: " + target +
+					AnalysisTools.getEnclosingContext(target));
+				}
+			}*/
+			//PrintTools.println("sArray: " + sArray + ", dimension: " + lengthList.size() + ", sArray.getArrayDimension(): " + sArray.getArrayDimension() + "\n" , 0);
+			
+			Identifier kParamVar = null;
+			String symNameBase = null;
+			if( sharedSym instanceof AccessSymbol) {
+				symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)sharedSym);
+			} else {
+				symNameBase = sharedSym.getSymbolName();
+			}
+			String kParamVarName = symNameBase;
+			
+			if( isScalar && !isStruct ) {
+				if( cudaSharedROSet.contains(sharedSym) ) {
+					// Create a function parameter corresponding to shared_var
+					VariableDeclarator kParam_declarator = new VariableDeclarator(new NameID(kParamVarName));
+					VariableDeclaration kParam_decl = new VariableDeclaration(typeSpecs,
+							kParam_declarator);
+					kParamVar = new Identifier(kParam_declarator);
+					new_proc.addDeclaration(kParam_decl);
+
+					// Insert argument to the outlined function call
+					if( sharedSym instanceof AccessSymbol ) {
+						AccessExpression accExp = AnalysisTools.accessSymbolToExpression((AccessSymbol)sharedSym, null);
+						call_to_new_proc.addArgument(accExp);
+					} else {
+						call_to_new_proc.addArgument(new Identifier(sharedSym));
+					}
+
+					// Replace the instance of shared variable with the new function parameter.
+					if( sharedSym instanceof AccessSymbol ) {
+						TransformTools.replaceAccessExpressions(target, (AccessSymbol)sharedSym, kParamVar);
+					} else {
+						TransformTools.replaceAll(target, new Identifier(sharedSym), kParamVar);
+					}
+					continue;
+				}
+			}
+
+			Set<Symbol> symSet = null;
+			
+			SymbolTable targetSymbolTable = AnalysisTools.getIRSymbolScope(IRSym, target.getParent());
+			if( targetSymbolTable instanceof Procedure ) {
+				targetSymbolTable = ((Procedure)targetSymbolTable).getBody();
+			}
+			if( targetSymbolTable instanceof CompoundStatement ) {
+				if( AnalysisTools.ipFindFirstPragmaInParent(target, OmpAnnotation.class, new HashSet(Arrays.asList("parallel", "task")), false, null, null) != null ) { 
+					targetSymbolTable = (CompoundStatement)target.getParent();
+				}
+			}
+			
+			//FIXME: below will work only for scalar variable, since multiple instances of array variables
+			//are possible in the registerRO and registerRW clauses.
+			boolean useRegister = false;
+			boolean useSharedMemory = false;
+			boolean ROData = false;
+			if( cudaRegisterSet.contains(sharedSym) ) {
+				useRegister = true;
+			}
+			if( cudaRegisterROSet.contains(sharedSym) ) {
+				useRegister = true;
+				ROData = true;
+			}
+			if( cudaSharedSet.contains(sharedSym) ) {
+				useSharedMemory = true;
+			}
+			if( cudaSharedROSet.contains(sharedSym) ) {
+				useSharedMemory = true;
+				ROData = true;
+			}
+
+			if( isScalar ) {
+				//It is OK to use this method as long as useSharedMemory argument is set to false.
+				CUDATranslationTools.scalarSharedConv(sharedSym, symNameBase, typeSpecs,
+						sharedSym, target, new_proc, call_to_new_proc, useRegister, false, ROData);
+				//We don't need to insert scalar symbol to callerProcSymSet.
+			} else {
+				//Create a kernel parameter for the shared array variable.
+				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, null, true, false);
+				Symbol kParamSym = kParamVar.getSymbol();
+				// Insert argument to the kernel function call
+				call_to_new_proc.addArgument(hostVar.clone());
+/*				if( dimension == 1 ) {
+					call_to_new_proc.addArgument(hostVar.clone());
+				} else {
+					//Cast the gpu variable to pointer-to-array type 
+					// Ex: (float (*)[SIZE2]) gpu__x
+					List castspecs = new LinkedList();
+					castspecs.addAll(typeSpecs);
+					
+					 * FIXME: NestedDeclarator was used for (*)[SIZE2], but this may not be 
+					 * semantically correct way to represent (*)[SIZE2] in IR.
+					 
+					List tindices = new LinkedList();
+					for( int i=1; i<dimension; i++) {
+						tindices.add(lengthList.get(i).clone());
+					}
+					ArraySpecifier aspec = new ArraySpecifier(tindices);
+					List tailSpecs = new ArrayList(1);
+					tailSpecs.add(aspec);
+					VariableDeclarator childDeclr = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, new NameID(" "));
+					NestedDeclarator nestedDeclr = new NestedDeclarator(new ArrayList(), childDeclr, null, tailSpecs);
+					castspecs.add(nestedDeclr);
+					call_to_new_proc.addArgument(new Typecast(castspecs, (Identifier)hostVar.clone()));
+				}*/
+				
+				// Replace all instances of the shared variable to the parameter variable
+				if( sharedSym instanceof AccessSymbol ) {
+					TransformTools.replaceAccessExpressions(target, (AccessSymbol)sharedSym, kParamVar);
+				} else {
+					TransformTools.replaceAll(target, hostVar, kParamVar);
+				}
+			}
+		}
+
+		//////////////////////////////
+		//Perform actual outlining. //
+		//////////////////////////////
+		target.swapWith(kernelCall_stmt);
+
+		return new_proc;
+	}
+	
 	/**
 	 * Create a reduction assignment expression for the given reduction operator.
 	 * This function is used to perform both in-block partial reduction and across-
@@ -1405,7 +1858,7 @@ public abstract class TransformTools {
     * Skips the immediate right hand side of member access expressions.
     * This method differs from IRTools.replaceAll() in that this does not
     * replace declarator ID. If input expression <var>x</var> is 
-    * an Identifier and * input Traversable <var>t</var> contains the 
+    * an Identifier and input Traversable <var>t</var> contains the 
     * declarator for the input identifier <var>x</var>, and if <var>t</var> 
     * also contains the same identifier in other IR tree, 
     * getting the identifier's name will cause infinite loops.

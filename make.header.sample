@@ -1,6 +1,8 @@
 ####################################################################
 # - Modify the following environment variables according to user's #
 # environment.                                                     #
+# (Example settings can be found in the "Set the target system"    #
+#  section below.)                                                 # 
 #   - Set OPENARCLIB to the path to openarcrt directory.           #
 #       - Set OPENARC_ARCH to 0 if targeting CUDA GPUs             #
 #                         1 if targeting OpenCL devices            #
@@ -93,15 +95,23 @@
 ####################################################################
 ###################
 # OpenARC Setting #
-###################
+###########################################################################
+# Setting OPENARCLIB is mandatory unless an environment variable, openarc #
+# is set to the root directory of the OpenARC repository.                 #
+###########################################################################
 OPENARCLIB = $(openarc)/openarcrt
 CETUS_OUTPUT = cetus_output
 #OPENARC_ARCH = 0
 
 ########################################################################
 # Set the target system                                                #
-# Example targets: Titan, Newark, MacBookPro, Beacon, Atlanta, Cooley  #
 ########################################################################
+# Example targets: LCUDA, Titan, Newark, MacBookPro, Beacon, Atlanta,  #
+#                  Cooley                                              #
+# To target a general Linux system with NVIDIA GPUs, choose LCUDA and  #
+# adjust variables in the LCUDA section as necessary.                  # 
+########################################################################
+# LCUDA: Linux system with NVIDIA GPUs                                 #
 # Titan: Cray XK7 system with NVIDIA GPUs                              #
 #        https://www.olcf.ornl.gov/computing-resources/titan-cray-xk7/ #
 # Beacon: Linux system with Intel Xeon Phi coprocessors (MICs)         #
@@ -118,7 +128,37 @@ CETUS_OUTPUT = cetus_output
 # Oswald: Heterogeneous mini cluster with NVIDIA Tesla P100 and        #
 #         Nallatech 510T FPGA                                          #
 ########################################################################
-TARGET_SYSTEM = Newark
+TARGET_SYSTEM = LCUDA
+
+########################
+# Target System: LCUDA #
+########################
+ifeq ($(TARGET_SYSTEM),LCUDA)
+
+OPENARC_ARCH = 0
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = gcc
+CXX = g++
+CPP = $(CC) -E
+GMACROS = -D OPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D _OPENARC_PROFILE_=1
+BACKENDCXX = nvcc
+CC_FLAGS_PREFIX = -Xcompiler
+GBACKEND_FLAGS = -arch sm_20 -O3
+GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
+GBACKEND_LIBS = -lcuda -lOpenCL
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = -L$(OPENARCLIB) -lcuda
+GFRONTEND_DEBUG = -g
+
+#MPI_FLAGS =
+MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
+MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+
+endif
 
 ########################
 # Target System: Titan #
@@ -131,10 +171,10 @@ OPENARC_ARCH = 0
 #option for PGI compiler (PrgEnv-gnu)
 #GOMP_FLAGS = -fopenmp
 #option for Intel compiler (PrgEnv-intel)
-#GOMP_FLAGS = -openmp
+GOMP_FLAGS = -qopenmp
 #option for PGI compiler (PrgEnv-pgi)
-GOMP_FLAGS = -mp
-GOMP_LIBS =
+#GOMP_FLAGS = -mp
+#GOMP_LIBS =
 CC = cc
 CXX = CC
 #CPP = $(CC) -E
@@ -289,14 +329,14 @@ ifeq ($(OPENARC_ARCH), 3)
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
-# Altera OpenCL 16.1
-GBACKEND_INCLUDES = -I/opt/altera/16.1/hld/host/include
-GBACKEND_LIBS = -L/opt/altera/16.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+# Altera OpenCL 16.0
+GBACKEND_INCLUDES = -I/opt/altera/16.0/hld/host/include
+GBACKEND_LIBS = -L/opt/altera/16.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-# Altera OpenCL 16.1
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/16.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+# Altera OpenCL 16.0
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/16.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++

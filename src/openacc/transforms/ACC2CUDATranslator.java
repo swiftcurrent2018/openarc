@@ -5345,7 +5345,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			if( isScalar ) {
 				CUDATranslationTools.scalarSharedConv(sharedSym, symNameBase, typeSpecs,
 						gpuSym, region, new_proc, call_to_new_proc, useRegister, false, ROData);
-				//We done need to insert scalar symbol to callerProcSymSet.
+				//We don't need to insert scalar symbol to callerProcSymSet.
 			} else {
 				//Create a kernel parameter for the shared array variable.
 				kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, null, true, opt_AssumeNoAliasing);
