@@ -147,11 +147,11 @@ BACKENDCXX = nvcc
 CC_FLAGS_PREFIX = -Xcompiler
 GBACKEND_FLAGS = -arch sm_20 -O3
 GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
-GBACKEND_LIBS = -lcuda -lOpenCL
+GBACKEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -lcuda
+GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -L$(OPENARCLIB) -lcuda
 GFRONTEND_DEBUG = -g
 
 #MPI_FLAGS =
