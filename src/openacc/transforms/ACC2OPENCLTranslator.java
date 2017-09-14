@@ -5034,20 +5034,22 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		/* put new_proc before the calling proc (avoids prototypes) */
         //((TranslationUnit) cProc.getParent()).addDeclarationBefore(cProc,new_proc);
 		
-		//FIXME: seq loop may still need _tid for Worker-Single Mode.
+		//DEBUG: seq loop may still need _tid for Worker-Single Mode. 
 		//Disable the below condition.
+		//Instead, the initial values for _tid 
+		//and _bsize can be simplified if isSingleTask is true.
 		//if( !isSingleTask ) {
 		if( true ) {
 			/*
 			 * Create expressions for calculating global GPU thread ID (_gtid), local thread ID (_tid), 
 			 * global thread block ID (_bid), and thread block size (_bsize).
-			 *     _bid = blockIdx.x + (blockIdx.y * gridDim.x) + (blockIdx.z * gridDim.x * gridDim.y);
-			 *     _bsize = blockDim.x * blockDim.y * blockDim.z;
-			 *     _tid = threadIdx.x + (threadIdx.y * blockDim.x) + (threadIdx.z * blockDim.x * blockDim.y);
+			 *     _bid = get_group_id(0) + get_group_id(1)*get_num_groups(0) + get_group_id(2)*get_num_groups(0)*get_num_groups(1);
+			 *     _bsize = get_local_size(0)*get_local_size(1)*get_local_size(2);
+			 *     _tid = get_local_id(0) + get_local_id(1)*get_local_size(0) + get_local_id(2)*get_local_size(0)*get_local_size(1);
 			 *     _gtid = _tid + (_bid * _bsize);
-			 * [CAUTION] threadIdx.x, blockIdx.x, and blockDim.x are CUDA-built-in
-			 * variables, and thus they don't have any declarations; Range Analysis 
-			 * can not decide the types of these variables, and therefore, ignore these.
+			 * [CAUTION] get_local_id(), get_local_size(), get_group_id(), and get_num_groups() are OpenCL-built-in
+			 * functions, and thus they don't have any declarations; Range Analysis 
+			 * can not decide the types of these functions, and therefore, ignore these.
 			 */ 
 			VariableDeclarator gtid_declarator = new VariableDeclarator(new NameID("_gtid"));
 			//gtid_declarator.setInitializer(new Initializer(biexp2));
@@ -5083,8 +5085,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			//bsize_declarator.setInitializer(new Initializer(biexp1));
 			Declaration bsize_decl = new VariableDeclaration(Specifier.INT, bsize_declarator);
 			bsize = new Identifier(bsize_declarator);
-			ExpressionStatement bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
-					biexp1));
+			ExpressionStatement bsizeInitStmt;
+			if( isSingleTask ) {
+				bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
+						new IntegerLiteral(1)));
+			} else {
+				bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
+						biexp1));
+			}
 			if( IRTools.containsExpression(kernelRegion, bsize) || IRTools.containsExpression(kernelRegion, gtid) ) {
 				kernelRegion.addDeclaration(bsize_decl);
 				Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
@@ -5096,8 +5104,6 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 					BinaryOperator.MULTIPLY, new NameID("get_local_size(0)"));
 			biexp2 = new BinaryExpression(new NameID("get_local_id(0)"),
 					BinaryOperator.ADD, biexp1);
-			biexp1 = new BinaryExpression(new BinaryExpression(new NameID("get_local_id(2)"), BinaryOperator.MULTIPLY, 
-					new NameID("get_local_size(0)")), BinaryOperator.MULTIPLY, new NameID("get_local_size(1)"));
 			biexp1 = new BinaryExpression(new NameID("get_local_id(2)"), BinaryOperator.MULTIPLY, 
 					new BinaryExpression(new NameID("get_local_size(0)"), BinaryOperator.MULTIPLY, new NameID("get_local_size(1)")));
 			biexp2 = new BinaryExpression(biexp2, BinaryOperator.ADD, biexp1);
@@ -5105,8 +5111,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			//tid_declarator.setInitializer(new Initializer(biexp2));
 			Declaration tid_decl = new VariableDeclaration(Specifier.INT, tid_declarator);
 			tid = new Identifier(tid_declarator);
-			ExpressionStatement tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
-					biexp2));
+			ExpressionStatement tidInitStmt;
+			if( isSingleTask ) {
+				tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
+						new IntegerLiteral(0)));
+			} else {
+				tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
+						biexp2));
+			}
 			boolean tidIncluded = false;
 			if( IRTools.containsExpression(kernelRegion, tid) || IRTools.containsExpression(kernelRegion, gtid)) {
 				tidIncluded = true;

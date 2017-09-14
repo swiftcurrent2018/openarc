@@ -155,7 +155,8 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 						Object wObj = wAnnot.get("worker");
 						Expression numWorkers;
 						if( wObj instanceof Expression ) {
-							numWorkers = (Expression)wObj;
+							numWorkers = Symbolic.simplify((Expression)wObj);
+							wAnnot.put("worker", numWorkers);
 						} else {
 							int wCnt = 1;
 							if( AnalysisTools.ipFindFirstPragmaInParent(gLoop, ACCAnnotation.class, "worker", funcCallList, null) != null ) {
@@ -171,6 +172,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 							} else {
 								numWorkers = new IntegerLiteral(8);
 							}
+							numWorkers = Symbolic.simplify(numWorkers);
 							wAnnot.put("worker", numWorkers);
 						}
 						//numGangs = Symbolic.divide(iterspace, numWorkers);
@@ -249,7 +251,9 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 							ACCAnnotation iAnnot = tLoop.getAnnotation(ACCAnnotation.class, "gang");
 							Expression tExp = iAnnot.get("gang");
 							if( tExp != null ) {
+								tExp = Symbolic.simplify(tExp);
 								tExpList.add(tExp);
+								iAnnot.put("gang", tExp);
 							}
 						}
 						if( nestedGLoops.size() != tExpList.size() ) {
@@ -293,6 +297,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 									totalNumGangs = Symbolic.multiply(totalNumGangs, exp.clone());
 								}
 							}
+							totalNumGangs = Symbolic.simplify(totalNumGangs);
 							iAnnot.put("totalnumgangs", totalNumGangs);
 						}
 					}
@@ -321,6 +326,8 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 							numWorkers = new IntegerLiteral(8);
 						}
 						wAnnot.put("worker", numWorkers);
+					} else {
+						wAnnot.put("worker", Symbolic.simplify((Expression)wObj));
 					}
 				}
 				//Add workerconf clause to each outermost worker loop.
@@ -342,7 +349,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 							ACCAnnotation iAnnot = tLoop.getAnnotation(ACCAnnotation.class, "worker");
 							Expression tExp = iAnnot.get("worker");
 							if( tExp != null ) {
-								tExpList.add(tExp);
+								tExpList.add(Symbolic.simplify(tExp));
 							}
 						}
 						if( nestedWLoops.size() != tExpList.size() ) {
@@ -369,6 +376,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 									totalNumWorkers = Symbolic.multiply(totalNumWorkers, exp.clone());
 								}
 							}
+							totalNumWorkers = Symbolic.simplify(totalNumWorkers);
 							iAnnot.put("totalnumworkers", totalNumWorkers);
 							if( totalNumWorkers instanceof IntegerLiteral ) {
 								long tNumWorkers = ((IntegerLiteral)totalNumWorkers).getValue();
@@ -411,6 +419,8 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 			Expression num_workers = null;
 			if( cAnnot.containsKey("num_workers") ) {
 				num_workers = ((Expression)cAnnot.get("num_workers")).clone();
+				num_workers = Symbolic.simplify(num_workers);
+				cAnnot.put("num_workers", num_workers.clone());
 			} else {
 				List<ACCAnnotation> workerAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, "worker", null);
 				if( (workerAnnots == null) || (workerAnnots.isEmpty()) ) {
@@ -418,6 +428,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 				} else {
 					num_workers = new IntegerLiteral(defaultNumWorkers);
 				}
+				num_workers = Symbolic.simplify(num_workers);
 				cAnnot.put("num_workers", num_workers.clone());
 			}
 			List<ForLoop> outermostGangLoops = new ArrayList<ForLoop>();

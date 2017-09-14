@@ -35,7 +35,7 @@ echo "====> To compile the translated output file:"
 echo "\$ make"
 echo ""
 echo "====> To run the compiled binary:"
-echo "\$ cd bin; jacobi_ACC"
+echo "\$ cd bin; fft2d_ACC"
 echo ""
 if [ -f "./cetus_output/openarc_kernel.cl" ]; then
 	cd ./cetus_output

@@ -5891,8 +5891,10 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		/* put new_proc before the calling proc (avoids prototypes) */
         //((TranslationUnit) cProc.getParent()).addDeclarationBefore(cProc,new_proc);
 		
-		//FIXME: seq loop may still need _tid for Worker-Single Mode.
+		//DEBUG: seq loop may still need _tid for Worker-Single Mode. 
 		//Disable the below condition.
+		//Instead, the initial values for _tid 
+		//and _bsize can be simplified if isSingleTask is true.
 		//if( !isSingleTask ) {
 		if( true ) {
 			/*
@@ -5940,8 +5942,14 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			//bsize_declarator.setInitializer(new Initializer(biexp1));
 			Declaration bsize_decl = new VariableDeclaration(Specifier.INT, bsize_declarator);
 			bsize = new Identifier(bsize_declarator);
-			ExpressionStatement bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
-					biexp1));
+			ExpressionStatement bsizeInitStmt;
+			if( isSingleTask ) {
+				bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
+						new IntegerLiteral(1)));
+			} else {
+				bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
+						biexp1));
+			}
 			if( IRTools.containsExpression(kernelRegion, bsize) || IRTools.containsExpression(kernelRegion, gtid) ) {
 				kernelRegion.addDeclaration(bsize_decl);
 				Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
@@ -5962,8 +5970,14 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			//tid_declarator.setInitializer(new Initializer(biexp2));
 			Declaration tid_decl = new VariableDeclaration(Specifier.INT, tid_declarator);
 			tid = new Identifier(tid_declarator);
-			ExpressionStatement tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
-					biexp2));
+			ExpressionStatement tidInitStmt;
+			if( isSingleTask ) {
+				tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
+						new IntegerLiteral(0)));
+			} else {
+				tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
+						biexp2));
+			}
 			boolean tidIncluded = false;
 			if( IRTools.containsExpression(kernelRegion, tid) || IRTools.containsExpression(kernelRegion, gtid)) {
 				tidIncluded = true;
