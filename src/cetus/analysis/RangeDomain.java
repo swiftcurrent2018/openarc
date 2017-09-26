@@ -1008,16 +1008,39 @@ public class RangeDomain implements Cloneable, Domain {
     private void removeSymbol(Symbol var) {
         Expression with = getRange(var);
         removeRange(var);
+    	LinkedHashSet<Symbol> removeSet = new LinkedHashSet<Symbol>();
+    	LinkedHashMap<Symbol, Expression> updateMap = new LinkedHashMap<Symbol, Expression>();
         for (Symbol symbol : new LinkedHashSet<Symbol>(ranges.keySet())) {
             Expression replaced =
                 replaceSymbol(getRange(symbol).clone(), var, with);
             Set<Symbol> kill = new LinkedHashSet<Symbol>(2);
             kill.add(var);
             kill.add(symbol);
-            if (IRTools.containsSymbols(replaced, kill))
-                removeRange(symbol);
-            else
-                setRange(symbol, replaced);
+            if (IRTools.containsSymbols(replaced, kill)) {
+            	//[DEBUG by Seyong Lee] moved out of this loop to avoid the corruption of the enclosing loop iterator.
+            	//This movement should be unnecessary because of the LinkedHashSet, but it works anyway.
+                //removeRange(symbol);
+            	removeSet.add(symbol);
+            } else {
+            	//[DEBUG by Seyong Lee] moved out of this loop to avoid the corruption of the enclosing loop iterator.
+            	//This movement should be unnecessary because of the LinkedHashSet, but it works anyway.
+                //setRange(symbol, replaced);
+            	if (isOmega(replaced)) {
+            		removeSet.add(symbol);
+            	} else {
+            		updateMap.put(symbol, replaced);
+            	}
+            }
+        }
+        if( !removeSet.isEmpty() ) {
+        	for(Symbol tSym : removeSet) {
+        		ranges.remove(tSym);
+        	}
+        }
+        if( !updateMap.keySet().isEmpty() ) {
+        	for(Symbol tSym : updateMap.keySet()) {
+        		ranges.put(tSym, updateMap.get(tSym));
+        	}
         }
     }
 
@@ -1715,6 +1738,8 @@ public class RangeDomain implements Cloneable, Domain {
     * @param other the range domain intersected with
     */
     public void intersectRanges(RangeDomain other) {
+    	LinkedHashSet<Symbol> removeSet = new LinkedHashSet<Symbol>();
+    	LinkedHashMap<Symbol, Expression> updateMap = new LinkedHashMap<Symbol, Expression>();
         RangeDomain before = null;
         if (debug >= 2) {
             before = this.clone();
@@ -1734,10 +1759,26 @@ public class RangeDomain implements Cloneable, Domain {
                 break;
             }
             if (isOmega(result)) {
-                removeRange(var);
+            	//[DEBUG by Seyong Lee] moved out of this loop to avoid the corruption of the enclosing loop iterator.
+            	//This movement should be unnecessary because of the LinkedHashSet, but it works anyway.
+                //removeRange(var);
+            	removeSet.add(var);
             } else {
-                setRange(var, result);
+            	//[DEBUG by Seyong Lee] moved out of this loop to avoid the corruption of the enclosing loop iterator.
+            	//This movement should be unnecessary because of the LinkedHashSet, but it works anyway.
+                //setRange(var, result);
+                updateMap.put(var, result);
             }
+        }
+        if( !removeSet.isEmpty() ) {
+        	for(Symbol tSym : removeSet) {
+        		ranges.remove(tSym);
+        	}
+        }
+        if( !updateMap.keySet().isEmpty() ) {
+        	for(Symbol tSym : updateMap.keySet()) {
+        		ranges.put(tSym, updateMap.get(tSym));
+        	}
         }
         PrintTools.printlnStatus(2, tag, before, "(^)", other, "=", this);
     }
@@ -1752,15 +1793,33 @@ public class RangeDomain implements Cloneable, Domain {
         if (debug >= 2) {
             before = this.clone();
         }
+    	LinkedHashSet<Symbol> removeSet = new LinkedHashSet<Symbol>();
+    	LinkedHashMap<Symbol, Expression> updateMap = new LinkedHashMap<Symbol, Expression>();
         //String dmsg = tag + this + " (v) " + other;
         for (Symbol var : new LinkedHashSet<Symbol>(ranges.keySet())) {
             Expression result = unionRanges(getRange(var), this,
                                             other.getRange(var), other);
             if (isOmega(result)) {
-                removeRange(var);
+            	//[DEBUG by Seyong Lee] moved out of this loop to avoid the corruption of the enclosing loop iterator.
+            	//This movement should be unnecessary because of the LinkedHashSet, but it works anyway.
+                //removeRange(var);
+            	removeSet.add(var);
             } else {
-                setRange(var, result);
+            	//[DEBUG by Seyong Lee] moved out of this loop to avoid the corruption of the enclosing loop iterator.
+            	//This movement should be unnecessary because of the LinkedHashSet, but it works anyway.
+                //setRange(var, result);
+                updateMap.put(var, result);
             }
+        }
+        if( !removeSet.isEmpty() ) {
+        	for(Symbol tSym : removeSet) {
+        		ranges.remove(tSym);
+        	}
+        }
+        if( !updateMap.keySet().isEmpty() ) {
+        	for(Symbol tSym : updateMap.keySet()) {
+        		ranges.put(tSym, updateMap.get(tSym));
+        	}
         }
         PrintTools.printlnStatus(2, tag, before, "(v)", other, "=", this);
     }
