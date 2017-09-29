@@ -81,18 +81,20 @@ public class ParallelLoopSwap extends LoopInterchange {
 			} else {
 				pAnnot = AnalysisTools.ipFindFirstPragmaInParent(accLoop, ACCAnnotation.class, ACCAnnotation.computeRegions, 
 						false, null, null);
-				pRegion = (Statement)pAnnot.getAnnotatable();
+				if( pAnnot != null ) {
+					pRegion = (Statement)pAnnot.getAnnotatable();
+				}
 			}
 			if( pRegion == null ) {
 				if( !initStmtPrinted ) {
 					PrintTools.println("[WARNING in ParallelLoopSwap()] Can not find compute regions " +
-							"enclosing the following OpenACC loops; parallel loop-swap will not be applied the following loop:", 0);
+							"enclosing the following OpenACC loops; parallel loop-swap will not be applied the following loop:", 1);
 					initStmtPrinted = true;
 				}
 				ACCAnnotation fAnnot = accLoop.getAnnotation(ACCAnnotation.class, "loop");
-				PrintTools.println("==> OpenACC loop annotation : " + fAnnot, 0);
+				PrintTools.println("==> OpenACC loop annotation : " + fAnnot, 1);
 				Procedure proc = IRTools.getParentProcedure(accLoop);
-				PrintTools.println("    enclosing procedure : " + proc.getSymbolName(), 0);
+				PrintTools.println("    enclosing procedure : " + proc.getSymbolName(), 1);
 				num_not_in_parallel++;
 				continue;
 			}
