@@ -3036,17 +3036,29 @@ public class ACCParser {
 	private static void parse_arc_windowclause(String clause)
 	{
 		PrintTools.println("ACCParser is parsing ["+clause+"] clause", 3);
-		List<Object> wconflist = new ArrayList<Object>(4);
 		match("(");
 		List<SubArray> slist = new LinkedList<SubArray>();
-		parse_commaSeparatedSubArrayList(slist, 1);
-		wconflist.add(slist.get(0));
+		parse_commaSeparatedSubArrayList(slist, 2);
+
 		List<Expression> elist = new LinkedList<Expression>(); 
 		parse_commaSeparatedExpressionList(elist);
 		match(")");
-		if( elist.size() != 3 ) {
-			ACCParserError("incorrect number of arguments for an OpenARC window clause, which requires 4 arguments!");
-		} else {
+
+		if( elist.size() < 2 || elist.size() > 3 ) {
+			ACCParserError("incorrect number of arguments for an OpenARC window clause, which requires 4 or 5 (unroll factor) arguments!");
+		} else if (elist.size() == 2) {
+                        List<Object> wconflist = new ArrayList<Object>(4);
+		        wconflist.add(slist.get(0));
+		        wconflist.add(slist.get(1));
+			
+                        wconflist.add(elist.get(0).clone());
+			wconflist.add(elist.get(1).clone());
+			addToMap(clause, wconflist);
+		} else if (elist.size() == 3) {
+                        List<Object> wconflist = new ArrayList<Object>(4);
+		        wconflist.add(slist.get(0));
+		        wconflist.add(slist.get(1));
+
 			wconflist.add(elist.get(0).clone());
 			wconflist.add(elist.get(1).clone());
 			wconflist.add(elist.get(2).clone());

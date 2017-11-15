@@ -2170,6 +2170,8 @@ public class ASPENModelAnalysis extends AnalysisPass {
 		Map<Symbol, Expression> analyzeVariableAccesses(Expression tExp, boolean isLValue) {
 			Map<Symbol, Expression> retMap = new HashMap<Symbol, Expression>();
 			if( tExp != null ) {
+				containsFloats = false;
+				containsDoubles = false;
 				Traversable t = tExp.getParent();
 				ForLoop pLoop = null;
 				while( (t != null) && !(t instanceof ForLoop) ) {
@@ -2187,6 +2189,20 @@ public class ASPENModelAnalysis extends AnalysisPass {
 					tID = iter.next();
 					Symbol symbol = tID.getSymbol();
 					if (symbol != null) {
+						if( isLValue ) {
+							Traversable pTr = tID.getParent();
+							if( pTr != null ) {
+								pTr = pTr.getParent();
+								while ( (pTr != null) && !(pTr instanceof ArrayAccess) ) {
+									pTr = pTr.getParent();
+								}
+								if( pTr instanceof ArrayAccess ) {
+									//This expression is used for index expressions of an outer array access; 
+									//should be excluded for STORES counts.
+									continue;
+								}
+							}
+						}
 						List specs = symbol.getTypeSpecifiers();
 						if( specs != null ) {
 							if( specs.contains(Specifier.DOUBLE) ) {
@@ -2213,10 +2229,17 @@ public class ASPENModelAnalysis extends AnalysisPass {
 							}
 							if( !isArray && !isPointer ) {
 								//Scalar variable.
-								retMap.put(symbol, new IntegerLiteral(0));
-								if( inComputeRegion ) {
-									isSIMDizable = true;
-								}
+								//[DEBUG] ignore for now.
+								continue;
+/*								if( isLValue && (tID.getParent() instanceof ArrayAccess) ) {
+									//Do not include index expressions into STORES set.
+									continue;
+								} else {
+									retMap.put(symbol, new IntegerLiteral(0));
+									if( inComputeRegion ) {
+										isSIMDizable = true;
+									}
+								}*/
 							} else {
 								if( tID.getParent() instanceof ArrayAccess ) {
 									if( indexVar != null ) {
@@ -2349,7 +2372,23 @@ public class ASPENModelAnalysis extends AnalysisPass {
 						}
 					}
 					isExpressionRoot = false;
+					boolean curr_containsFloats = containsFloats;
+					boolean curr_containsDoubles = containsDoubles;
+					containsFloats = false;
+					containsDoubles = false;
+					if( bExp.getLHS() instanceof ArrayAccess ) {
+						ArrayAccess ttArrayAccess = (ArrayAccess)bExp.getLHS();
+						List<Expression> indexExpList = ttArrayAccess.getIndices();
+						for( Expression tIndexExp : indexExpList ) {
+							analyzeExpression(tIndexExp, internalParamMap, mainTrUnt);
+						}
+					}
+					isExpressionRoot = false;
+					containsFloats = false;
+					containsDoubles = false;
 					analyzeExpression(bExp.getRHS(), internalParamMap, mainTrUnt);
+					containsFloats = containsFloats || curr_containsFloats;
+					containsDoubles = containsDoubles || curr_containsDoubles;
 					if( containsFloats || containsDoubles ) {
 						AssignmentOperator aOp = (AssignmentOperator)bExp.getOperator();
 						if( aOp.equals(AssignmentOperator.ADD) ) {
@@ -2404,8 +2443,16 @@ public class ASPENModelAnalysis extends AnalysisPass {
 				} else {
 					BinaryOperator bOp = bExp.getOperator();
 					isExpressionRoot = false;
+					containsFloats = false;
+					containsDoubles = false;
 					analyzeExpression(bExp.getLHS(), internalParamMap, mainTrUnt);
+					boolean lhs_containsFloats = containsFloats;
+					boolean lhs_containsDoubles = containsDoubles;
+					containsFloats = false;
+					containsDoubles = false;
 					analyzeExpression(bExp.getRHS(), internalParamMap, mainTrUnt);
+					containsFloats = containsFloats || lhs_containsFloats;
+					containsDoubles = containsDoubles || lhs_containsDoubles;
 					if( containsFloats || containsDoubles ) {
 						if( bOp.equals(BinaryOperator.ADD) ) {
 							FADDS++;
@@ -2446,6 +2493,8 @@ public class ASPENModelAnalysis extends AnalysisPass {
 				UnaryExpression uExp = (UnaryExpression)inExp;
 				UnaryOperator uOp = uExp.getOperator();
 				isExpressionRoot = false;
+				containsFloats = false;
+				containsDoubles = false;
 				analyzeExpression(uExp.getExpression(), internalParamMap, mainTrUnt);
 				if( containsFloats || containsDoubles ) {
 					if( uOp.equals(UnaryOperator.POST_INCREMENT) || 
@@ -2479,15 +2528,13 @@ public class ASPENModelAnalysis extends AnalysisPass {
 				}
 			} else if( inExp instanceof Typecast ) {
 				Typecast tExp = (Typecast)inExp;
-				boolean prev_containsFloats = containsFloats;
-				boolean prev_containsDoubles = containsDoubles;
 				Expression tCastExp = ((Typecast)inExp).getExpression();
 				isExpressionRoot = false;
+				containsFloats = false;
+				containsDoubles = false;
 				analyzeExpression(tCastExp, internalParamMap, mainTrUnt);
-				if( (tCastExp instanceof IDExpression) || (tCastExp instanceof Literal) ) {
-					containsFloats = prev_containsFloats;
-					containsDoubles = prev_containsDoubles;
-				}
+				containsFloats = false;
+				containsDoubles = false;
 				List typeList = tExp.getSpecifiers();
 				if( typeList.contains(Specifier.FLOAT) ) {
 					containsFloats = true;
@@ -2704,6 +2751,8 @@ public class ASPENModelAnalysis extends AnalysisPass {
 				} else if( StandardLibrary.hasSideEffectOnParameter(fCall) ) { 
 					//If this function call modify float variables, this should be handled separately.
 					for(Expression arg : fCall.getArguments() ) {
+						containsFloats = false;
+						containsDoubles = false;
 						//Set<Symbol> fSymSet = getFloatVariables(arg);
 						//Map<Symbol, Expression> fSymMap = analyzeFloatVariableAccesses(arg, false);
 						Map<Symbol, Expression> fSymMap = analyzeVariableAccesses(arg, false);
@@ -2734,6 +2783,8 @@ public class ASPENModelAnalysis extends AnalysisPass {
 				} else {
 					isExpressionRoot = false;
 					for(Expression arg : fCall.getArguments() ) {
+						containsFloats = false;
+						containsDoubles = false;
 						analyzeExpression(arg, internalParamMap, mainTrUnt);
 					}
 					if( StandardLibrary.isSideEffectFree(fCall) && 
@@ -2748,13 +2799,10 @@ public class ASPENModelAnalysis extends AnalysisPass {
 						}
 					}
 				}
+				containsFloats = false;
+				containsDoubles = false;
 				List returnTypes = fCall.getReturnType();
 				if( returnTypes != null ) {
-					if( returnTypes.contains(Specifier.DOUBLE) ) {
-						containsDoubles = true;
-					} else if( returnTypes.contains(Specifier.FLOAT)) {
-						containsFloats = true;
-					}
 					//[DEBUG] Below simple optimization may not work if the indirect malloc call is called in multiple contexts.
 					if( containsUserFunction ) {
 						for( Object tObj : returnTypes ) {
@@ -2776,12 +2824,16 @@ public class ASPENModelAnalysis extends AnalysisPass {
 												Statement inStmt = rFcall.getStatement();
 												if( inStmt != null ) {
 													if( inStmt instanceof ReturnStatement ) {
+														containsFloats = false;
+														containsDoubles = false;
 														analyzeExpression(((ReturnStatement) inStmt).getExpression(), internalParamMap, mainTrUnt);
 													} else if( inStmt instanceof ExpressionStatement) {
 														Expression inTemExp = ((ExpressionStatement)inStmt).getExpression();
 														if( inTemExp instanceof AssignmentExpression ) {
 															Expression inTemLHS = ((AssignmentExpression)inTemExp).getLHS();
 															if( inTemLHS.toString().startsWith("_ret_val") || retExpList.contains(inTemLHS) ) {
+																containsFloats = false;
+																containsDoubles = false;
 																analyzeExpression(((AssignmentExpression)inTemExp).getRHS(), internalParamMap, mainTrUnt);
 																if( allocatedElems != null ) {
 																	List<Expression> argList = fCall.getArguments();
@@ -2825,25 +2877,88 @@ public class ASPENModelAnalysis extends AnalysisPass {
 							}
 						}
 					}
+					containsFloats = false;
+					containsDoubles = false;
+					if( returnTypes.contains(Specifier.DOUBLE) ) {
+						containsDoubles = true;
+					} else if( returnTypes.contains(Specifier.FLOAT)) {
+						containsFloats = true;
+					}
 				}
 			} else if( inExp instanceof ConditionalExpression ) {
 				ConditionalExpression cExp = (ConditionalExpression)inExp;
 				isExpressionRoot = false;
+				containsFloats = false;
+				containsDoubles = false;
 				analyzeExpression(cExp.getCondition(), internalParamMap, mainTrUnt);
+				containsFloats = false;
+				containsDoubles = false;
 				analyzeExpression(cExp.getTrueExpression(), internalParamMap, mainTrUnt);
+				boolean true_containsFloats = containsFloats;
+				boolean true_containsDoubles = containsDoubles;
+				containsFloats = false;
+				containsDoubles = false;
 				analyzeExpression(cExp.getFalseExpression(), internalParamMap, mainTrUnt);
+				containsFloats = containsFloats || true_containsFloats;
+				containsDoubles = containsDoubles || true_containsDoubles;
 			} else if( (inExp instanceof CommaExpression) || (inExp instanceof MinMaxExpression) ) {
 				isExpressionRoot = false;
+				boolean curr_containsFloats = false;
+				boolean curr_containsDoubles = false;
 				for( Traversable tt : inExp.getChildren() ) {
+					containsFloats = false;
+					containsDoubles = false;
 					analyzeExpression((Expression)tt, internalParamMap, mainTrUnt);
+					curr_containsFloats = curr_containsFloats || containsFloats;
+					curr_containsDoubles = curr_containsDoubles || containsDoubles;
 				}
+				containsFloats = curr_containsFloats;
+				containsDoubles = curr_containsDoubles;
 			} else if( inExp instanceof FloatLiteral ) {
+				containsFloats = false;
+				containsDoubles = false;
 				if( inExp.toString().contains("f") || inExp.toString().contains("F") ) {
 					containsFloats = true;
 				} else {
 					containsDoubles = true;
 				}
+			} else if( inExp instanceof ArrayAccess ) {
+				ArrayAccess tArrayAccess = (ArrayAccess)inExp;
+				List<Expression> indexExpList = tArrayAccess.getIndices();
+				for( Expression tIndexExp : indexExpList ) {
+					containsFloats = false;
+					containsDoubles = false;
+					analyzeExpression(tIndexExp, internalParamMap, mainTrUnt);
+				}
+				containsFloats = false;
+				containsDoubles = false;
+				Map<Symbol, Expression> fSymMap = analyzeVariableAccesses(tArrayAccess.getArrayName(), false);
+				Set<Symbol> fSymSet = fSymMap.keySet();
+				for( Symbol tSym : fSymSet ) {
+					Map<Expression, Expression> statusMap = LOADS.get(tSym);
+					Expression cstatus = fSymMap.get(tSym);
+					if( statusMap == null ) {
+						statusMap = new HashMap<Expression, Expression>();
+						statusMap.put(cstatus.clone(), new IntegerLiteral(1));
+						LOADS.put(tSym, statusMap);
+					} else {
+						Expression tInt = null;
+						if( statusMap.containsKey(cstatus) ) {
+							tInt = statusMap.get(cstatus);
+							if( tInt instanceof IntegerLiteral ) {
+								tInt = new IntegerLiteral(((IntegerLiteral)tInt).getValue()+1);
+							} else {
+								tInt = new BinaryExpression(tInt, BinaryOperator.ADD, new IntegerLiteral(1));
+							}
+						} else {
+							tInt = new IntegerLiteral(1);
+						}
+						statusMap.put(cstatus.clone(), tInt);
+					}
+				}
 			} else {
+				containsFloats = false;
+				containsDoubles = false;
 				//Set<Symbol> fSymSet = getFloatVariables(inExp);
 				//Map<Symbol, Expression> fSymMap = analyzeFloatVariableAccesses(inExp, false);
 				Map<Symbol, Expression> fSymMap = analyzeVariableAccesses(inExp, false);
