@@ -1110,32 +1110,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
             accSharedSet.removeAll(devicePtrSet);
           }
         }
-        // Although normal reduction handles data movement internally,
-        // we can let OpenARC generate needed data movement in FPGA-specific
-        // reductions by checking for reduction annotations here.
-      } else if( key.equals("reduction") && 
-            FPGASpecificTools.isFPGASingleWorkItemRegion((Statement) at)) {
-          genCodeForDataClause = true;
-          memtrT = MemTrType.CopyInOut;
       }
 
       if( genCodeForDataClause ) {
         Object value = dAnnot.get(key);
-
-        // convert Map to Set (for reduction only)
-        if (key.equals("reduction")) {
-          Set<SubArray> reduction_set = new HashSet<SubArray>();
-
-          // Add map elements to set (values only, keys unneeded)
-          for (Object value_sets : ((Map) value).values()) {
-            for (Object elm : (Set) value_sets) {
-              reduction_set.add( (SubArray) elm);
-            }
-          }
-          value = reduction_set;
-        }
-          
-
 
         if( value instanceof Set ) {
           boolean isFirstData = true;
