@@ -801,7 +801,14 @@ public abstract class TransformTools {
 				VariableDeclarator varSym = (VariableDeclarator)inSym;
 				specs = new LinkedList();
 				if( addSpecs != null ) {
-					specs.addAll(addSpecs);
+					//specs.addAll(addSpecs);
+					for( Specifier tSpecifier : addSpecs ) {
+						if( (tSpecifier instanceof OpenCLSpecifier) || (tSpecifier instanceof CUDASpecifier) ) {
+							specs.add(0, tSpecifier);
+						} else {
+							specs.add(tSpecifier);
+						}
+					}
 				}
 				specs.addAll(varSym.getTypeSpecifiers());
 				if( removeSpecs != null ) {
@@ -899,7 +906,14 @@ public abstract class TransformTools {
 					specs.removeAll(removeSpecs);
 				}
 				if( addSpecs != null ) {
-					specs.addAll(addSpecs);
+					//specs.addAll(addSpecs);
+					for( Specifier tSpecifier : addSpecs ) {
+						if( (tSpecifier instanceof OpenCLSpecifier) || (tSpecifier instanceof CUDASpecifier) ) {
+							specs.add(0, tSpecifier);
+						} else {
+							specs.add(tSpecifier);
+						}
+					}
 				}
 				// Separate declarator/declaration specifiers.
 				List declaration_specs = new ArrayList(specs.size());
@@ -945,7 +959,7 @@ public abstract class TransformTools {
 	 * @return
 	 */
 	public static Identifier declareClonedArrayVariable(Traversable where, SubArray sArray, String name, List<Specifier> removeSpecs,
-			List<Specifier> addSpecs ) {
+			List<Specifier> addSpecs, boolean addInitialVal ) {
 		NameID id = new NameID(name);
 		Identifier newID = null;
 		List specs = null;
@@ -981,7 +995,14 @@ public abstract class TransformTools {
 					specs.removeAll(removeSpecs);
 				}
 				if( addSpecs != null ) {
-					specs.addAll(addSpecs);
+					//specs.addAll(addSpecs);
+					for( Specifier tSpecifier : addSpecs ) {
+						if( (tSpecifier instanceof OpenCLSpecifier) || (tSpecifier instanceof CUDASpecifier) ) {
+							specs.add(0, tSpecifier);
+						} else {
+							specs.add(tSpecifier);
+						}
+					}
 				}
 				// Separate declarator/declaration specifiers.
 				List declaration_specs = new ArrayList(specs.size());
@@ -1013,6 +1034,10 @@ public abstract class TransformTools {
 				} else {
 					Declr = new VariableDeclarator(declarator_specs, id, arraySpecs);
 				}
+				Initializer initVal = varSym.getInitializer();
+				if ( addInitialVal && (initVal != null) ) {
+					Declr.setInitializer(initVal.clone());
+				}
 
 				Declaration decls = new VariableDeclaration(declaration_specs, Declr);
 				st.addDeclaration(decls);
@@ -1024,7 +1049,14 @@ public abstract class TransformTools {
 					specs.removeAll(removeSpecs);
 				}
 				if( addSpecs != null ) {
-					specs.addAll(addSpecs);
+					//specs.addAll(addSpecs);
+					for( Specifier tSpecifier : addSpecs ) {
+						if( (tSpecifier instanceof OpenCLSpecifier) || (tSpecifier instanceof CUDASpecifier) ) {
+							specs.add(0, tSpecifier);
+						} else {
+							specs.add(tSpecifier);
+						}
+					}
 				}
 				// Separate declarator/declaration specifiers.
 				List declaration_specs = new ArrayList(specs.size());
@@ -1053,6 +1085,10 @@ public abstract class TransformTools {
 					Declr = new VariableDeclarator(declarator_specs, id);
 				} else {
 					Declr = new VariableDeclarator(declarator_specs, id, arraySpecs);
+				}
+				Initializer initVal = nestedSym.getInitializer();
+				if ( addInitialVal && (initVal != null) ) {
+					Declr.setInitializer(initVal.clone());
 				}
 
 				Declaration decls = new VariableDeclaration(declaration_specs, Declr);
@@ -1239,7 +1275,7 @@ public abstract class TransformTools {
 	}
 	
 	public static Procedure outlining(Statement target, String new_func_name, List<Specifier> funcReturnTypes, List<Annotation> funcCallAnnots, 
-			TranslationUnit targetTu, Declaration refDecl, boolean parametrizeGlobalSymbols, boolean IRSymbolOnly ) {
+			TranslationUnit targetTu, Declaration refDecl, boolean parametrizeGlobalSymbols, boolean IRSymbolOnly, boolean isSingleTask ) {
 		Procedure cProc = IRTools.getParentProcedure(target);
 		TranslationUnit parentTu = IRTools.getParentTranslationUnit(target);
 		if( (target == null) || (target.getParent() == null) ) {
@@ -1640,7 +1676,7 @@ public abstract class TransformTools {
 			if( isScalar ) {
 				//It is OK to use this method as long as useSharedMemory argument is set to false.
 				CUDATranslationTools.scalarSharedConv(sharedSym, symNameBase, typeSpecs,
-						sharedSym, target, new_proc, call_to_new_proc, useRegister, false, ROData);
+						sharedSym, target, new_proc, call_to_new_proc, useRegister, false, ROData, isSingleTask, null, null);
 				//We don't need to insert scalar symbol to callerProcSymSet.
 			} else {
 				//Create a kernel parameter for the shared array variable.

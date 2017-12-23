@@ -4822,19 +4822,6 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			}
 		}*/
 		
-		/////////////////////////////////////////////////////////////////////////////////////////
-		// Apply stripmining transformation to fit the iteration size of a worksharing loop to //
-		// the specified gang/worker sizes.                                                    //
-		/////////////////////////////////////////////////////////////////////////////////////////
-		ForLoop newLoop = worksharingLoopStripmining(cProc, cAnnot, cRegionKind);
-		if( newLoop != null ) { //Target region is changed; update related local references.
-			if( confRefStmt == region ) {
-				confRefStmt = newLoop;
-				confRefParent = (CompoundStatement)newLoop.getParent();
-			}
-			region = newLoop;
-			cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
-		}
 		
 		///////////////////////////////////////////////
 		// Handle array-element-caching on register. //
@@ -4963,6 +4950,22 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
 					isSingleTask = true;
 				}
+			}
+		}
+
+		/////////////////////////////////////////////////////////////////////////////////////////
+		// Apply stripmining transformation to fit the iteration size of a worksharing loop to //
+		// the specified gang/worker sizes.                                                    //
+		/////////////////////////////////////////////////////////////////////////////////////////
+		if( !isSingleTask ) {
+			ForLoop newLoop = worksharingLoopStripmining(cProc, cAnnot, cRegionKind);
+			if( newLoop != null ) { //Target region is changed; update related local references.
+				if( confRefStmt == region ) {
+					confRefStmt = newLoop;
+					confRefParent = (CompoundStatement)newLoop.getParent();
+				}
+				region = newLoop;
+				cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
 			}
 		}
 		
@@ -5344,7 +5347,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			
 			if( isScalar ) {
 				CUDATranslationTools.scalarSharedConv(sharedSym, symNameBase, typeSpecs,
-						gpuSym, region, new_proc, call_to_new_proc, useRegister, false, ROData);
+						gpuSym, region, new_proc, call_to_new_proc, useRegister, false, ROData, isSingleTask, preList, postList);
 				//We don't need to insert scalar symbol to callerProcSymSet.
 			} else {
 				//Create a kernel parameter for the shared array variable.
@@ -5923,8 +5926,14 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			//bid_declarator.setInitializer(new Initializer(biexp2));
 			Declaration bid_decl = new VariableDeclaration(Specifier.INT, bid_declarator);
 			bid = new Identifier(bid_declarator);
-			ExpressionStatement bidInitStmt = new ExpressionStatement(new AssignmentExpression(bid.clone(), AssignmentOperator.NORMAL,
-					biexp2));
+			ExpressionStatement bidInitStmt;
+			if( isSingleTask ) {
+				bidInitStmt = new ExpressionStatement(new AssignmentExpression(bid.clone(), AssignmentOperator.NORMAL,
+						new IntegerLiteral(0)));
+			} else {
+				bidInitStmt = new ExpressionStatement(new AssignmentExpression(bid.clone(), AssignmentOperator.NORMAL,
+						biexp2));
+			}
 			Statement gtidRefStmt = null;
 			boolean bidIncluded = false;
 			if( IRTools.containsExpression(kernelRegion, bid) || IRTools.containsExpression(kernelRegion, gtid) ) {
@@ -6026,9 +6035,13 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		}
 		
 		Traversable parent = kernelCall_stmt.getParent();
+
+		if( SkipGPUTranslation == 5 ) {
+			return;
+		}
 		
 		//Convert worksharing loops into if-statements. 
-		CUDATranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers, opt_skipKernelLoopBoundChecking);
+		CUDATranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers, opt_skipKernelLoopBoundChecking, isSingleTask);
 		
 		//[DEBUG] We don't need this since each kernel call in the default queue will be followed by HI_synchronize() call.
 /*		if( opt_forceSyncKernelCall ) {

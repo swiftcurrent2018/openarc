@@ -14,7 +14,7 @@ import openacc.analysis.SubArray;
  * <b>CollapseTransformation</b> performs source-level transformation to collapse
  * the iterations of all associated loops into one larger iteration space.
  * 
- * @author Seyong Lee <lees2@ornl.gov> and Jacob Lambert <jlambert@cs.uoregon.edu>
+ * @author Seyong Lee <lees2@ornl.gov>
  *         Future Technologies Group, Oak Ridge National Laboratory
  */
 public class CollapseTransformation extends TransformPass {
@@ -71,8 +71,20 @@ public class CollapseTransformation extends TransformPass {
       }
     }
   
-  // Collapse Header Only 
-  public static int collapseLoopHeader(ForLoop accLoop, boolean simplifyE) {
+  /* This method performs the first half of loop collapsing. That is, it performs:
+   *  > for (i=...)
+   *  >   for (j=...)
+   *
+   *  < for(index=...)
+   *
+   *  This is needed in SlidingWindwTransformation.java, as
+   *  the variable replacement and increment is handled internally in 
+   *  that transformation
+   *
+   *  DEBUG: This method could be simplified, and possibly moved to 
+   *         FPGASpecificTools.java.
+   */
+  public static int collapseLoopHead(ForLoop accLoop, boolean simplifyE) {
     int collapsedLoops = 0;
 
     Traversable t = (Traversable)accLoop;
@@ -82,7 +94,7 @@ public class CollapseTransformation extends TransformPass {
     }
 
     if( t == null ) {
-      Tools.exit("[ERROR in CollapseTransformatin.collapseLoop()] Cannot find an enclosing procedure for the following loop:\n"
+      Tools.exit("[ERROR in CollapseTransformation.collapseLoop()] Cannot find an enclosing procedure for the following loop:\n"
           + accLoop + "\n");
     }
 
@@ -143,13 +155,6 @@ public class CollapseTransformation extends TransformPass {
       cStmt.addStatement(fBody);
       tRefStmt = fBody;
     }
-    //System.out.println("Loops to collapse: \n" + accLoop + "\n");
-    //System.out.println("Innermost loop body: \n" + cStmt + "\n");
-    //If const symbol declaration exists, old index variables may be used in its initialization.
-    //In this case, expression statements assigning the old index variables should be put before
-    //the const symbol declaration.
-    //For simplicity, the new assignment expression statements added at the beginning whenever
-    //const symbol declaration exists.
     boolean containsConstSymbol = false;
     Set<Symbol> lSymbolSet = cStmt.getSymbols();
     for(Symbol lSym : lSymbolSet) {
@@ -207,26 +212,33 @@ public class CollapseTransformation extends TransformPass {
       newIndex = TransformTools.getNewTempIndex(((ForLoop)enclosingCompRegion).getBody());
     } else {
       newIndex = TransformTools.getNewTempIndex(procBody);
-
-      //If the current accLoop is in a compute region, the above new private variable should be
-      //added to the private clause.
-      Set<SubArray> privateSet = null;
-      if( collapseAnnot.containsKey("private") ) {
-        privateSet = collapseAnnot.get("private");
-      } else {
-        privateSet = new HashSet<SubArray>();
-        collapseAnnot.put("private", privateSet);
-      }
-      privateSet.add(AnalysisTools.createSubArray(newIndex.getSymbol(), true, null));
-      if( ompAnnot != null ) {
-        Set<String> ompPrivSet = ompAnnot.get("private");
-        if( ompPrivSet == null ) {
-          ompPrivSet = new HashSet<String>();
-          ompAnnot.put("private", ompPrivSet);
-        }
-        ompPrivSet.add(newIndex.toString());
-      }
     }
+
+    //If the current accLoop is in a compute region, the above new private variable should be
+    //added to the private clause.
+    Set<SubArray> privateSet = null;
+    if( collapseAnnot.containsKey("private") ) {
+    	privateSet = collapseAnnot.get("private");
+    } else {
+    	privateSet = new HashSet<SubArray>();
+    	collapseAnnot.put("private", privateSet);
+    }
+    privateSet.add(AnalysisTools.createSubArray(newIndex.getSymbol(), true, null));
+    for(Symbol indexSym : indexSymbols ) {
+    	privateSet.add(AnalysisTools.createSubArray(indexSym, true, null));
+    }
+    if( ompAnnot != null ) {
+    	Set<String> ompPrivSet = ompAnnot.get("private");
+    	if( ompPrivSet == null ) {
+    		ompPrivSet = new HashSet<String>();
+    		ompAnnot.put("private", ompPrivSet);
+    	}
+    	ompPrivSet.add(newIndex.toString());
+    	for(Symbol indexSym : indexSymbols ) {
+    		ompPrivSet.add(indexSym.getSymbolName());
+    	}
+    }
+
     if( !collapseAnnot.containsKey("gang") && !collapseAnnot.containsKey("worker") &&
         !collapseAnnot.containsKey("vector") && !collapseAnnot.containsKey("seq") ) {
       collapseAnnot.put("seq", "true");
@@ -257,7 +269,6 @@ public class CollapseTransformation extends TransformPass {
     return collapsedLoops;
   }
 
-  // Collapse Header and Collapse Incrementation
   public static int collapseLoop(ForLoop accLoop, boolean simplifyE) {
     int collapsedLoops = 0;
 
@@ -268,7 +279,7 @@ public class CollapseTransformation extends TransformPass {
     }
 
     if( t == null ) {
-      Tools.exit("[ERROR in CollapseTransformatin.collapseLoop()] Cannot find an enclosing procedure for the following loop:\n"
+      Tools.exit("[ERROR in CollapseTransformation.collapseLoop()] Cannot find an enclosing procedure for the following loop:\n"
           + accLoop + "\n");
     }
 
@@ -292,39 +303,11 @@ public class CollapseTransformation extends TransformPass {
       }
     }
 
-    // Determine if single work-item
-    int isSingleWorkItem = 0;
-    ACCAnnotation gAnnot, wAnnot;
-    if (enclosingCompRegion != null) {
-      gAnnot = enclosingCompRegion.getAnnotation(ACCAnnotation.class, "num_gangs");
-      wAnnot = enclosingCompRegion.getAnnotation(ACCAnnotation.class, "num_workers");
-    }
-    else {
-      gAnnot = accLoop.getAnnotation(ACCAnnotation.class, "num_gangs");
-      wAnnot = accLoop.getAnnotation(ACCAnnotation.class, "num_workers");
-    }
-
-    if( gAnnot == null ) {
-      Tools.exit("num_gangs null\n");
-    }
-    if( wAnnot == null ) {
-      Tools.exit("num_workers null\n");
-    }
-
-    Expression totalnumgangs = ((Expression)gAnnot.get("num_gangs")).clone();
-    Expression totalnumworkers = ((Expression)wAnnot.get("num_workers")).clone();
-
-    if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
-      isSingleWorkItem = 1;
-    }
-    else {
-      isSingleWorkItem = 0;
-    }
-
     ArrayList<Symbol> indexSymbols = new ArrayList<Symbol>();
     ArrayList<ForLoop> indexedLoops = new ArrayList<ForLoop>();
     indexedLoops.add(accLoop);
     ACCAnnotation collapseAnnot = accLoop.getAnnotation(ACCAnnotation.class, "collapse");
+    ACCAnnotation loopAnnot = accLoop.getAnnotation(ACCAnnotation.class, "loop");
     OmpAnnotation ompAnnot = accLoop.getAnnotation(OmpAnnotation.class, "for");
     int collapseLevel = (int)((IntegerLiteral)collapseAnnot.get("collapse")).getValue();
     boolean pnest = true;
@@ -423,25 +406,31 @@ public class CollapseTransformation extends TransformPass {
       newIndex = TransformTools.getNewTempIndex(((ForLoop)enclosingCompRegion).getBody());
     } else {
       newIndex = TransformTools.getNewTempIndex(procBody);
+    }
 
-      //If the current accLoop is in a compute region, the above new private variable should be
-      //added to the private clause.
-      Set<SubArray> privateSet = null;
-      if( collapseAnnot.containsKey("private") ) {
-        privateSet = collapseAnnot.get("private");
-      } else {
-        privateSet = new HashSet<SubArray>();
-        collapseAnnot.put("private", privateSet);
-      }
-      privateSet.add(AnalysisTools.createSubArray(newIndex.getSymbol(), true, null));
-      if( ompAnnot != null ) {
-        Set<String> ompPrivSet = ompAnnot.get("private");
-        if( ompPrivSet == null ) {
-          ompPrivSet = new HashSet<String>();
-          ompAnnot.put("private", ompPrivSet);
-        }
-        ompPrivSet.add(newIndex.toString());
-      }
+    //If the current accLoop is in a compute region, the above new private variable and 
+    //original index variables should be added to the private clause.
+    Set<SubArray> privateSet = null;
+    if( collapseAnnot.containsKey("private") ) {
+    	privateSet = collapseAnnot.get("private");
+    } else {
+    	privateSet = new HashSet<SubArray>();
+    	collapseAnnot.put("private", privateSet);
+    }
+    privateSet.add(AnalysisTools.createSubArray(newIndex.getSymbol(), true, null));
+    for(Symbol indexSym : indexSymbols ) {
+    	privateSet.add(AnalysisTools.createSubArray(indexSym, true, null));
+    }
+    if( ompAnnot != null ) {
+    	Set<String> ompPrivSet = ompAnnot.get("private");
+    	if( ompPrivSet == null ) {
+    		ompPrivSet = new HashSet<String>();
+    		ompAnnot.put("private", ompPrivSet);
+    	}
+    	ompPrivSet.add(newIndex.toString());
+    	for(Symbol indexSym : indexSymbols ) {
+    		ompPrivSet.add(indexSym.getSymbolName());
+    	}
     }
     if( !collapseAnnot.containsKey("gang") && !collapseAnnot.containsKey("worker") &&
         !collapseAnnot.containsKey("vector") && !collapseAnnot.containsKey("seq") ) {
@@ -464,63 +453,16 @@ public class CollapseTransformation extends TransformPass {
         UnaryOperator.POST_INCREMENT, (Identifier)newIndex.clone());
     accLoop.getStep().swapWith(expr1);
 
-    int targetArch = Integer.valueOf(System.getenv("OPENARC_ARCH") ).intValue();  
-    // single work-item FPGA execution
-    if (isSingleWorkItem == 1 && targetArch == 3) {
-      int i = 1;
-      while (i < collapseLevel) {
-        Identifier tIndex = new Identifier(indexSymbols.get(i));
-        Identifier nIndex = new Identifier(indexSymbols.get(i-1));
 
-        Statement stmt;
+    /* Determine the enclosing parallel region */
+    Statement parallelRegion;
+    parallelRegion = enclosingCompRegion == null ? accLoop : enclosingCompRegion;
 
-        // x = x + 1
-        if (i == collapseLevel-1) { 
-          expr1 = new BinaryExpression(tIndex.clone(), BinaryOperator.ADD, new IntegerLiteral(1));
-
-          stmt = new ExpressionStatement(new AssignmentExpression(tIndex.clone(), 
-                AssignmentOperator.NORMAL, expr1));
-          cStmt.addStatement(stmt);
-        }
-
-        // y = (x == X) ? y + 1 : y
-        Expression expr_true = new BinaryExpression(nIndex.clone(), BinaryOperator.ADD, 
-            new IntegerLiteral(1));
-
-        Expression expr_cond = new BinaryExpression(tIndex.clone(), BinaryOperator.COMPARE_EQ, 
-            iterspaceList.get(i).clone());
-
-        expr1 = new ConditionalExpression(expr_cond, expr_true, nIndex.clone());
-
-        stmt = new ExpressionStatement(new AssignmentExpression(nIndex.clone(), 
-              AssignmentOperator.NORMAL, expr1));
-        cStmt.addStatement(stmt);
-
-        // x = (x == X) ? 0 : x; 
-        expr_cond = new BinaryExpression(tIndex.clone(), BinaryOperator.COMPARE_EQ, 
-            iterspaceList.get(i).clone());
-
-        expr1 = new ConditionalExpression(expr_cond, new IntegerLiteral(0), tIndex.clone());
-
-        stmt = new ExpressionStatement(new AssignmentExpression(tIndex.clone(), 
-              AssignmentOperator.NORMAL, expr1));
-        cStmt.addStatement(stmt);
-
-        i++;
-      }
-
-      // Add initalizations before loop
-      CompoundStatement accLoopParent = (CompoundStatement) accLoop.getParent();
-      for (i = 0; i < collapseLevel; ++i) {
-        Identifier tIndex = new Identifier(indexSymbols.get(i));
-
-        expr1 = new AssignmentExpression(tIndex.clone(), AssignmentOperator.NORMAL,
-            new IntegerLiteral(0));
-        ExpressionStatement expStmt = new ExpressionStatement(expr1);
-        accLoopParent.addStatementBefore(accLoop, expStmt);
-      }
+    /* Single work-item FPGA kernel */
+    if ( FPGASpecificTools.isFPGASingleWorkItemRegion(parallelRegion) ) {
+      FPGASpecificTools.collapseTransformation(accLoop, cStmt, indexSymbols, iterspaceList, collapseLevel);
     }
-    // Multiple work item or non-FPGA execution
+    /* Multiple work item or non-FPGA kernel */
     else {
       Identifier accforIndex = new Identifier(indexSymbols.get(0));
       int i = collapseLevel-1;
@@ -566,13 +508,13 @@ public class CollapseTransformation extends TransformPass {
         }
         i--;
       }
-    }
+      /////////////////////////////////////////////////////////////////////////
+      //Swap the body of the OpenACC loop with the one of the innermost loop //
+      //among associated loops.                                              //
+      /////////////////////////////////////////////////////////////////////////
+      accLoop.getBody().swapWith(cStmt);
 
-    /////////////////////////////////////////////////////////////////////////
-    //Swap the body of the OpenACC loop with the one of the innermost loop //
-    //among associated loops.                                              //
-    /////////////////////////////////////////////////////////////////////////
-    accLoop.getBody().swapWith(cStmt);
+    }
 
     return collapsedLoops;
   }

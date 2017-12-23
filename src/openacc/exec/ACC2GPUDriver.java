@@ -142,7 +142,8 @@ public class ACC2GPUDriver extends Driver
 		"        =1 exit after all analyses are done (default)\n" + 
 		"        =2 exit before the final GPU translation\n" + 
 		"        =3 exit after private variable transformaion\n" +
-		"        =4 exit after reduction variable transformation");
+		"        =4 exit after reduction variable transformation\n" + 
+		"        =5 exit after basic kernel outlining transformation");
 		optionsWithIntArgument.add("SkipGPUTranslation");
 
 		options.add(options.ANALYSIS, "AccPrivatization", "N",

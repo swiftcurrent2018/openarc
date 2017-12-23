@@ -813,7 +813,7 @@
 #skipKernelLoopBoundChecking
 #SetAccEntryFunction=filename
 addIncludePath=__openarcrt__
-#macro=GANGS=16,WORKERS=256
+#macro=GANGS=1,WORKERS=1
 defaultNumWorkers=64
 #maxNumGangs=N
 #maxNumWorkers=N

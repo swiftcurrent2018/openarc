@@ -304,12 +304,6 @@ public class acc2gpu extends CodeGenPass
 			applyInlining = true;
 		}*/
 
-        if(convertOpenMPtoOpenACC)
-        {
-            OMP2ACCTranslator omp2ACCTranslator = new OMP2ACCTranslator(program, defaultNumAsyncQueues);
-            TransformPass.run(omp2ACCTranslator);
-        }
-
 		/*****************************************************************/
 		/* cetus.transforms.AnnotationParser stores a OpenACC annotation */
 		/* as stand-alone PragmaAnnotation in an AnnotationStatement or  */
@@ -317,6 +311,12 @@ public class acc2gpu extends CodeGenPass
 		/* ACCAnnotation and attach it to the next annotatable object.   */
 		/*****************************************************************/
 		TransformPass.run(new ACCAnnotationParser(program));
+
+        if(convertOpenMPtoOpenACC)
+        {
+            OMP2ACCTranslator omp2ACCTranslator = new OMP2ACCTranslator(program, defaultNumAsyncQueues);
+            TransformPass.run(omp2ACCTranslator);
+        }
 
 		if( AccAnalysisOnly == 1 ) {
 			cleanAnnotations();

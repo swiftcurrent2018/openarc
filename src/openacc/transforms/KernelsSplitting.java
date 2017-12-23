@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.ArrayList;
+
 import openacc.analysis.AnalysisTools;
 import openacc.analysis.SubArray;
 import openacc.hir.*;
@@ -142,6 +143,42 @@ public class KernelsSplitting extends TransformPass {
 							} else {
 								cAnnot = new ACCAnnotation("parallel", "_directive");
 								nCompRegion.annotate(cAnnot);
+								List<ACCAnnotation> tAnnots = IRTools.collectPragmas(nCompRegion, ACCAnnotation.class, "gang");
+								if( tAnnots != null ) {
+									Expression tExp = null;
+									Expression tTemp = null;
+									for( ACCAnnotation tGAnnot : tAnnots ) {
+										if( tExp == null ) {
+											tExp = tGAnnot.get("gang");
+										} else {
+											tTemp = tGAnnot.get("gang");
+											if( tTemp != null ) {
+												tExp = Symbolic.multiply(tExp, tTemp);
+											}
+										}
+									}
+									if( tExp != null ) {
+										cAnnot.put("num_gangs", tExp);
+									}
+								}
+								tAnnots = IRTools.collectPragmas(nCompRegion, ACCAnnotation.class, "worker");
+								if( tAnnots != null ) {
+									Expression tExp = null;
+									Expression tTemp = null;
+									for( ACCAnnotation tGAnnot : tAnnots ) {
+										if( tExp == null ) {
+											tExp = tGAnnot.get("worker");
+										} else {
+											tTemp = tGAnnot.get("worker");
+											if( tTemp != null ) {
+												tExp = Symbolic.multiply(tExp, tTemp);
+											}
+										}
+									}
+									if( tExp != null ) {
+										cAnnot.put("num_workers", tExp);
+									}
+								}
 							}
 							//Step2-1: find symbols accessed in the region, and add them to accshared set.
 							Set<Symbol> accSharedSymbols = null;

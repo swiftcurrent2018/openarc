@@ -688,10 +688,10 @@ public abstract class CUDATranslationTools {
 								tSym = ((AccessSymbol)tSym).getMemberSymbol();
 							}
 							lgcred_var = TransformTools.declareClonedArrayVariable(scope, sArray, localGCRedSymName, 
-									removeSpecs, addSpecs);
+									removeSpecs, addSpecs, false);
 						} else {
 							lgcred_var = TransformTools.declareClonedArrayVariable(scope, sArray, localGCRedSymName, 
-									removeSpecs, addSpecs);
+									removeSpecs, addSpecs, false);
 						}
 						/////////////////////////////////////////////////////////////////////////////
 						// Replace the gang-private variable with this new local private variable. //
@@ -2382,7 +2382,7 @@ public abstract class CUDATranslationTools {
 	 */
 	protected static VariableDeclarator scalarSharedConv(Symbol sharedSym, String symNameBase, List<Specifier> typeSpecs,
 			Symbol gpuSym, Statement region, Procedure new_proc, FunctionCall call_to_new_proc, boolean useRegister, 
-			boolean useSharedMemory, boolean ROData) {
+			boolean useSharedMemory, boolean ROData, boolean isSingleTask, List<Statement> preList, List<Statement> postList) {
 		// Create a parameter Declaration for the kernel function
 		// Change the scalar variable to a pointer type 
 		VariableDeclarator kParam_declarator = new VariableDeclarator(PointerSpecifier.RESTRICT, 
@@ -2513,7 +2513,11 @@ public abstract class CUDATranslationTools {
 				// be inserted before the converted kernel region. For this, the statement has   //
 				// to be inserted after the for-loop is converted into a kernel function.        //
 				///////////////////////////////////////////////////////////////////////////////////
-				new_proc.getBody().addStatement(estmt);
+				if( preList == null ) {
+					new_proc.getBody().addStatement(estmt);
+				} else {
+					preList.add(estmt);
+				}
 			} else {
 				Statement last_decl_stmt;
 				last_decl_stmt = IRTools.getLastDeclarationStatement(targetStmt);
@@ -2526,18 +2530,36 @@ public abstract class CUDATranslationTools {
 			}
 			if( !ROData ) {
 				if( region instanceof CompoundStatement ) {
-					IfStatement ifStmt = new IfStatement(new BinaryExpression(new NameID("_tid"), BinaryOperator.COMPARE_EQ,
-							new IntegerLiteral(0)), astmt.clone());
-					targetStmt.addStatement(ifStmt);
-
-				} else {
-					if( region.containsAnnotation(ACCAnnotation.class, "worker") ) {
+					if( isSingleTask ) {
 						targetStmt.addStatement(astmt.clone());
 					} else {
 						IfStatement ifStmt = new IfStatement(new BinaryExpression(new NameID("_tid"), BinaryOperator.COMPARE_EQ,
 								new IntegerLiteral(0)), astmt.clone());
 						targetStmt.addStatement(ifStmt);
-
+					}
+				} else {
+					if( region.containsAnnotation(ACCAnnotation.class, "worker") ) {
+						if( postList == null ) {
+							targetStmt.addStatement(astmt.clone());
+						} else {
+							postList.add(astmt.clone());
+						}
+					} else {
+						if( isSingleTask ) {
+							if( postList == null ) {
+								targetStmt.addStatement(astmt.clone());
+							} else {
+								postList.add(astmt.clone());
+							}
+						} else {
+							IfStatement ifStmt = new IfStatement(new BinaryExpression(new NameID("_tid"), BinaryOperator.COMPARE_EQ,
+									new IntegerLiteral(0)), astmt.clone());
+							if( postList == null ) {
+								targetStmt.addStatement(ifStmt);
+							} else {
+								postList.add(ifStmt);
+							}
+						}
 					}
 				}
 			}
@@ -3519,12 +3541,12 @@ public abstract class CUDATranslationTools {
 							//lpriv_var = TransformTools.declareClonedVariable(scope, tSym, localWPSymName, 
 							//		removeSpecs, addSpecs);
 							lpriv_var = TransformTools.declareClonedArrayVariable(scope, sArray, localWPSymName, 
-									removeSpecs, addSpecs);
+									removeSpecs, addSpecs, true);
 						} else {
 							//lpriv_var = TransformTools.declareClonedVariable(scope, privSym, localWPSymName, 
 							//		removeSpecs, addSpecs);
 							lpriv_var = TransformTools.declareClonedArrayVariable(scope, sArray, localWPSymName, 
-									removeSpecs, addSpecs);
+									removeSpecs, addSpecs, true);
 						}
 						////////////////////////////////////////////////////////////////////////
 						// Replace the private variable with this new local private variable. //
@@ -3552,10 +3574,10 @@ public abstract class CUDATranslationTools {
 							tSym = ((AccessSymbol)tSym).getMemberSymbol();
 						}
 						lpriv_var = TransformTools.declareClonedArrayVariable(scope, sArray, localGPSymName, 
-								removeSpecs, addSpecs);
+								removeSpecs, addSpecs, false);
 					} else {
 						lpriv_var = TransformTools.declareClonedArrayVariable(scope, sArray, localGPSymName, 
-								removeSpecs, addSpecs);
+								removeSpecs, addSpecs, false);
 					}
 					/////////////////////////////////////////////////////////////////////////////
 					// Replace the gang-private variable with this new local private variable. //
@@ -4280,7 +4302,7 @@ public abstract class CUDATranslationTools {
 	
 	protected static void worksharingLoopTransformation(Procedure cProc, CompoundStatement kernelRegion, 
 			Statement region, String cRegionKind,
-			int defaultNumWorkers, boolean opt_skipKernelLoopBoundChecking) {
+			int defaultNumWorkers, boolean opt_skipKernelLoopBoundChecking, boolean isSingleTask) {
 		PrintTools.println("[worksharingLoopTransformation() begins]", 2);
 		List<ACCAnnotation> lAnnots = AnalysisTools.ipCollectPragmas(kernelRegion, ACCAnnotation.class, "loop", null);
 		if( lAnnots == null ) {
@@ -4455,7 +4477,7 @@ public abstract class CUDATranslationTools {
 					SymbolTools.linkSymbol(ploop);
 				}*/
 				
-				if( isSeqKernelLoop ) {
+				if( isSeqKernelLoop || isSingleTask ) {
 					//return;
 					continue;
 				}

@@ -118,7 +118,8 @@ public class AccPrivatization extends AnalysisPass {
 						}
 						//If a current loop is a gang loop without worker clauses, and the privatisable variable
 						//is declared within a worker loop, we don't need to gang-privatize the variable.
-						if( gangloop && !workerloop ) {
+						//[DEBUG] Do not privatize local variables declared within a worker loop too.
+						if( (gangloop && !workerloop) || workerloop ) {
 							for( Symbol pSym : privatisables ) {
 								Declaration tDecl = null;
 								if( pSym instanceof VariableDeclarator ) {
