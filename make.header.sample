@@ -127,6 +127,7 @@ CETUS_OUTPUT = cetus_output
 # Cooley: ALCF NVIDIA GPU cluster                                      #
 # Oswald: Heterogeneous mini cluster with NVIDIA Tesla P100 and        #
 #         Nallatech 510T FPGA                                          #
+#         (To use FPGAs, AOCLSDKROOT should be properly selected.)     #
 ########################################################################
 TARGET_SYSTEM = LCUDA
 
@@ -330,13 +331,15 @@ BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
 # Altera OpenCL 16.0
-GBACKEND_INCLUDES = -I/opt/altera/16.0/hld/host/include
-GBACKEND_LIBS = -L/opt/altera/16.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+#AOCLSDKROOT = /opt/altera/16.0/hld
+# Altera OpenCL 17.1
+AOCLSDKROOT = /opt/altera/17.1/hld
+GBACKEND_INCLUDES = -I$(AOCLSDKROOT)/host/include
+GBACKEND_LIBS = -L$(AOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(AOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-# Altera OpenCL 16.0
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/16.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L$(AOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(AOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++

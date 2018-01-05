@@ -152,9 +152,11 @@ ifeq ($(OPENARC_ARCH),3)
 #EMUL_MODE = $(shell export $(AOCL_FLAGS); echo $$AOCL_FLAGS | grep "emulator" > /dev/null 2>&1;)
 EMUL_MODE = $(shell export AOCL_FLAGS="$(AOCL_FLAGS)"; echo $$AOCL_FLAGS | grep "emulator";)
 ifneq ($(EMUL_MODE),)
-    KERNEL_BINARY ?= "openarc_kernel_EmulatorDeviceEmulatedDevice.aocx"
+    #KERNEL_BINARY ?= "openarc_kernel_EmulatorDeviceEmulatedDevice.aocx"
+    KERNEL_BINARY = "openarc_kernel.aocx"
 else
-    KERNEL_BINARY ?= "openarc_kernel_p385_hpc_d5PCIe385n.aocx"
+    #KERNEL_BINARY ?= "openarc_kernel_p385_hpc_d5PCIe385n.aocx"
+    KERNEL_BINARY = "openarc_kernel.aocx"
 endif
 endif
 

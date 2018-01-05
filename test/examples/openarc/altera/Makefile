@@ -54,7 +54,6 @@ AOCL_BOARD ?= p385_hpc_d5
 #AOCL_FLAGS ?= -v -g -c --report
 AOCL_FLAGS ?= -v -c --report
 #AOCL_FLAGS ?= -v --report
-#KERNEL_BINARY="openarc_kernel_p385_hpc_d5PCIe385n.aocx"
 
 #########################################################
 # Use the following macros to give program-specific     #

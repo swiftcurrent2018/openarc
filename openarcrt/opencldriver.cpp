@@ -196,7 +196,8 @@ HI_error_t OpenCLDriver::init() {
 	cBufferN = deblank(cBuffer); //Remove spaces.
     std::string binaryName;
     if(dev == acc_device_altera) {
-    	binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".aocx");
+    	//binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".aocx");
+    	binaryName = std::string("openarc_kernel") + std::string(".aocx");
 	} else {
     	binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".ptx");
 	}
