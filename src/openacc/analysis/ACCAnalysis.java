@@ -518,6 +518,29 @@ public class ACCAnalysis extends AnalysisPass
 						}
 					}
 				}
+				//Handle reduction clause first to check duplicate variables in both reduction clause and other dataclauses.
+				if( dAnnot.containsKey("reduction") ) {
+					Object val = dAnnot.get("reduction");
+					if( (!directiveType.equals("data")) && (val instanceof Map) ) {
+						try { 
+							Map valMap = (Map)val;
+							for( ReductionOperator op : (Set<ReductionOperator>)valMap.keySet() ) {
+								Set<SubArray> valSet = (Set<SubArray>)valMap.get(op); 
+								Set<Symbol> symDSet = null;
+								symDSet = AnalysisTools.subarraysToSymbols(valSet, IRSymbolOnly);
+								if( valSet.size() != symDSet.size() ) {
+									Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: cannot find symbols for " +
+											"subarrays of key," + "reduction" + ", in ACCAnnotation, " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
+								} else {
+									accReductionSymbols.addAll(symDSet);
+								}
+							}
+						} catch( Exception e ) {
+							Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: <String, Set<SubArray>> type " +
+									"is expected for the value of key," + "reduction" + " in ACCAnnotation, " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
+						}
+					}
+				}
 				//Put symbols in each dataclause into the internal symbol set.
 				for( String aKey : dAnnot.keySet() ) {
 					Object val = dAnnot.get(aKey);
@@ -536,31 +559,25 @@ public class ACCAnalysis extends AnalysisPass
 									accPrivateSymbols.addAll(symDSet);
 								//} else if( !ACCAnnotation.pipeClauses.contains(aKey) ){
 								} else {
+									Set<Symbol> removeSet = new HashSet<Symbol>();
+									if( (accReductionSymbols != null) && (!accReductionSymbols.isEmpty()) ) {
+										for( Symbol ttSym : symDSet ) {
+											if( accReductionSymbols.contains(ttSym) ) {
+												SubArray ttSubA = AnalysisTools.subarrayOfSymbol(dataSet, ttSym);
+												if( ttSubA != null ) {
+													removeSet.add(ttSym);
+													dataSet.remove(ttSubA);
+												}
+											}
+										}
+									}
+									symDSet.removeAll(removeSet);
 									accSharedSymbols.addAll(symDSet);
 								}
 							}
 						} catch (Exception e) {
 							Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: Set<SubArray> type is expected " +
 									"for the value of key," + aKey + " in ACCAnnotation, " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
-						}
-					} else if( (!directiveType.equals("data")) && aKey.equals("reduction") 
-							&& (val instanceof Map) ) {
-						try { 
-							Map valMap = (Map)val;
-							for( ReductionOperator op : (Set<ReductionOperator>)valMap.keySet() ) {
-								Set<SubArray> valSet = (Set<SubArray>)valMap.get(op); 
-								Set<Symbol> symDSet = null;
-								symDSet = AnalysisTools.subarraysToSymbols(valSet, IRSymbolOnly);
-								if( valSet.size() != symDSet.size() ) {
-									Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: cannot find symbols for " +
-											"subarrays of key," + aKey + ", in ACCAnnotation, " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
-								} else {
-									accReductionSymbols.addAll(symDSet);
-								}
-							}
-						} catch( Exception e ) {
-							Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: <String, Set<SubArray>> type " +
-									"is expected for the value of key," + aKey + " in ACCAnnotation, " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
 						}
 					}
 				}

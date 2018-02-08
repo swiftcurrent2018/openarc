@@ -344,12 +344,6 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     kernelStr.append("#endif\n");
     kernelStr.append("#define MAX(a,b) (((a) > (b)) ? (a) : (b))\n");
     kernelStr.append("#define MIN(a,b) (((a) < (b)) ? (a) : (b))\n");
-    kernelStr.append("#ifndef DBL_MAX\n");
-    kernelStr.append("#define DBL_MAX 1.7976931348623158e+308\n");
-    kernelStr.append("#endif\n");
-    kernelStr.append("#ifndef DBL_MIN\n");
-    kernelStr.append("#define DBL_MIN 2.2250738585072014e-308\n");
-    kernelStr.append("#endif\n");
     kernelStr.append("#ifndef FLT_MAX\n");
     kernelStr.append("#define FLT_MAX 3.402823466e+38\n");
     kernelStr.append("#endif\n");
@@ -357,6 +351,12 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     kernelStr.append("#define FLT_MIN 1.175494351e-38\n");
     kernelStr.append("#endif\n");
     kernelStr.append("#pragma OPENCL EXTENSION cl_khr_fp64: enable\n");
+    kernelStr.append("#ifndef DBL_MAX\n");
+    kernelStr.append("#define DBL_MAX 1.7976931348623158e+308\n");
+    kernelStr.append("#endif\n");
+    kernelStr.append("#ifndef DBL_MIN\n");
+    kernelStr.append("#define DBL_MIN 2.2250738585072014e-308\n");
+    kernelStr.append("#endif\n");
     if( enableFaultInjection ) {
       kernelStr.append("#include \"resilience.cl\"\n");
     }
@@ -4165,10 +4165,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     //////////////////////////////////////
 
     if (isSingleTask) {
-/*    	if( targetArch == 3 ) {
+    	if( targetArch == 3 ) {
     		Statement newregion = FPGASpecificTools.reductionTransformation(cProc, region, cRegionKind, 
     				call_to_new_proc, new_proc, IRSymbolOnly, isSingleTask);
-    		if( newregion != null ) {
+    		if( (newregion != null) && (newregion != region) ) {
     			if( confRefStmt == region ) {
     				confRefStmt = newregion;
     				confRefParent = (CompoundStatement)newregion.getParent();
@@ -4176,16 +4176,16 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     			region = newregion;
     			cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
     		}
-    	}*/
-      OpenCLTranslationTools.singleTaskReductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
-          postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
-          opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
-          memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
+    	}
+    	OpenCLTranslationTools.singleTaskReductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
+    			postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
+    			opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
+    			memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
     } else {
-      OpenCLTranslationTools.reductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
-          postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
-          opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
-          memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
+    	OpenCLTranslationTools.reductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
+    			postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
+    			opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
+    			memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
     }
 
     if( SkipGPUTranslation == 4 ) {

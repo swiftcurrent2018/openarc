@@ -354,17 +354,17 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		kernelStr.append("#endif\n");
         kernelStr.append("#define MAX(a,b) (((a) > (b)) ? (a) : (b))\n");
         kernelStr.append("#define MIN(a,b) (((a) < (b)) ? (a) : (b))\n");
-        kernelStr.append("#ifndef DBL_MAX\n");
-        kernelStr.append("#define DBL_MAX 1.7976931348623158e+308\n");
-		kernelStr.append("#endif\n");
-        kernelStr.append("#ifndef DBL_MIN\n");
-        kernelStr.append("#define DBL_MIN 2.2250738585072014e-308\n");
-		kernelStr.append("#endif\n");
         kernelStr.append("#ifndef FLT_MAX\n");
         kernelStr.append("#define FLT_MAX 3.402823466e+38\n");
 		kernelStr.append("#endif\n");
         kernelStr.append("#ifndef FLT_MIN\n");
         kernelStr.append("#define FLT_MIN 1.175494351e-38\n");
+		kernelStr.append("#endif\n");
+        kernelStr.append("#ifndef DBL_MAX\n");
+        kernelStr.append("#define DBL_MAX 1.7976931348623158e+308\n");
+		kernelStr.append("#endif\n");
+        kernelStr.append("#ifndef DBL_MIN\n");
+        kernelStr.append("#define DBL_MIN 2.2250738585072014e-308\n");
 		kernelStr.append("#endif\n");
 		if( enableFaultInjection ) {
 			kernelStr.append("#include \"resilience.cu\"\n");

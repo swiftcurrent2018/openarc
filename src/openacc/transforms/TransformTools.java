@@ -1831,9 +1831,9 @@ public abstract class TransformTools {
 			}
 		} else if( redOp.equals(ReductionOperator.MAX) ) {
 			if(specList.contains(Specifier.FLOAT)) {
-				initValue = new NameID("FLT_MIN");
+				initValue = new NameID("-FLT_MAX"); //FLT_MIN is the minimum positive value of float.
 			} else if(specList.contains(Specifier.DOUBLE)) {
-				initValue = new NameID("DBL_MIN");
+				initValue = new NameID("-DBL_MAX"); //DBL_MIN is the minimum positive value of double.
 			} else if(specList.contains(Specifier.LONG)) {
 				initValue = new NameID("LONG_MIN");
 			} else {
