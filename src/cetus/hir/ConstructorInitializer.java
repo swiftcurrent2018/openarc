@@ -3,7 +3,7 @@ package cetus.hir;
 import java.io.PrintWriter;
 import java.util.List;
 
-/** This class is no longer supported */
+/** This class is used only for generating C++ output code.*/
 public class ConstructorInitializer extends Initializer {
 
     public ConstructorInitializer(List values) {

@@ -300,10 +300,12 @@ public:
         D2DMemTrCnt = 0;
         HMallocCnt = 0;
         IHMallocCnt = 0;
+        IPMallocCnt = 0;
         DMallocCnt = 0;
         IDMallocCnt = 0;
         HFreeCnt = 0;
         IHFreeCnt = 0;
+        IPFreeCnt = 0;
         DFreeCnt = 0;
         IDFreeCnt = 0;
 		KernelSyncCnt = 0;
@@ -317,6 +319,7 @@ public:
         D2DMemTrSize = 0;
         HMallocSize = 0;
         IHMallocSize = 0;
+        IPMallocSize = 0;
         DMallocSize = 0;
         IDMallocSize = 0;
 		totalWaitTime = 0.0;
@@ -361,10 +364,12 @@ public:
     long D2DMemTrCnt;
     long HMallocCnt;
     long IHMallocCnt;
+    long IPMallocCnt;
     long DMallocCnt;
     long IDMallocCnt;
     long HFreeCnt;
     long IHFreeCnt;
+    long IPFreeCnt;
     long DFreeCnt;
     long IDFreeCnt;
 	long KernelSyncCnt;
@@ -378,6 +383,7 @@ public:
     unsigned long D2DMemTrSize;
     unsigned long HMallocSize;
     unsigned long IHMallocSize;
+    unsigned long IPMallocSize;
     unsigned long DMallocSize;
     unsigned long IDMallocSize;
     double start_time;

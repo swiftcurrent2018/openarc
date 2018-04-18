@@ -247,7 +247,6 @@ HI_error_t CudaDriver::init() {
         fprintf(stderr, "[ERROR in CudaDriver::init()] Module Load FAIL with error = %d (%s)\n", err, cuda_error_code(err));
 		exit(1);
     }
-
     CUstream s0, s1;
     CUevent e0, e1;
 	// CU_STREAM_DEFAULT => create a blocking stream that synchronizes with 
@@ -257,18 +256,54 @@ HI_error_t CudaDriver::init() {
 	// the NULL stream).
 	for( int i=0; i<HI_num_hostthreads; i++ ) {
 #ifdef USE_BLOCKING_STREAMS
-    	cuStreamCreate(&s0, CU_STREAM_DEFAULT);
-    	cuStreamCreate(&s1, CU_STREAM_DEFAULT);
+    	err = cuStreamCreate(&s0, CU_STREAM_DEFAULT);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::init()] Stream Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
+    	err = cuStreamCreate(&s1, CU_STREAM_DEFAULT);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::init()] Stream Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
 #else
-    	cuStreamCreate(&s0, CU_STREAM_NON_BLOCKING);
-    	cuStreamCreate(&s1, CU_STREAM_NON_BLOCKING);
+    	err = cuStreamCreate(&s0, CU_STREAM_NON_BLOCKING);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::init()] Stream Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
+    	err = cuStreamCreate(&s1, CU_STREAM_NON_BLOCKING);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::init()] Stream Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
 #endif
     	queueMap[0+i*MAX_NUM_QUEUES_PER_THREAD] = s0;
     	queueMap[1+i*MAX_NUM_QUEUES_PER_THREAD] = s1;
-    	cuEventCreate(&e0, CU_EVENT_DEFAULT);
+    	err = cuEventCreate(&e0, CU_EVENT_DEFAULT);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::init()] Event Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
     	std::map<int, CUevent> eventMap;
     	eventMap[0+i*MAX_NUM_QUEUES_PER_THREAD]= e0;
-    	cuEventCreate(&e1, CU_EVENT_DEFAULT);
+    	err = cuEventCreate(&e1, CU_EVENT_DEFAULT);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::init()] Event Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
     	eventMap[1+i*MAX_NUM_QUEUES_PER_THREAD]= e1;
     	threadQueueEventMap[i] = eventMap;
 		masterAddressTableMap[i] = new addresstable_t();
@@ -297,12 +332,17 @@ HI_error_t CudaDriver::createKernelArgMap() {
 	}
 #endif
     CUresult err;
-    cuCtxSetCurrent(cuContext);
+    err = cuCtxSetCurrent(cuContext);
+    if (err != CUDA_SUCCESS) {
+		fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Set Context FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+		exit(1);
+	}
     std::map<std::string, kernelParams_t*> kernelArgs;
     std::map<std::string, CUfunction> kernelMap;
     for(std::set<std::string>::iterator it=kernelNameSet.begin(); it!=kernelNameSet.end(); ++it) {
         // Create argument mapping for the kernel
         const char *kernelName = (*it).c_str();
+        //fprintf(stderr, "[INFO in CudaDriver::createKernelArgMap()] Function to load: %s\n", kernelName);
         CUfunction cuFunc;
 		kernelParams_t *kernelParams = new kernelParams_t;
 		kernelParams->num_args = 0;
@@ -346,7 +386,7 @@ HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames) {
         	(tconf->kernelArgsMap[this]).insert(std::pair<std::string, kernelParams_t*>(std::string(kernelName), kernelParams));
         	err = cuModuleGetFunction(&cuFunc, cuModule, kernelName);
         	if (err != CUDA_SUCCESS) {
-            	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Function Load FAIL on %s with error = %d (%s)\n", kernelName, err, cuda_error_code(err));
+            	fprintf(stderr, "[ERROR in CudaDriver::HI_register_kernels()] Function Load FAIL on %s with error = %d (%s)\n", kernelName, err, cuda_error_code(err));
 				exit(1);
         	}
         	(tconf->kernelsMap[this])[*it] = cuFunc;
@@ -423,6 +463,11 @@ HI_error_t CudaDriver::HI_pin_host_memory(const void* hostPtr, size_t size)
             CUresult cuResult = cuMemHostRegister((void*)host, size, CU_MEMHOSTREGISTER_PORTABLE);
             if(cuResult == CUDA_SUCCESS) {
                 CudaDriver::pinnedHostMemCounter[host] = 1;
+#ifdef _OPENARC_PROFILE_
+    			HostConf_t * tconf = getHostConf();
+				tconf->IPMallocCnt++;
+				tconf->IPMallocSize += size;
+#endif
             } else	{
 				result = HI_error;
             }
@@ -459,6 +504,11 @@ HI_error_t CudaDriver::pin_host_memory_if_unpinned(const void* hostPtr, size_t s
             CUresult cuResult = cuMemHostRegister((void*)host, size, CU_MEMHOSTREGISTER_PORTABLE);
             if(cuResult == CUDA_SUCCESS) {
                 CudaDriver::pinnedHostMemCounter[host] = 1;
+#ifdef _OPENARC_PROFILE_
+    			HostConf_t * tconf = getHostConf();
+				tconf->IPMallocCnt++;
+				tconf->IPMallocSize += size;
+#endif
             } else	{
 				result = HI_error;
             }
@@ -494,6 +544,10 @@ void CudaDriver::HI_unpin_host_memory(const void* hostPtr)
                 if(cuResult == CUDA_SUCCESS){
                 	//CudaDriver::pinnedHostMemCounter[host] = 0;
                 	CudaDriver::pinnedHostMemCounter.erase(host);
+#ifdef _OPENARC_PROFILE_
+					HostConf_t * tconf = getHostConf();
+					tconf->IPFreeCnt++;
+#endif
                 } else {
                 	fprintf(stderr, "[ERROR in CudaDriver::HI_unpin_host_memory()] Cannot unpin host memory with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 					exit(1);
@@ -587,6 +641,9 @@ void CudaDriver::unpin_host_memory_all(int asyncID)
                 		if(cuResult == CUDA_SUCCESS){
                 			CudaDriver::pinnedHostMemCounter.erase(host);
 							CudaDriver::hostMemToUnpin.push_back(it2->first);
+#ifdef _OPENARC_PROFILE_
+							tconf->IPFreeCnt++;
+#endif
                 		} else {
                 			fprintf(stderr, "[ERROR in CudaDriver::unpin_host_memory_all(%d)] Cannot unpin host memory with error %d (%s)\n", asyncID, cuResult, cuda_error_code(cuResult));
 							exit(1);
@@ -638,6 +695,9 @@ void CudaDriver::unpin_host_memory_all()
                 		if(cuResult == CUDA_SUCCESS){
                 			CudaDriver::pinnedHostMemCounter.erase(host);
 							CudaDriver::hostMemToUnpin.push_back(it2->first);
+#ifdef _OPENARC_PROFILE_
+							tconf->IDFreeCnt++;
+#endif
                 		} else {
                 			fprintf(stderr, "[ERROR in CudaDriver::unpin_host_memory_all()] Cannot unpin host memory with error %d (%s)\n", cuResult, cuda_error_code(cuResult));
 							exit(1);
@@ -2316,15 +2376,30 @@ HI_error_t CudaDriver::HI_synchronize( int forcedSync )
 	if( (forcedSync != 0) || (unifiedMemSupported == 1) ) {
 		//cuCtxSynchronize() waits for all tasks in the current context, but we
 		//need to wait for the tasks in the default queue (NULL stream).
-    	//CUresult err = cuCtxSynchronize();
+    	//CUresult err2 = cuCtxSynchronize();
+    	//if (err2 != CUDA_SUCCESS) {
+        //	fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] Current Context Synchronization FAIL with error %d (%s)\n", err2, cuda_error_code(err2));
+		//	exit(1);
+        //	return HI_error;
+    	//}
     	HostConf_t * tconf = getHostConf();
-    	CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
-    	err = cuStreamSynchronize(0);
+    	//CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
+    	//err = cuStreamSynchronize(0);
+    	CUstream stream = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset);
+    	CUresult err = cuStreamSynchronize(stream);
     	if (err != CUDA_SUCCESS) {
-        	fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] DEFAULT_QUEUE Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
 			exit(1);
         	return HI_error;
     	}
+		if( stream != 0 ) {
+    		err = cuStreamSynchronize(0);
+    		if (err != CUDA_SUCCESS) {
+        		fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] Defalut Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
+				exit(1);
+        		return HI_error;
+    		}
+		}
 	}
 
 #ifdef _OPENARC_PROFILE_
@@ -2458,12 +2533,21 @@ void CudaDriver::HI_set_async(int asyncId) {
 		//unified memory is not used.
     	//CUresult err = cuCtxSynchronize();
     	HostConf_t * tconf = getHostConf();
-    	CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
-    	err = cuStreamSynchronize(0);
+    	//CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
+    	//err = cuStreamSynchronize(0);
+    	CUstream stream = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset);
+    	CUresult err = cuStreamSynchronize(stream);
     	if (err != CUDA_SUCCESS) {
-        	fprintf(stderr, "[ERROR in CudaDriver::HI_set_async()] Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_set_async()] DEFAULT_QUEUE Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
 			exit(1);
     	}
+		if( stream != 0 ) {
+    		err = cuStreamSynchronize(0);
+    		if (err != CUDA_SUCCESS) {
+        		fprintf(stderr, "[ERROR in CudaDriver::HI_set_async()] Default Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
+				exit(1);
+    		}
+		}
 	}
 #endif
 #ifdef _OPENARC_PROFILE_
@@ -2604,7 +2688,7 @@ void CudaDriver::HI_waitS1(int asyncId) {
     CUresult cuResult = cuEventSynchronize(event);
 
     if(cuResult != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_wait()] failed wait on CUDA queue %d with error %d (%s)\n", asyncId, cuResult, cuda_error_code(cuResult));
+        fprintf(stderr, "[ERROR in CudaDriver::HI_waitS1()] failed wait on CUDA queue %d with error %d (%s)\n", asyncId, cuResult, cuda_error_code(cuResult));
 		exit(1);
     }
 
@@ -2670,7 +2754,7 @@ void CudaDriver::HI_wait_all_async(int async) {
     for(eventmap_cuda_t::iterator it = eventMap->begin(); it != eventMap->end(); ++it) {
         cuResult = cuEventSynchronize(it->second);
         if(cuResult != CUDA_SUCCESS) {
-            fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all()] failed wait on CUDA queue %d with error %d (%s)\n", it->first, cuResult, cuda_error_code(cuResult));
+            fprintf(stderr, "[ERROR in CudaDriver::HI_wait_all_async()] failed wait on CUDA queue %d with error %d (%s)\n", it->first, cuResult, cuda_error_code(cuResult));
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);

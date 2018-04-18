@@ -9,6 +9,7 @@ import java.util.ArrayList;
 public class TemplateID extends IDExpression {
 
     private static Method class_print_method;
+    private List template_args;
 
     static {
         Class<?>[] params = new Class<?>[2];
@@ -33,11 +34,7 @@ public class TemplateID extends IDExpression {
         super(false);
         object_print_method = class_print_method;
         this.name = name;
-        children = new ArrayList<Traversable>(args.size());
-        for (Object o : args) {
-            children.add((Traversable)o);
-            ((Traversable)o).setParent(this);
-        }
+        template_args = new ArrayList(args);
     }
 
     @Override
@@ -60,6 +57,9 @@ public class TemplateID extends IDExpression {
         o.print(i.name);
         o.print("<");
         // template arguments
+        if( i.template_args != null ) {
+        	PrintTools.printListWithComma(i.template_args, o);
+        }
         o.print(">");
     }
 

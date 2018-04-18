@@ -392,6 +392,7 @@ defaultNumWorkers=32
 #macro=SAVE_OUTPUT=1,I_SIZE=6553601
 #macro=_N_=512,_OPENMP,_OPENACCM=1
 macro=USE_MPI=__use_mpi__,OPENARC_ARCH=__openarc_arch__,LULESH_DUMP_OUTPUT=__dump_output__
+#macro=USE_MPI=__use_mpi__,OPENARC_ARCH=__openarc_arch__,LULESH_DUMP_OUTPUT=__dump_output__,USE_UNIFIEDMEM,USE_ASYNC
 #dump-options
 #dump-system-options
 #induction

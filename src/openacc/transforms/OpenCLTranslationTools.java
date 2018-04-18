@@ -12,7 +12,7 @@ import openacc.hir.ReductionOperator;
 import java.util.*;
 
 /**
- * <b>OpenCLTranslationTools</b> provides tools for various transformation tools for CUDA-specific translation.
+ * <b>OpenCLTranslationTools</b> provides tools for various transformation tools for OpenCL-specific translation.
  * 
  * @author Seyong Lee <lees2@ornl.gov>
  *         Future Technologies Group, Computer Science and Mathematics Division,
@@ -4818,7 +4818,7 @@ public abstract class OpenCLTranslationTools {
 	                SymbolTable targetSymbolTable = AnalysisTools.getIRSymbolScope(redSym, region);
 	                if( isGangReduction && ((targetSymbolTable == null) || (targetSymbolTable == region)) ) {
 	                    ACCAnnotation cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
-	                    Tools.exit("[ERROR in CUDATTranslationTools.reductionTransformation()] gang-reduction variable should" +
+	                    Tools.exit("[ERROR in OpenCLTranslationTools.reductionTransformation()] gang-reduction variable should" +
 	                            " be visible outside of the enclosing compute region, but the following reduction variable is not; exit!\n" +
 	                            "Gang-reduction variable: " + redSym.getSymbolName() + "\n" +
 								"Current reduction loop: " + pannot + "\n" +

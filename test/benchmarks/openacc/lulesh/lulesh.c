@@ -454,14 +454,22 @@ void InitStressTermsForElems(Real_t *p, Real_t *q,
    //
    Index_t i;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(p[numElem], q[numElem], \
+                                  sigxx[numElem],sigyy[numElem],sigzz[numElem]) async(0)
+#else
 #pragma acc parallel loop present(p[numElem], q[numElem], \
                                   sigxx[numElem],sigyy[numElem],sigzz[numElem]) 
+#endif
 #else
 #pragma omp parallel for firstprivate(numElem)
 #endif
   for (i = 0 ; i < numElem ; ++i){
     sigxx[i] = sigyy[i] = sigzz[i] =  - p[i] - q[i] ;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -660,6 +668,19 @@ void IntegrateStressForElems( Index_t *nodelist,
 
   // loop over all elements
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(x[numNode],         \
+                                  y[numNode],         \
+                                  z[numNode],         \
+                                  determ[numElem],    \
+                                  nodelist[numElem8], \
+                                  sigxx[numElem],     \
+                                  sigyy[numElem],     \
+                                  sigzz[numElem],     \
+                                  fx_elem[numElem8],  \
+                                  fy_elem[numElem8],  \
+                                  fz_elem[numElem8]) async(0)
+#else
 #pragma acc parallel loop present(x[numNode],         \
                                   y[numNode],         \
                                   z[numNode],         \
@@ -671,6 +692,7 @@ void IntegrateStressForElems( Index_t *nodelist,
                                   fx_elem[numElem8],  \
                                   fy_elem[numElem8],  \
                                   fz_elem[numElem8])
+#endif
 #else
 #pragma omp parallel for firstprivate(numElem)
 #endif
@@ -764,6 +786,18 @@ void IntegrateStressForElems( Index_t *nodelist,
                              + nodeElemCount[numNode-1];
   Index_t gnode;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc kernels loop independent vector(256) \
+                          present(fx_elem[numElem8], \
+                                  fy_elem[numElem8], \
+                                  fz_elem[numElem8], \
+                                  fx[numElem],       \
+                                  fy[numElem],       \
+                                  fz[numElem],       \
+                                  nodeElemCount[numNode], \
+                                  nodeElemCornerList[nCorner], \
+                                  nodeElemStart[numNode]) async(0)
+#else
 #pragma acc kernels loop independent vector(256) \
                           present(fx_elem[numElem8], \
                                   fy_elem[numElem8], \
@@ -774,6 +808,7 @@ void IntegrateStressForElems( Index_t *nodelist,
                                   nodeElemCount[numNode], \
                                   nodeElemCornerList[nCorner], \
                                   nodeElemStart[numNode])
+#endif
 #else
 #pragma omp parallel for firstprivate(numNode)
 #endif
@@ -796,6 +831,9 @@ void IntegrateStressForElems( Index_t *nodelist,
     fz[gnode] = fz_tmp ;
 
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -1290,7 +1328,11 @@ void CalcFBHourglassForceForElems(
   Real_t *fy_elem = m_fy_elem;
   Real_t *fz_elem = m_fz_elem;
 
+#ifdef USE_UNIFIEDMEM
+  Real_t (*gamma)[8] = (Real_t (*)[8])acc_create_unified(NULL, sizeof(Real_t)*4*8);
+#else
   Real_t  gamma[4][8];
+#endif
 
   gamma[0][0] = (Real_t)( 1.);
   gamma[0][1] = (Real_t)( 1.);
@@ -1330,6 +1372,25 @@ void CalcFBHourglassForceForElems(
 /*************************************************/
 /*    compute the hourglass modes */
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc kernels copyin(gamma[4][8])         \
+                    present(fx_elem[numElem8], \
+                            fy_elem[numElem8], \
+                            fz_elem[numElem8], \
+                            xd[numNode],       \
+                            yd[numNode],       \
+                            zd[numNode],       \
+                            dvdx[numElem8],    \
+                            dvdy[numElem8],    \
+                            dvdz[numElem8],    \
+                            x8n[numElem8],     \
+                            y8n[numElem8],     \
+                            z8n[numElem8],     \
+                            nodelist[numElem8],\
+                            determ[numElem],   \
+                            ss[numElem],       \
+                            elemMass[numElem]) async(0)
+#else
 #pragma acc kernels copyin(gamma[4][8])         \
                     present(fx_elem[numElem8], \
                             fy_elem[numElem8], \
@@ -1347,6 +1408,7 @@ void CalcFBHourglassForceForElems(
                             determ[numElem],   \
                             ss[numElem],       \
                             elemMass[numElem])
+#endif
 #pragma acc cache(gamma)
 #pragma acc loop independent
 #else
@@ -1458,6 +1520,18 @@ void CalcFBHourglassForceForElems(
 
   // Collect the data from the local arrays into the final force arrays
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc kernels loop independent vector(256) \
+                          present(nodeElemCount[numNode],      \
+                                  nodeElemStart[numNode],      \
+                                  nodeElemCornerList[nCorner], \
+                                  fx_elem[numElem8],           \
+                                  fy_elem[numElem8],           \
+                                  fz_elem[numElem8],           \
+                                  fx[numNode],                 \
+                                  fy[numNode],                 \
+                                  fz[numNode]) async(0)
+#else
 #pragma acc kernels loop independent vector(256) \
                           present(nodeElemCount[numNode],      \
                                   nodeElemStart[numNode],      \
@@ -1468,6 +1542,7 @@ void CalcFBHourglassForceForElems(
                                   fx[numNode],                 \
                                   fy[numNode],                 \
                                   fz[numNode])
+#endif
 #else
 #pragma omp parallel for firstprivate(numNode)
 #endif
@@ -1489,6 +1564,12 @@ void CalcFBHourglassForceForElems(
     fy[gnode] += fy_tmp ;
     fz[gnode] += fz_tmp ;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
+#ifdef USE_UNIFIEDMEM
+  acc_delete_unified(gamma, 0);
+#endif
 
 }
 
@@ -1585,6 +1666,22 @@ void CalcHourglassControlForElems(
   /* start loop over elements */
   Index_t i;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(dvdx[numElem8],     \
+                                  dvdy[numElem8],     \
+                                  dvdz[numElem8],     \
+                                  x8n[numElem8],      \
+                                  y8n[numElem8],      \
+                                  z8n[numElem8],      \
+                                  x[numNode],         \
+                                  y[numNode],         \
+                                  z[numNode],         \
+                                  volo[numElem],      \
+                                  v[numElem],         \
+                                  determ[numElem],    \
+                                  nodelist[numElem8]) \
+                          reduction(max: abort) async(0)
+#else
 #pragma acc parallel loop present(dvdx[numElem8],     \
                                   dvdy[numElem8],     \
                                   dvdz[numElem8],     \
@@ -1599,6 +1696,7 @@ void CalcHourglassControlForElems(
                                   determ[numElem],    \
                                   nodelist[numElem8]) \
                           reduction(max: abort)
+#endif
 #else
 #pragma omp parallel for firstprivate(numElem) reduction(max: abort)
 #endif
@@ -1630,6 +1728,9 @@ void CalcHourglassControlForElems(
       abort = 1;
     }
   } // end for
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
   if(abort) {
 #if USE_MPI         
@@ -1690,8 +1791,13 @@ void CalcVolumeForceForElems(Real_t *fx, Real_t *fy, Real_t *fz)
     int abort = 0;
     Index_t k;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(determ[numElem]) \
+                          reduction(max: abort) async(0)
+#else
 #pragma acc parallel loop present(determ[numElem]) \
                           reduction(max: abort)
+#endif
 #else
 #pragma omp parallel for  reduction(max:abort) firstprivate(numElem)  
 #endif
@@ -1700,6 +1806,9 @@ void CalcVolumeForceForElems(Real_t *fx, Real_t *fy, Real_t *fz)
         abort = 1;
       }
     }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
     if(abort == 1) {
 #if USE_MPI            
@@ -1735,9 +1844,15 @@ static inline void CalcForceForNodes()
   Index_t i;
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(fx[numNode], \
+                                  fy[numNode], \
+                                  fz[numNode]) async(0)
+#else
 #pragma acc parallel loop present(fx[numNode], \
                                   fy[numNode], \
                                   fz[numNode])
+#endif
 #else
 #pragma omp parallel for firstprivate(numNode)
 #endif
@@ -1746,6 +1861,9 @@ static inline void CalcForceForNodes()
     fy[i] = (Real_t)(0.0);
     fz[i] = (Real_t)(0.0);
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
   /* Calcforce calls partial, force, hourq */
   CalcVolumeForceForElems(fx, fy, fz) ;
@@ -1768,10 +1886,16 @@ static inline void CalcForceForNodes()
              m_sizeX + 1, m_sizeY + 1, m_sizeZ +  1,
              true, false) ;
     CommSBN(3, fieldData) ;
+#ifdef USE_UNIFIEDMEM
+#pragma acc update device(fx[numNode], \
+                          fy[numNode], \
+                          fz[numNode])
+#else
 #pragma acc update device(fx[numNode], \
                           fy[numNode], \
                           fz[numNode]) \
                    async
+#endif
   } // end acc data
 #endif  
 }
@@ -1785,6 +1909,15 @@ void CalcAccelerationForNodes(Real_t *xdd, Real_t *ydd, Real_t *zdd,
 {
   Index_t i;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(fx[numNode], \
+                                  fy[numNode], \
+                                  fz[numNode], \
+                                  xdd[numNode], \
+                                  ydd[numNode], \
+                                  zdd[numNode], \
+                                  nodalMass[numNode]) async(0)
+#else
 #pragma acc parallel loop present(fx[numNode], \
                                   fy[numNode], \
                                   fz[numNode], \
@@ -1792,6 +1925,7 @@ void CalcAccelerationForNodes(Real_t *xdd, Real_t *ydd, Real_t *zdd,
                                   ydd[numNode], \
                                   zdd[numNode], \
                                   nodalMass[numNode])
+#endif
 #else
 #pragma omp parallel for firstprivate(numNode)
 #endif
@@ -1800,6 +1934,9 @@ void CalcAccelerationForNodes(Real_t *xdd, Real_t *ydd, Real_t *zdd,
     ydd[i] = fy[i] / nodalMass[i];
     zdd[i] = fz[i] / nodalMass[i];
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -1826,6 +1963,15 @@ void ApplyAccelerationBoundaryConditionsForNodes(
   Index_t i;
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel firstprivate(numNodeBC) \
+                     present(xdd[numNode], \
+                             ydd[numNode], \
+                             zdd[numNode], \
+                             symmX[numNodeBC], \
+                             symmY[numNodeBC], \
+                             symmZ[numNodeBC]) async(0)
+#else
 #pragma acc parallel firstprivate(numNodeBC) \
                      present(xdd[numNode], \
                              ydd[numNode], \
@@ -1833,6 +1979,7 @@ void ApplyAccelerationBoundaryConditionsForNodes(
                              symmX[numNodeBC], \
                              symmY[numNodeBC], \
                              symmZ[numNodeBC])
+#endif
 #else
 #pragma omp parallel firstprivate(numNodeBC)
 #endif
@@ -1866,6 +2013,9 @@ void ApplyAccelerationBoundaryConditionsForNodes(
     }
 
   } // end parallel region
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
 }
 
@@ -1879,12 +2029,21 @@ void CalcVelocityForNodes(Real_t *xd,  Real_t *yd,  Real_t *zd,
 {
   Index_t i;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(xd[numNode], \
+                                  yd[numNode], \
+                                  zd[numNode], \
+                                  xdd[numNode], \
+                                  ydd[numNode], \
+                                  zdd[numNode]) async(0)
+#else
 #pragma acc parallel loop present(xd[numNode], \
                                   yd[numNode], \
                                   zd[numNode], \
                                   xdd[numNode], \
                                   ydd[numNode], \
                                   zdd[numNode])
+#endif
 #else
 #pragma omp parallel for firstprivate(numNode)
 #endif
@@ -1904,6 +2063,9 @@ void CalcVelocityForNodes(Real_t *xd,  Real_t *yd,  Real_t *zd,
     if( fabs(zdtmp) < u_cut ) zdtmp = (Real_t)(0.0);
     zd[i] = zdtmp ;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -1915,12 +2077,15 @@ void CalcPositionForNodes(Real_t *x,  Real_t *y,  Real_t *z,
 {
   Index_t i;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#else
 #pragma acc parallel loop present(x[numNode], \
                                   y[numNode], \
                                   z[numNode], \
                                   xd[numNode], \
                                   yd[numNode], \
                                   zd[numNode])
+#endif
 #else
 #pragma omp parallel for firstprivate(numNode)
 #endif
@@ -1930,6 +2095,9 @@ void CalcPositionForNodes(Real_t *x,  Real_t *y,  Real_t *z,
     y[i] += yd[i] * dt ;
     z[i] += zd[i] * dt ;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -1988,7 +2156,9 @@ void LagrangeNodal()
     /* used for async update */
     volatile int up = 1;
     /* wait for async device update in CalcForceForNodes to complete */
+#ifndef USE_UNIFIEDMEM
 #pragma acc wait
+#endif
 #endif
 
     CalcAccelerationForNodes(xdd, ydd, zdd,
@@ -2003,10 +2173,16 @@ void LagrangeNodal()
 #if USE_MPI
 #ifdef SEDOV_SYNC_POS_VEL_EARLY
   /* start to update velocities asynchronously before the MPI comm */
+#ifdef USE_UNIFIEDMEM
+#pragma acc update host(xd[numNode], \
+                        yd[numNode], \
+                        zd[numNode])
+#else
 #pragma acc update host(xd[numNode], \
                         yd[numNode], \
                         zd[numNode]) \
                    async(up)
+#endif
 #endif
 #endif
 
@@ -2016,11 +2192,19 @@ void LagrangeNodal()
 
 #if USE_MPI
 #ifdef SEDOV_SYNC_POS_VEL_EARLY
+#ifdef USE_UNIFIEDMEM
+#pragma acc update host(x[numNode], \
+                        y[numNode], \
+                        z[numNode])
+#else
 #pragma acc update host(x[numNode], \
                         y[numNode], \
                         z[numNode]) \
                    async(up)
+#endif
+#ifndef USE_UNIFIEDMEM
 #pragma acc wait(up)
+#endif
     fieldData[0] = x ;
     fieldData[1] = y ;
     fieldData[2] = z ;
@@ -2034,6 +2218,14 @@ void LagrangeNodal()
     CommSyncPosVel() ;
 
 /* update device after CommRecv */
+#ifdef USE_UNIFIEDMEM
+#pragma acc update device(x[numNode], \
+                          y[numNode], \
+                          z[numNode], \
+                          xd[numNode], \
+                          yd[numNode], \
+                          zd[numNode])
+#else
 #pragma acc update device(x[numNode], \
                           y[numNode], \
                           z[numNode], \
@@ -2041,6 +2233,7 @@ void LagrangeNodal()
                           yd[numNode], \
                           zd[numNode]) \
                    async
+#endif
 #endif
 #endif
   } // end acc data
@@ -2381,6 +2574,23 @@ void CalcKinematicsForElems( Index_t *nodelist,
 
   // loop over all elements
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(dxx[numElem], \
+                                  dyy[numElem], \
+                                  dzz[numElem], \
+                                  x[numNode], \
+                                  y[numNode], \
+                                  z[numNode], \
+                                  xd[numNode], \
+                                  yd[numNode], \
+                                  zd[numNode], \
+                                  v[numElem], \
+                                  volo[numElem], \
+                                  vnew[numElem], \
+                                  delv[numElem], \
+                                  arealg[numElem], \
+                                  nodelist[numElem8]) async(0)
+#else
 #pragma acc parallel loop present(dxx[numElem], \
                                   dyy[numElem], \
                                   dzz[numElem], \
@@ -2396,6 +2606,7 @@ void CalcKinematicsForElems( Index_t *nodelist,
                                   delv[numElem], \
                                   arealg[numElem], \
                                   nodelist[numElem8])
+#endif
 #else
 #pragma omp parallel for firstprivate(numElem, deltaTime)
 #endif
@@ -2536,6 +2747,9 @@ void CalcKinematicsForElems( Index_t *nodelist,
     dyy[k] = D.v1;
     dzz[k] = D.v2;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -2579,12 +2793,21 @@ void CalcLagrangeElements(Real_t* vnew)
     int abort = 0;
     Index_t k;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(vdov[numElem], \
+                                  dxx[numElem], \
+                                  dyy[numElem], \
+                                  dzz[numElem], \
+                                  vnew[numElem]) \
+                          reduction(max: abort) async(0)
+#else
 #pragma acc parallel loop present(vdov[numElem], \
                                   dxx[numElem], \
                                   dyy[numElem], \
                                   dzz[numElem], \
                                   vnew[numElem]) \
                           reduction(max: abort)
+#endif
 #else
 #pragma omp parallel for firstprivate(numElem) reduction(max: abort)
 #endif
@@ -2606,6 +2829,9 @@ void CalcLagrangeElements(Real_t* vnew)
         abort = 1;
       }
     }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
     if(abort) {
 #if USE_MPI
         MPI_Abort(MPI_COMM_WORLD, VolumeError) ;
@@ -2645,6 +2871,23 @@ void CalcMonotonicQGradientsForElems(Real_t vnew[], Index_t allElem)
   Index_t i;
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(vnew[numElem], \
+                                  nodelist[numElem8], \
+                                  x[numNode], \
+                                  y[numNode], \
+                                  z[numNode], \
+                                  xd[numNode], \
+                                  yd[numNode], \
+                                  zd[numNode], \
+                                  volo[numElem], \
+                                  delx_xi[allElem], \
+                                  delx_eta[allElem], \
+                                  delx_zeta[allElem], \
+                                  delv_xi[allElem], \
+                                  delv_eta[allElem], \
+                                  delv_zeta[allElem]) async(0)
+#else
 #pragma acc parallel loop present(vnew[numElem], \
                                   nodelist[numElem8], \
                                   x[numNode], \
@@ -2660,6 +2903,7 @@ void CalcMonotonicQGradientsForElems(Real_t vnew[], Index_t allElem)
                                   delv_xi[allElem], \
                                   delv_eta[allElem], \
                                   delv_zeta[allElem])
+#endif
 #else
 #pragma omp parallel for firstprivate(numElem)
 #endif
@@ -2801,6 +3045,9 @@ void CalcMonotonicQGradientsForElems(Real_t vnew[], Index_t allElem)
 
     delv_eta[i] = ax*dxv + ay*dyv + az*dzv ;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -2850,6 +3097,31 @@ void CalcMonotonicQRegionForElems(Int_t r,
   Index_t ielem;
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop firstprivate(qlc_monoq, qqc_monoq, \
+                                       monoq_limiter_mult, monoq_max_slope, \
+                                       ptiny) \
+                          copyin(regElemlist[regElemSize]) \
+                          present(vnew[numElem], \
+                                  vdov[numElem], \
+                                  delx_xi[allElem], \
+                                  delx_eta[allElem], \
+                                  delx_zeta[allElem], \
+                                  delv_xi[allElem], \
+                                  delv_eta[allElem], \
+                                  delv_zeta[allElem], \
+                                  elemMass[numElem], \
+                                  volo[numElem], \
+                                  lxip[numElem], \
+                                  lxim[numElem], \
+                                  letam[numElem], \
+                                  letap[numElem], \
+                                  lzetam[numElem], \
+                                  lzetap[numElem], \
+                                  ql[numElem], \
+                                  qq[numElem], \
+                                  elemBC[numElem]) async(0)
+#else
 #pragma acc parallel loop firstprivate(qlc_monoq, qqc_monoq, \
                                        monoq_limiter_mult, monoq_max_slope, \
                                        ptiny) \
@@ -2873,6 +3145,7 @@ void CalcMonotonicQRegionForElems(Int_t r,
                                   ql[numElem], \
                                   qq[numElem], \
                                   elemBC[numElem])
+#endif
 #else
 #pragma omp parallel for firstprivate(qlc_monoq, qqc_monoq, monoq_limiter_mult, monoq_max_slope, ptiny)
 #endif
@@ -3016,6 +3289,9 @@ void CalcMonotonicQRegionForElems(Int_t r,
     qq[i] = qquad ;
     ql[i] = qlin  ;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -3139,6 +3415,15 @@ void CalcPressureForElems(Real_t* p_new, Real_t* bvc,
   volatile Index_t numElem = m_numElem;
   Index_t i;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(regElemList[length], \
+                         compression[length], \
+                         pbvc[length], \
+                         p_new[length], \
+                         bvc[length], \
+                         e_old[length], \
+                         vnewc[numElem]) async(0)
+#else
 #pragma acc parallel loop present(regElemList[length], \
                          compression[length], \
                          pbvc[length], \
@@ -3146,6 +3431,7 @@ void CalcPressureForElems(Real_t* p_new, Real_t* bvc,
                          bvc[length], \
                          e_old[length], \
                          vnewc[numElem])
+#endif
 #else
 #pragma omp parallel for firstprivate(length, pmin, p_cut, eosvmax)
 #endif
@@ -3168,6 +3454,9 @@ void CalcPressureForElems(Real_t* p_new, Real_t* bvc,
     if    (p_new[i]       <  pmin)
       p_new[i]   = pmin ;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -3184,7 +3473,11 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
                         Real_t eosvmax,
                         Int_t length, Index_t *regElemList)
 {
+#ifdef USE_UNIFIEDMEM
+  Real_t *pHalfStep = (Real_t*) acc_create_unified(NULL, sizeof(Real_t) * (length)) ;
+#else
   Real_t *pHalfStep = (Real_t*) malloc(sizeof(Real_t) * (length)) ;
+#endif
 
     Index_t i;
 
@@ -3195,12 +3488,21 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
 #endif
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(e_new[length], \
+                                  e_old[length], \
+                                  p_old[length], \
+                                  q_old[length], \
+                                  delvc[length], \
+                                  work[length]) async(0)
+#else
 #pragma acc parallel loop present(e_new[length], \
                                   e_old[length], \
                                   p_old[length], \
                                   q_old[length], \
                                   delvc[length], \
                                   work[length])
+#endif
 #else
 #pragma omp parallel for firstprivate(length, emin)
 #endif
@@ -3212,11 +3514,27 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
       e_new[i] = emin ;
     }
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
   CalcPressureForElems(pHalfStep, bvc, pbvc, e_new, compHalfStep, vnewc,
       pmin, p_cut, eosvmax, length, regElemList);
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(compHalfStep[length], \
+                                  pHalfStep[length], \
+                                  delvc[length], \
+                                  p_old[length], \
+                                  q_old[length], \
+                                  ql_old[length], \
+                                  qq_old[length], \
+                                  q_new[length], \
+                                  pbvc[length], \
+                                  bvc[length], \
+                                  e_new[length]) async(0)
+#else
 #pragma acc parallel loop present(compHalfStep[length], \
                                   pHalfStep[length], \
                                   delvc[length], \
@@ -3228,6 +3546,7 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
                                   pbvc[length], \
                                   bvc[length], \
                                   e_new[length])
+#endif
 #else
 #pragma omp parallel for firstprivate(length, rho0)
 #endif
@@ -3256,8 +3575,13 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
   }
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(e_new[length], \
+                                  work[length]) async(0)
+#else
 #pragma acc parallel loop present(e_new[length], \
                                   work[length])
+#endif
 #else
 #pragma omp parallel for firstprivate(length, emin, e_cut)
 #endif
@@ -3272,11 +3596,29 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
       e_new[i] = emin ;
     }
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
   CalcPressureForElems(p_new, bvc, pbvc, e_new, compression, vnewc,
                        pmin, p_cut, eosvmax, length, regElemList);
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(regElemList[length], \
+                                  pHalfStep[length], \
+                                  delvc[length], \
+                                  pbvc[length], \
+                                  e_new[length], \
+                                  bvc[length], \
+                                  ql_old[length], \
+                                  qq_old[length], \
+                                  p_old[length], \
+                                  q_old[length], \
+                                  p_new[length], \
+                                  q_new[length], \
+                                  vnewc[numElem]) async(0)
+#else
 #pragma acc parallel loop present(regElemList[length], \
                                   pHalfStep[length], \
                                   delvc[length], \
@@ -3290,6 +3632,7 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
                                   p_new[length], \
                                   q_new[length], \
                                   vnewc[numElem])
+#endif
 #else
 #pragma omp parallel for firstprivate(length, rho0, emin, e_cut)
 #endif
@@ -3325,11 +3668,26 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
       e_new[i] = emin ;
     }
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
    CalcPressureForElems(p_new, bvc, pbvc, e_new, compression, vnewc,
                         pmin, p_cut, eosvmax, length, regElemList);
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(regElemList[length], \
+                                  delvc[length], \
+                                  pbvc[length], \
+                                  e_new[length], \
+                                  vnewc[numElem], \
+                                  bvc[length], \
+                                  ql_old[length], \
+                                  qq_old[length], \
+                                  p_new[length], \
+                                  q_new[length]) async(0)
+#else
 #pragma acc parallel loop present(regElemList[length], \
                                   delvc[length], \
                                   pbvc[length], \
@@ -3340,6 +3698,7 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
                                   qq_old[length], \
                                   p_new[length], \
                                   q_new[length])
+#endif
 #else
 #pragma omp parallel for firstprivate(length, rho0, q_cut)
 #endif
@@ -3361,11 +3720,18 @@ void CalcEnergyForElems(Real_t* p_new, Real_t* e_new, Real_t* q_new,
          if (fabs(q_new[i]) < q_cut) q_new[i] = (Real_t)(0.) ;
       }
    }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
 #ifdef _OPENACC
 } // end acc data
 #endif
+#ifdef USE_UNIFIEDMEM
+   if (pHalfStep != NULL) acc_delete_unified(pHalfStep, 0);
+#else
    if (pHalfStep != NULL) free(pHalfStep);
+#endif
 
    return ;
 }
@@ -3381,6 +3747,16 @@ void CalcSoundSpeedForElems(Real_t *ss,
 {
    Index_t i;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(vnewc[numElem], \
+                                  regElemList[len], \
+                                  pbvc[len], \
+                                  enewc[len], \
+                                  bvc[len], \
+                                  pnewc[len], \
+                                  ss[numElem]) \
+                          firstprivate(rho0, ss4o3) async(0)
+#else
 #pragma acc parallel loop present(vnewc[numElem], \
                                   regElemList[len], \
                                   pbvc[len], \
@@ -3389,6 +3765,7 @@ void CalcSoundSpeedForElems(Real_t *ss,
                                   pnewc[len], \
                                   ss[numElem]) \
                           firstprivate(rho0, ss4o3)
+#endif
 #else
 #pragma omp parallel for firstprivate(rho0, ss4o3)
 #endif
@@ -3404,6 +3781,9 @@ void CalcSoundSpeedForElems(Real_t *ss,
       }
       ss[elem] = ssTmp ;
    }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 }
 
 /******************************************/
@@ -3476,6 +3856,21 @@ void EvalEOSForElems(Real_t *vnewc,
 //{ // omp parallel brace
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(e_old[numElemReg], \
+                                  delvc[numElemReg], \
+                                  p_old[numElemReg], \
+                                  q_old[numElemReg], \
+                                  regElemList[numElemReg], \
+                                  qq_old[numElemReg], \
+                                  ql_old[numElemReg], \
+                                  p[numElem], \
+                                  e[numElem], \
+                                  q[numElem], \
+                                  delv[numElem], \
+                                  qq[numElem], \
+                                  ql[numElem]) async(0)
+#else
 #pragma acc parallel loop present(e_old[numElemReg], \
                                   delvc[numElemReg], \
                                   p_old[numElemReg], \
@@ -3489,6 +3884,7 @@ void EvalEOSForElems(Real_t *vnewc,
                                   delv[numElem], \
                                   qq[numElem], \
                                   ql[numElem])
+#endif
 #else
 #pragma omp for nowait firstprivate(numElemReg)
 #endif
@@ -3503,11 +3899,19 @@ void EvalEOSForElems(Real_t *vnewc,
     }
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(vnewc[numElem], \
+                                  compression[numElemReg], \
+                                  delvc[numElemReg], \
+                                  compHalfStep[numElemReg], \
+                                  regElemList[numElemReg]) async(0)
+#else
 #pragma acc parallel loop present(vnewc[numElem], \
                                   compression[numElemReg], \
                                   delvc[numElemReg], \
                                   compHalfStep[numElemReg], \
                                   regElemList[numElemReg])
+#endif
 #else
 #pragma omp for
 #endif
@@ -3521,6 +3925,15 @@ void EvalEOSForElems(Real_t *vnewc,
 
 // Fused some loops here to reduce overhead of repeatedly calling small kernels
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(vnewc[numElem], \
+                                  compHalfStep[numElemReg], \
+                                  compression[numElemReg], \
+                                  regElemList[numElemReg], \
+                                  p_old[numElemReg], \
+                                  compHalfStep[numElemReg], \
+                                  work[numElemReg]) async(0)
+#else
 #pragma acc parallel loop present(vnewc[numElem], \
                                   compHalfStep[numElemReg], \
                                   compression[numElemReg], \
@@ -3528,6 +3941,7 @@ void EvalEOSForElems(Real_t *vnewc,
                                   p_old[numElemReg], \
                                   compHalfStep[numElemReg], \
                                   work[numElemReg])
+#endif
 #else
 #pragma omp for
 #endif
@@ -3543,6 +3957,9 @@ void EvalEOSForElems(Real_t *vnewc,
       }
       work[i] = (Real_t)(0.) ; 
     }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 //} // end omp parallel
 
     CalcEnergyForElems(p_new, e_new, q_new, bvc, pbvc,
@@ -3554,12 +3971,21 @@ void EvalEOSForElems(Real_t *vnewc,
 } // end foreach repetition
 
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(p_new[numElemReg], \
+                                  e_new[numElemReg], \
+                                  q_new[numElemReg], \
+                                  p[numElem], \
+                                  e[numElem], \
+                                  q[numElem]) async(0)
+#else
 #pragma acc parallel loop present(p_new[numElemReg], \
                                   e_new[numElemReg], \
                                   q_new[numElemReg], \
                                   p[numElem], \
                                   e[numElem], \
                                   q[numElem])
+#endif
 #else
 #pragma omp parallel for firstprivate(numElemReg)
 #endif
@@ -3569,6 +3995,9 @@ void EvalEOSForElems(Real_t *vnewc,
     e[elem] = e_new[i] ;
     q[elem] = q_new[i] ;
   }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
   Real_t *ss = m_ss;
   CalcSoundSpeedForElems(ss,
@@ -3602,7 +4031,11 @@ void ApplyMaterialPropertiesForElems(Real_t vnew[])
       // Bound the updated relative volumes with eosvmin/max
       if (eosvmin != (Real_t)(0.)) {
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop async(0)
+#else
 #pragma acc parallel loop
+#endif
 #else
 #pragma omp for
 #endif
@@ -3614,7 +4047,11 @@ void ApplyMaterialPropertiesForElems(Real_t vnew[])
 
       if (eosvmax != (Real_t)(0.)) {
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop async(0)
+#else
 #pragma acc parallel loop
+#endif
 #else
 #pragma omp for nowait
 #endif
@@ -3630,8 +4067,13 @@ void ApplyMaterialPropertiesForElems(Real_t vnew[])
       Real_t *v = m_v;
       Real_t vc = 1.;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop reduction(min: vc) \
+                          present(v[numElem]) async(0)
+#else
 #pragma acc parallel loop reduction(min: vc) \
                           present(v[numElem])
+#endif
 #else
 #pragma omp for nowait private(vc) reduction(min: vc)
 #endif
@@ -3646,6 +4088,9 @@ void ApplyMaterialPropertiesForElems(Real_t vnew[])
             vc = eosvmax ;
         }
       }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
 
       if (vc <= 0.) {
 #if USE_MPI             
@@ -3691,8 +4136,13 @@ void UpdateVolumesForElems(Real_t *vnew, Real_t *v,
   if (length != 0) {
     Index_t i;
 #ifdef _OPENACC
+#ifdef USE_ASYNC
+#pragma acc parallel loop present(vnew[length], \
+                                  v[length]) async(0)
+#else
 #pragma acc parallel loop present(vnew[length], \
                                   v[length])
+#endif
 #else
 #pragma omp parallel for firstprivate(length, v_cut)
 #endif
@@ -3704,6 +4154,9 @@ void UpdateVolumesForElems(Real_t *vnew, Real_t *v,
 
       v[i] = tmpV ;
     }
+#ifdef USE_ASYNC
+#pragma acc wait(0)
+#endif
   }
 
   return ;
@@ -3898,7 +4351,9 @@ void CalcTimeConstraintsForElems() {
 
   Index_t r;
   /* wait for async mem updates to finish */
+#ifndef USE_UNIFIEDMEM
 #pragma acc wait
+#endif
 
   for (r=0 ; r < m_numReg ; ++r) {
     /* evaluate time constraint */
@@ -3927,7 +4382,9 @@ void LagrangeLeapFrog()
   Real_t *fieldData[6] ;
 
 /* wait for async device update to complete */
+#ifndef USE_UNIFIEDMEM
 #pragma acc wait
+#endif
 #endif
   //[DEBUG by Seyong Lee] Below definitions are moved out of
   //the above #ifdef macro region.
@@ -3954,13 +4411,23 @@ void LagrangeLeapFrog()
 
 #ifdef SEDOV_SYNC_POS_VEL_EARLY
 /* wait for async device update to complete (in LagrangeNodal) */
+#ifndef USE_UNIFIEDMEM
 #pragma acc wait
+#endif
 #endif
 
 #ifdef SEDOV_SYNC_POS_VEL_LATE
 
   /* asynchronously update on host before MPI comm */
   volatile int up = 1;
+#ifdef USE_UNIFIEDMEM
+#pragma acc update host(x[numNode], \
+                        y[numNode], \
+                        z[numNode], \
+                        xd[numNode], \
+                        yd[numNode], \
+                        zd[numNode])
+#else
 #pragma acc update host(x[numNode], \
                         y[numNode], \
                         z[numNode], \
@@ -3968,6 +4435,7 @@ void LagrangeLeapFrog()
                         yd[numNode], \
                         zd[numNode]) \
                    async(up)
+#endif
 #endif
 #endif
 
@@ -3984,10 +4452,16 @@ void LagrangeLeapFrog()
                          vdov[numElem], \
                          arealg[numElem])
 {
+#ifdef USE_UNIFIEDMEM
+#pragma acc update host(ss[numElem], \
+                        vdov[numElem], \
+                        arealg[numElem])
+#else
 #pragma acc update host(ss[numElem], \
                         vdov[numElem], \
                         arealg[numElem]) \
                    async
+#endif
 }
 #endif
 
@@ -3995,7 +4469,9 @@ void LagrangeLeapFrog()
 #if USE_MPI   
 #ifdef SEDOV_SYNC_POS_VEL_LATE
 
+#ifndef USE_UNIFIEDMEM
 #pragma acc wait(up)
+#endif
 
   CommRecv(MSG_SYNC_POS_VEL, 6,
       m_sizeX + 1, m_sizeY + 1, m_sizeZ + 1,
@@ -4019,6 +4495,14 @@ void LagrangeLeapFrog()
 #if USE_MPI   
 #ifdef SEDOV_SYNC_POS_VEL_LATE
   CommSyncPosVel() ;
+#ifdef USE_UNIFIEDMEM
+#pragma acc update device(x[numNode], \
+                          y[numNode], \
+                          z[numNode], \
+                          xd[numNode], \
+                          yd[numNode], \
+                          zd[numNode])
+#else
 #pragma acc update device(x[numNode], \
                           y[numNode], \
                           z[numNode], \
@@ -4026,6 +4510,7 @@ void LagrangeLeapFrog()
                           yd[numNode], \
                           zd[numNode]) \
                    async
+#endif
 #endif
 #endif   
 } // end acc data

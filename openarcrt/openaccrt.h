@@ -268,7 +268,7 @@ public:
         addressmap_t::iterator it2 =	tAddressMap->find(hostPtr);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -294,7 +294,7 @@ public:
 					tAddressMap = it->second;
             		it2 =	tAddressMap->find(hostPtr);
 #ifdef _OPENARC_PROFILE_
-    				if( HI_openarcrt_verbosity > 3 ) {
+    				if( HI_openarcrt_verbosity > 1 ) {
 						ptit->second++;
     				}    
 #endif
@@ -325,7 +325,7 @@ public:
 		for (addressmap_t::iterator it2 = tAddressMap->begin(); it2 != tAddressMap->end(); ++it2) {
             const void* aet_host = it2->first;
 #ifdef _OPENARC_PROFILE_
-    		if( HI_openarcrt_verbosity > 3 ) {
+    		if( HI_openarcrt_verbosity > 1 ) {
 				ptit->second++;
     		}    
 #endif
@@ -345,7 +345,7 @@ public:
         	for (addressmap_t::iterator it2 = tAddressMap->begin(); it2 != tAddressMap->end(); ++it2) {
             	const void* aet_host = it2->first;
 #ifdef _OPENARC_PROFILE_
-    			if( HI_openarcrt_verbosity > 3 ) {
+    			if( HI_openarcrt_verbosity > 1 ) {
 					ptit->second++;
     			}    
 #endif
@@ -364,7 +364,7 @@ public:
         addressmap_t::iterator it2 =	tAddressMap->lower_bound(hostPtr);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -420,7 +420,7 @@ public:
 			tAddressMap = it->second;
         	addressmap_t::iterator it2 =	tAddressMap->lower_bound(hostPtr);
 #ifdef _OPENARC_PROFILE_
-    		if( HI_openarcrt_verbosity > 3 ) {
+    		if( HI_openarcrt_verbosity > 1 ) {
 				ptit->second++;
     		}    
 #endif
@@ -492,7 +492,7 @@ public:
 		}
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -509,7 +509,7 @@ public:
 
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -586,7 +586,7 @@ public:
         addresstable_t::iterator it = masterAddressTable->find(asyncID);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -596,7 +596,7 @@ public:
 			addressmap_t *tAddressMap = it->second;
 			for( addressmap_t::iterator it3 = tAddressMap->begin(); it3 != tAddressMap->end(); ++it3 ) {
 #ifdef _OPENARC_PROFILE_
-    			if( HI_openarcrt_verbosity > 3 ) {
+    			if( HI_openarcrt_verbosity > 1 ) {
 					ptit->second++;
     			}    
 #endif
@@ -618,7 +618,7 @@ public:
 				addressmap_t *tAddressMap = it->second;
 				for( addressmap_t::iterator it3 = tAddressMap->begin(); it3 != tAddressMap->end(); ++it3 ) {
 #ifdef _OPENARC_PROFILE_
-    				if( HI_openarcrt_verbosity > 3 ) {
+    				if( HI_openarcrt_verbosity > 1 ) {
 						ptit->second++;
     				}    
 #endif
@@ -655,7 +655,7 @@ public:
         addressmap_t::iterator it2 =	tAddressMap->find(hostPtr);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -674,7 +674,7 @@ public:
 			tAddressMap = it->second;
             it2 =	tAddressMap->find(hostPtr);
 #ifdef _OPENARC_PROFILE_
-    		if( HI_openarcrt_verbosity > 3 ) {
+    		if( HI_openarcrt_verbosity > 1 ) {
 				ptit->second++;
     		}    
 #endif
@@ -687,7 +687,7 @@ public:
 		//in the addressTable.
 		for (addressmap_t::iterator it2 = tAddressMap->begin(); it2 != tAddressMap->end(); ++it2) {
 #ifdef _OPENARC_PROFILE_
-    		if( HI_openarcrt_verbosity > 3 ) {
+    		if( HI_openarcrt_verbosity > 1 ) {
 				ptit->second++;
     		}    
 #endif
@@ -704,7 +704,7 @@ public:
 			tAddressMap = it->second;
         	for (addressmap_t::iterator it2 = tAddressMap->begin(); it2 != tAddressMap->end(); ++it2) {
 #ifdef _OPENARC_PROFILE_
-    			if( HI_openarcrt_verbosity > 3 ) {
+    			if( HI_openarcrt_verbosity > 1 ) {
 					ptit->second++;
     			}    
 #endif
@@ -721,7 +721,7 @@ public:
         addressmap_t::iterator it2 =	tAddressMap->lower_bound(hostPtr);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -767,7 +767,7 @@ public:
 			tAddressMap = it->second;
         	addressmap_t::iterator it2 =	tAddressMap->lower_bound(hostPtr);
 #ifdef _OPENARC_PROFILE_
-    		if( HI_openarcrt_verbosity > 3 ) {
+    		if( HI_openarcrt_verbosity > 1 ) {
 				ptit->second++;
     		}    
 #endif
@@ -811,7 +811,7 @@ public:
         addressmap_t::iterator it2 =	(it->second)->find(hostPtr);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -909,7 +909,7 @@ public:
         addressmap_t::iterator it2 =	myHandleMap->find(devPtr);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -932,7 +932,7 @@ public:
             const void* aet_devPtr = it2->first;
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
 #ifdef _OPENARC_PROFILE_
-    		if( HI_openarcrt_verbosity > 3 ) {
+    		if( HI_openarcrt_verbosity > 1 ) {
 				ptit->second++;
     		}    
 #endif
@@ -951,7 +951,7 @@ public:
         addressmap_t::iterator it2 =	myHandleMap->lower_bound(devPtr);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -1025,7 +1025,7 @@ public:
         //myHandleMap->insert(std::pair<const void*, void*>(devPtr, (void*) aet));
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}
@@ -1040,7 +1040,7 @@ public:
         addressmap_t::iterator it2 = myHandleMap->find(devPtr);
 #ifdef _OPENARC_PROFILE_
 		presenttablecnt_t::iterator ptit = presentTableCntMap.find(tid);
-    	if( HI_openarcrt_verbosity > 3 ) {
+    	if( HI_openarcrt_verbosity > 1 ) {
 			if(ptit == presentTableCntMap.end()) {
 				presentTableCntMap.insert(std::pair<int, long> (tid, 0));
 			}

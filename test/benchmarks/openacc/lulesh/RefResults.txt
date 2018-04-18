@@ -7,6 +7,8 @@ Size	Iteration Count 	Final Origin Energy
 70^3	2402				9.417145e+05
 90^3	3145				1.482403e+06
 
+(30^3 is the default size)
+
 The iteration count of the implementation should match exactly. 
 The energy at the origin when the simulation completes should be correct to at least six digits. 
 The three measures of symmetry should all be 10−8 or smaller in double precision for 100^3 mesh discretizations of smaller.

@@ -409,10 +409,12 @@ void HostConf::HI_init(int devNum) {
     D2DMemTrCnt = 0;
     HMallocCnt = 0;
     IHMallocCnt = 0;
+    IPMallocCnt = 0;
     DMallocCnt = 0;
     IDMallocCnt = 0;
     HFreeCnt = 0;
     IHFreeCnt = 0;
+    IPFreeCnt = 0;
     DFreeCnt = 0;
     IDFreeCnt = 0;
 	KernelSyncCnt = 0;
@@ -426,6 +428,7 @@ void HostConf::HI_init(int devNum) {
     D2DMemTrSize = 0;
     HMallocSize = 0;
     IHMallocSize = 0;
+    IPMallocSize = 0;
     DMallocSize = 0;
     IDMallocSize = 0;
     totalWaitTime = 0.0;
@@ -608,13 +611,15 @@ void HostConf::HI_reset() {
     printf("Number of Internal Device Memory Allocation Calls: %ld\n", IDMallocCnt);
     printf("Number of External Host Memory Allocation Calls by OpenARC runtime: %ld\n", HMallocCnt);
     printf("Number of Internal Host Memory Allocation Calls by OpenARC runtime: %ld\n", IHMallocCnt);
+    printf("Number of Internal Pinned Memory Allocation Calls by OpenARC runtime: %ld\n", IPMallocCnt);
     printf("Number of External Device Memory Free Calls by OpenARC runtime: %ld\n", DFreeCnt);
     printf("Number of Internal Device Memory Free Calls by OpenARC runtime: %ld\n", IDFreeCnt);
     printf("Number of External Host Memory Free Calls by OpenARC runtime: %ld\n", HFreeCnt);
     printf("Number of Internal Host Memory Free Calls by OpenARC runtime: %ld\n", IHFreeCnt);
+    printf("Number of Internal Pinned Memory Free Calls by OpenARC runtime: %ld\n", IPFreeCnt);
     printf("Number of Host-Kernel Synchronization Calls by OpenARC runtime: %ld\n", KernelSyncCnt);
-    printf("Number of External Present Table Lookup by OpenARC runtime: %ld\n", PresentTableCnt);
-	if( HI_openarcrt_verbosity > 3 ) {
+    printf("Number of External Present Table Lookups by OpenARC runtime: %ld\n", PresentTableCnt);
+	if( HI_openarcrt_verbosity > 1 ) {
 		IPresentTableCnt = (device->presentTableCntMap.find(thread_id))->second;
     	printf("Number of Internal Present Table Lookups by OpenARC runtime: %ld\n", IPresentTableCnt);
 	}
@@ -628,6 +633,7 @@ void HostConf::HI_reset() {
     printf("Size of Device Memory Internally Requested by OpenARC runtime : %lu\n", IDMallocSize);
     printf("Size of Host Memory Externally Requested by OpenARC runtime : %lu\n", HMallocSize);
     printf("Size of Host Memory Internally Requested by OpenARC runtime : %lu\n", IHMallocSize);
+    printf("Size of Pinned Memory Internally Requested by OpenARC runtime : %lu\n", IPMallocSize);
     printf("Total Memory Transfer Time: %lf sec\n", totalMemTrTime);
     printf("Total Memory Allocation Time: %lf sec\n", totalMallocTime);
     printf("Total Memory Free Time: %lf sec\n", totalFreeTime);

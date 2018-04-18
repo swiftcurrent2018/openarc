@@ -148,12 +148,15 @@ public class KernelsSplitting extends TransformPass {
 									Expression tExp = null;
 									Expression tTemp = null;
 									for( ACCAnnotation tGAnnot : tAnnots ) {
-										if( tExp == null ) {
-											tExp = tGAnnot.get("gang");
-										} else {
-											tTemp = tGAnnot.get("gang");
-											if( tTemp != null ) {
-												tExp = Symbolic.multiply(tExp, tTemp);
+										Object tValue = tGAnnot.get("gang");
+										if( tValue instanceof Expression ) {
+											tTemp = (Expression)tValue;
+											if( tExp == null ) {
+												tExp = tTemp;
+											} else {
+												if( tTemp != null ) {
+													tExp = Symbolic.multiply(tExp, tTemp);
+												}
 											}
 										}
 									}
@@ -166,12 +169,15 @@ public class KernelsSplitting extends TransformPass {
 									Expression tExp = null;
 									Expression tTemp = null;
 									for( ACCAnnotation tGAnnot : tAnnots ) {
-										if( tExp == null ) {
-											tExp = tGAnnot.get("worker");
-										} else {
-											tTemp = tGAnnot.get("worker");
-											if( tTemp != null ) {
-												tExp = Symbolic.multiply(tExp, tTemp);
+										Object tValue = tGAnnot.get("worker");
+										if( tValue instanceof Expression ) {
+											tTemp = (Expression)tValue;
+											if( tExp == null ) {
+												tExp = tTemp;
+											} else {
+												if( tTemp != null ) {
+													tExp = Symbolic.multiply(tExp, tTemp);
+												}
 											}
 										}
 									}

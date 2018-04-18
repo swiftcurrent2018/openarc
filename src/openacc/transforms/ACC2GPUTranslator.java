@@ -1369,7 +1369,9 @@ public abstract class ACC2GPUTranslator {
 				continue;
 			}
 			//HI_set_async will be generated before the data clause instead
-			/*if(pAnnot.containsKey("async"))
+			//[DEBUG] If the compute region does not have any data clause, HI_set_async should
+			//be inserted before the kernel call; re-enable below as an easy but inefficient fix
+			if(pAnnot.containsKey("async"))
             {
                 FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
                 if(pAnnot.get("async") != null)
@@ -1381,7 +1383,7 @@ public abstract class ACC2GPUTranslator {
                     setAsyncCall.addArgument(new NameID("acc_async_noval"));
                 }
                 TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall));
-            }*/
+            }
 			List<Statement> inStmts = new LinkedList<Statement>();
 			List<Statement> outStmts = new LinkedList<Statement>();
 			inStmts.add((Statement)at);
@@ -1401,7 +1403,10 @@ public abstract class ACC2GPUTranslator {
 				continue;
 			}
 
-			/*if(kAnnot.containsKey("async"))
+			//HI_set_async will be generated before the data clause instead
+			//[DEBUG] If the compute region does not have any data clause, HI_set_async should
+			//be inserted before the kernel call; re-enable below as an easy but inefficient fix
+			if(kAnnot.containsKey("async"))
             {
                 FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
                 if(kAnnot.get("async") != null)
@@ -1413,7 +1418,7 @@ public abstract class ACC2GPUTranslator {
                     setAsyncCall.addArgument(new NameID("acc_async_noval"));
                 }
                 TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall));
-            }*/
+            }
 			List<Statement> inStmts = new LinkedList<Statement>();
 			List<Statement> outStmts = new LinkedList<Statement>();
 			inStmts.add((Statement)at);

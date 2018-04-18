@@ -2,6 +2,7 @@ package cetus.analysis;
 
 import cetus.exec.Driver;
 import cetus.hir.*;
+import openacc.hir.*;
 
 import java.util.*;
 
@@ -1020,7 +1021,14 @@ public class ArrayPrivatization extends AnalysisPass {
                 new DFIterator<FunctionCall>(current_loop, FunctionCall.class);
         while (iter.hasNext()) {
             FunctionCall fc = iter.next();
+            //[DEBUG] Modified by Seyong Lee
             if (StandardLibrary.isSideEffectFree(fc)) {
+                continue;
+            } else if (OpenACCRuntimeLibrary.isSideEffectFree(fc)) {
+                continue;
+            } else if (OpenCLStdLibrary.isSideEffectFree(fc)) {
+                continue;
+            } else if (CudaStdLibrary.isSideEffectFree(fc)) {
                 continue;
             }
             contains_unsafe_fcall = true;

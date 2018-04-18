@@ -2165,7 +2165,7 @@ void OpenCLDriver::HI_waitS1(int asyncId) {
     err = clWaitForEvents(1, event);
 
     if(err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait()] failed wait on OpenCL queue %d with error %d (%s)\n", asyncId, err, opencl_error_code(err));
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_waitS1()] failed wait on OpenCL queue %d with error %d (%s)\n", asyncId, err, opencl_error_code(err));
 		exit(1);
     }
 

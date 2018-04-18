@@ -65,6 +65,127 @@ void Domain(Int_t numRanks, Index_t colLoc,
 
   m_numNode = edgeNodes*edgeNodes*edgeNodes ;
 
+#ifdef USE_UNIFIEDMEM
+  m_regNumList = (Index_t*) acc_create_unified(NULL, m_numElem * sizeof(Index_t)) ;  // material indexset
+  memset(m_regNumList, 0,  m_numElem * sizeof(Index_t)) ;
+
+  m_nodelist = (Index_t*) acc_create_unified(NULL, 8*m_numElem * sizeof(Index_t));
+  memset(m_nodelist, 0, 8*m_numElem * sizeof(Index_t));
+
+  // elem connectivities through face 
+  m_lxim = (Index_t*) acc_create_unified(NULL, m_numElem * sizeof(Index_t));
+  memset(m_lxim, 0, m_numElem * sizeof(Index_t));
+  m_lxip = (Index_t*) acc_create_unified(NULL, m_numElem * sizeof(Index_t));
+  memset(m_lxip, 0, m_numElem * sizeof(Index_t));
+  m_letam = (Index_t*) acc_create_unified(NULL, m_numElem * sizeof(Index_t));
+  memset(m_letam, 0, m_numElem * sizeof(Index_t));
+  m_letap = (Index_t*) acc_create_unified(NULL, m_numElem * sizeof(Index_t));
+  memset(m_letap, 0, m_numElem * sizeof(Index_t));
+  m_lzetam = (Index_t*) acc_create_unified(NULL, m_numElem * sizeof(Index_t));
+  memset(m_lzetam, 0, m_numElem * sizeof(Index_t));
+  m_lzetap = (Index_t*) acc_create_unified(NULL, m_numElem * sizeof(Index_t));
+  memset(m_lzetap, 0, m_numElem * sizeof(Index_t));
+
+  m_elemBC = (Int_t*) acc_create_unified(NULL, m_numElem * sizeof(Int_t));
+  memset(m_elemBC, 0, m_numElem * sizeof(Int_t));
+
+  m_e = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_e, 0, m_numElem * sizeof(Real_t));
+  m_p = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_p, 0, m_numElem * sizeof(Real_t));
+
+  m_q = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_q, 0, m_numElem * sizeof(Real_t));
+  m_ql = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_ql, 0, m_numElem * sizeof(Real_t));
+  m_qq = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_qq, 0, m_numElem * sizeof(Real_t));
+
+  m_v = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_v, 0, m_numElem * sizeof(Real_t));
+
+  m_volo = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_volo, 0, m_numElem * sizeof(Real_t));
+  m_delv = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_delv, 0, m_numElem * sizeof(Real_t));
+  m_vdov = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_vdov, 0, m_numElem * sizeof(Real_t));
+
+  m_arealg = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_arealg, 0, m_numElem * sizeof(Real_t));
+
+  m_ss = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_ss, 0, m_numElem * sizeof(Real_t));
+
+  m_elemMass = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_elemMass, 0, m_numElem * sizeof(Real_t));
+
+  // Node-centered 
+
+  m_x = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t)); // coordinates 
+  memset(m_x, 0, m_numNode * sizeof(Real_t)); // coordinates 
+  m_y = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));
+  memset(m_y, 0, m_numNode * sizeof(Real_t));
+  m_z = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));
+  memset(m_z, 0, m_numNode * sizeof(Real_t));
+
+  m_xd = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t)); // velocities 
+  memset(m_xd, 0, m_numNode * sizeof(Real_t)); // velocities 
+  m_yd = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));
+  memset(m_yd, 0, m_numNode * sizeof(Real_t));
+  m_zd = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));
+  memset(m_zd, 0, m_numNode * sizeof(Real_t));
+
+  m_xdd = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t)); // accelerations 
+  memset(m_xdd, 0, m_numNode * sizeof(Real_t)); // accelerations 
+  m_ydd = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));
+  memset(m_ydd, 0, m_numNode * sizeof(Real_t));
+  m_zdd = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));
+  memset(m_zdd, 0, m_numNode * sizeof(Real_t));
+
+  m_fx = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));  // forces 
+  memset(m_fx, 0, m_numNode * sizeof(Real_t));  // forces 
+  m_fy = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));
+  memset(m_fy, 0, m_numNode * sizeof(Real_t));
+  m_fz = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));
+  memset(m_fz, 0, m_numNode * sizeof(Real_t));
+
+  // Allocate tmp arrays
+  m_fx_elem = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_fx_elem, 0, m_numElem*8 * sizeof(Real_t));
+  m_fy_elem = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_fy_elem, 0, m_numElem*8 * sizeof(Real_t));
+  m_fz_elem = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_fz_elem, 0, m_numElem*8 * sizeof(Real_t));
+  m_dvdx = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_dvdx, 0, m_numElem*8 * sizeof(Real_t));
+  m_dvdy = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_dvdy, 0, m_numElem*8 * sizeof(Real_t));
+  m_dvdz = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_dvdz, 0, m_numElem*8 * sizeof(Real_t));
+  m_x8n = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_x8n, 0, m_numElem*8 * sizeof(Real_t));
+  m_y8n = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_y8n, 0, m_numElem*8 * sizeof(Real_t));
+  m_z8n = (Real_t*) acc_create_unified(NULL, m_numElem*8 * sizeof(Real_t));
+  memset(m_z8n, 0, m_numElem*8 * sizeof(Real_t));
+  m_sigxx = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_sigxx, 0, m_numElem * sizeof(Real_t));
+  m_sigyy = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_sigyy, 0, m_numElem * sizeof(Real_t));
+  m_sigzz = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_sigzz, 0, m_numElem * sizeof(Real_t));
+  m_determ = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_determ, 0, m_numElem * sizeof(Real_t));
+  m_dxx = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_dxx, 0, m_numElem * sizeof(Real_t));
+  m_dyy = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_dyy, 0, m_numElem * sizeof(Real_t));
+  m_dzz = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_dzz, 0, m_numElem * sizeof(Real_t));
+  m_vnew = (Real_t*) acc_create_unified(NULL, m_numElem * sizeof(Real_t));
+  memset(m_vnew, 0, m_numElem * sizeof(Real_t));
+#else
   m_regNumList = (Index_t*) calloc(m_numElem, sizeof(Index_t)) ;  // material indexset
 
   m_nodelist = (Index_t*) calloc(8*m_numElem, sizeof(Index_t));
@@ -134,13 +255,19 @@ void Domain(Int_t numRanks, Index_t colLoc,
   m_dyy = (Real_t*) calloc(m_numElem, sizeof(Real_t));
   m_dzz = (Real_t*) calloc(m_numElem, sizeof(Real_t));
   m_vnew = (Real_t*) calloc(m_numElem, sizeof(Real_t));
+#endif
   Index_t allElem = m_numElem +  /* local elem */
     2*m_sizeX*m_sizeY + /* plane ghosts */
     2*m_sizeX*m_sizeZ + /* row ghosts */
     2*m_sizeY*m_sizeZ ; /* col ghosts */
   AllocateGradients(allElem);
 
+#ifdef USE_UNIFIEDMEM
+  m_nodalMass = (Real_t*) acc_create_unified(NULL, m_numNode * sizeof(Real_t));  // mass 
+  memset(m_nodalMass, 0, m_numNode * sizeof(Real_t));  // mass 
+#else
   m_nodalMass = (Real_t*) calloc(m_numNode, sizeof(Real_t));  // mass 
+#endif
 
   SetupCommBuffers(edgeNodes);
 
@@ -335,7 +462,12 @@ SetupThreadSupportStructures()
    // allocate them
    if (1 /*numthreads > 1*/) {
      // set up node-centered indexing of elements 
+#ifdef USE_UNIFIEDMEM
+     m_nodeElemCount = (Index_t*) acc_create_unified(NULL, m_numNode * sizeof(Index_t)) ;
+     memset(m_nodeElemCount, 0, m_numNode * sizeof(Index_t)) ;
+#else
      m_nodeElemCount = (Index_t*) calloc(m_numNode, sizeof(Index_t)) ;
+#endif
 
      for (i=0; i<m_numNode; ++i) {
        m_nodeElemCount[i] = 0 ;
@@ -348,7 +480,12 @@ SetupThreadSupportStructures()
        }
      }
 
+#ifdef USE_UNIFIEDMEM
+     m_nodeElemStart = (Index_t*) acc_create_unified(NULL, m_numNode * sizeof(Index_t)) ;
+     memset(m_nodeElemStart, 0, m_numNode * sizeof(Index_t)) ;
+#else
      m_nodeElemStart = (Index_t*) calloc(m_numNode, sizeof(Index_t)) ;
+#endif
 
      m_nodeElemStart[0] = 0;
 
@@ -358,9 +495,14 @@ SetupThreadSupportStructures()
      }
 
 
+#ifdef USE_UNIFIEDMEM
      m_nodeElemCornerList =
-       (Index_t*) calloc(m_nodeElemStart[m_numNode-1] +
-       m_nodeElemCount[m_numNode-1], sizeof(Index_t));
+       (Index_t*) acc_create_unified(NULL, m_nodeElemStart[m_numNode-1] + m_nodeElemCount[m_numNode-1] * sizeof(Index_t));
+     memset(m_nodeElemCornerList, 0, m_nodeElemStart[m_numNode-1] + m_nodeElemCount[m_numNode-1] * sizeof(Index_t));
+#else
+     m_nodeElemCornerList =
+       (Index_t*) calloc(m_nodeElemStart[m_numNode-1] + m_nodeElemCount[m_numNode-1], sizeof(Index_t));
+#endif
 
      for (i=0; i < m_numNode; ++i) {
        m_nodeElemCount[i] = 0;
@@ -452,9 +594,18 @@ SetupCommBuffers(Int_t edgeNodes)
 #endif   
 
   // Boundary nodesets
+#ifdef USE_UNIFIEDMEM
+  m_symmX = (Index_t*) acc_create_unified(NULL, edgeNodes*edgeNodes * sizeof(Index_t));
+  memset(m_symmX, 0, edgeNodes*edgeNodes * sizeof(Index_t));
+  m_symmY = (Index_t*) acc_create_unified(NULL, edgeNodes*edgeNodes * sizeof(Index_t));
+  memset(m_symmY, 0, edgeNodes*edgeNodes * sizeof(Index_t));
+  m_symmZ = (Index_t*) acc_create_unified(NULL, edgeNodes*edgeNodes * sizeof(Index_t));
+  memset(m_symmZ, 0, edgeNodes*edgeNodes * sizeof(Index_t));
+#else
   m_symmX = (Index_t*) calloc(edgeNodes*edgeNodes, sizeof(Index_t));
   m_symmY = (Index_t*) calloc(edgeNodes*edgeNodes, sizeof(Index_t));
   m_symmZ = (Index_t*) calloc(edgeNodes*edgeNodes, sizeof(Index_t));
+#endif
 
   if (m_colLoc == 0) {
     m_symmXempty = false;
@@ -567,7 +718,12 @@ CreateRegionIndexSets(Int_t nr, Int_t balance)
   }
   // Second, allocate each region index set
   for (i=0 ; i<m_numReg ; ++i) {
+#ifdef USE_UNIFIEDMEM
+    m_regElemlist[i] = (Index_t*) acc_create_unified(NULL, m_regElemSize[i] * sizeof(Index_t));
+    memset(m_regElemlist[i], 0, m_regElemSize[i] * sizeof(Index_t));
+#else
     m_regElemlist[i] = (Index_t*) calloc(m_regElemSize[i], sizeof(Index_t));
+#endif
     m_regElemSize[i] = 0;
   }
   // Third, fill index sets
@@ -747,6 +903,23 @@ SetupBoundaryConditions(Int_t edgeElems)
 void
 AllocateGradients(Int_t numElem)
 {
+#ifdef USE_UNIFIEDMEM
+  // Velocity gradients
+  m_delv_xi = (Real_t*) acc_create_unified(NULL, numElem * sizeof(Real_t));
+  memset(m_delv_xi, 0, numElem * sizeof(Real_t));
+  m_delv_eta = (Real_t*) acc_create_unified(NULL, numElem * sizeof(Real_t));
+  memset(m_delv_eta, 0, numElem * sizeof(Real_t));
+  m_delv_zeta= (Real_t*) acc_create_unified(NULL, numElem * sizeof(Real_t));
+  memset(m_delv_zeta, 0, numElem * sizeof(Real_t));
+
+  // Position gradients
+  m_delx_xi = (Real_t*) acc_create_unified(NULL, numElem * sizeof(Real_t));
+  memset(m_delx_xi, 0, numElem * sizeof(Real_t));
+  m_delx_eta = (Real_t*) acc_create_unified(NULL, numElem * sizeof(Real_t));
+  memset(m_delx_eta, 0, numElem * sizeof(Real_t));
+  m_delx_zeta= (Real_t*) acc_create_unified(NULL, numElem * sizeof(Real_t));
+  memset(m_delx_zeta, 0, numElem * sizeof(Real_t));
+#else
   // Velocity gradients
   m_delv_xi = (Real_t*) calloc(numElem, sizeof(Real_t));
   m_delv_eta = (Real_t*) calloc(numElem, sizeof(Real_t));
@@ -756,12 +929,43 @@ AllocateGradients(Int_t numElem)
   m_delx_xi = (Real_t*) calloc(numElem, sizeof(Real_t));
   m_delx_eta = (Real_t*) calloc(numElem, sizeof(Real_t));
   m_delx_zeta= (Real_t*) calloc(numElem, sizeof(Real_t));
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////
 void
 AllocateRegionTmps(Int_t numElem)
 {
+#ifdef USE_UNIFIEDMEM
+  m_e_old = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_e_old, 0, numElem *  sizeof(Real_t));
+  m_delvc = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_delvc, 0, numElem *  sizeof(Real_t));
+  m_p_old = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_p_old, 0, numElem *  sizeof(Real_t));
+  m_q_old = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_q_old, 0, numElem *  sizeof(Real_t));
+  m_compression = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_compression, 0, numElem *  sizeof(Real_t));
+  m_compHalfStep = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_compHalfStep, 0, numElem *  sizeof(Real_t));
+  m_qq_old = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_qq_old, 0, numElem *  sizeof(Real_t));
+  m_ql_old = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_ql_old, 0, numElem *  sizeof(Real_t));
+  m_work = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_work, 0, numElem *  sizeof(Real_t));
+  m_p_new = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_p_new, 0, numElem *  sizeof(Real_t));
+  m_e_new = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_e_new, 0, numElem *  sizeof(Real_t));
+  m_q_new = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_q_new, 0, numElem *  sizeof(Real_t));
+  m_bvc = (Real_t*) acc_create_unified(NULL, numElem *  sizeof(Real_t));
+  memset(m_bvc, 0, numElem *  sizeof(Real_t));
+  m_pbvc = (Real_t*) acc_create_unified(NULL, numElem * sizeof(Real_t));
+  memset(m_pbvc, 0, numElem * sizeof(Real_t));
+#else
   m_e_old = (Real_t*) calloc(numElem, sizeof(Real_t));
   m_delvc = (Real_t*) calloc(numElem, sizeof(Real_t));
   m_p_old = (Real_t*) calloc(numElem, sizeof(Real_t));
@@ -776,6 +980,7 @@ AllocateRegionTmps(Int_t numElem)
   m_q_new = (Real_t*) calloc(numElem, sizeof(Real_t));
   m_bvc = (Real_t*) calloc(numElem, sizeof(Real_t));
   m_pbvc = (Real_t*) calloc(numElem, sizeof(Real_t));
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////
