@@ -12,6 +12,7 @@
 /libopenaccrtomp_openclpf.a
 /libopenaccrtdist_opencl.a
 /libresilience.a
+/libomphelper.a
 /make.header
 /resilience.o
 /copy2ARC.bash

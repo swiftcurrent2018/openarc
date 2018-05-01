@@ -814,6 +814,7 @@
 #SetAccEntryFunction=filename
 addIncludePath=__openarcrt__
 #macro=GANGS=1,WORKERS=1
+macro=TESTMODE=1
 defaultNumWorkers=64
 #maxNumGangs=N
 #maxNumWorkers=N

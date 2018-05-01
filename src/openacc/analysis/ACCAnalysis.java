@@ -483,6 +483,7 @@ public class ACCAnalysis extends AnalysisPass
 				} else {
 					directiveType = "kernels";
 				}
+				//PrintTools.println("[ACCAnalysis.declareDirectiveAnalysis()] data region annotation: " + dAnnot, 3);
 				Annotation iAnnot = at.getAnnotation(ACCAnnotation.class, "internal");
 				if( iAnnot == null ) {
 					iAnnot = new ACCAnnotation("internal", "_directive");
@@ -541,6 +542,36 @@ public class ACCAnalysis extends AnalysisPass
 						}
 					}
 				}
+				//If the compute region contains any gang reductions in it's body, include those in the accReductionSymbols set.
+				if( !directiveType.equals("data") ) {
+					List<ACCAnnotation> loopAnnotList = IRTools.collectPragmas(at, ACCAnnotation.class, "loop");
+					if( (loopAnnotList != null) && (!loopAnnotList.isEmpty()) ) {
+						for( ACCAnnotation lAnnot : loopAnnotList ) {
+							if( (lAnnot.containsKey("reduction")) && (lAnnot.containsKey("gang")) ) {
+								Object val = lAnnot.get("reduction");
+								try { 
+									Map valMap = (Map)val;
+									for( ReductionOperator op : (Set<ReductionOperator>)valMap.keySet() ) {
+										Set<SubArray> valSet = (Set<SubArray>)valMap.get(op); 
+										Set<Symbol> symDSet = null;
+										symDSet = AnalysisTools.subarraysToSymbols(valSet, IRSymbolOnly);
+										if( valSet.size() != symDSet.size() ) {
+											Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: cannot find symbols for " +
+													"subarrays of key," + "reduction" + ", in ACCAnnotation, " + lAnnot + AnalysisTools.getEnclosingAnnotationContext(lAnnot));
+										} else {
+											accReductionSymbols.addAll(symDSet);
+										}
+									}
+								} catch( Exception e ) {
+									Tools.exit("[ERROR 2 in ACCAnalysis.declareDirectiveAnalysis()]: <String, Set<SubArray>> type " +
+											"is expected for the value of key," + "reduction" + " in ACCAnnotation, " + lAnnot + AnalysisTools.getEnclosingAnnotationContext(lAnnot));
+								}
+
+							}
+						}
+					}
+				}
+				
 				//Put symbols in each dataclause into the internal symbol set.
 				for( String aKey : dAnnot.keySet() ) {
 					Object val = dAnnot.get(aKey);

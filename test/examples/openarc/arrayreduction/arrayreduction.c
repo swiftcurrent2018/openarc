@@ -14,6 +14,10 @@
 #define MSIZE 4096
 #pragma openarc #define MSIZE 4096
 
+#ifndef TESTMODE
+#define TESTMODE 1
+#endif
+
 int main(int argc, char** argv) {
     int size;
     float *A, *B, *C;
@@ -37,11 +41,22 @@ int main(int argc, char** argv) {
 
 #pragma acc data copyin(A[0:size], B[0:size])
     {
+#if TESTMODE == 1
 #pragma acc kernels loop independent gang(GANGS) worker(WORKERS) reduction(+:C[0:MSIZE], D)
         for (i = 0; i < size; i++) {
             C[i] += A[i] + B[i];
 			D += (float)i;
         }
+#else
+#pragma acc kernels loop independent gang(GANGS) worker(WORKERS) reduction(+:C[0:MSIZE])
+        for (i = 0; i < size; i++) {
+            C[i] += A[i] + B[i];
+        }
+#pragma acc kernels loop independent gang(GANGS) worker(WORKERS) reduction(+:D)
+        for (i = 0; i < size; i++) {
+			D += (float)i;
+        }
+#endif
     }
 
     for (i = 0; i < size; i++) {
