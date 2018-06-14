@@ -537,7 +537,7 @@ public class ACCAnalysis extends AnalysisPass
 								}
 							}
 						} catch( Exception e ) {
-							Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: <String, Set<SubArray>> type " +
+							Tools.exit("[ERROR in ACCAnalysis.declareDirectiveAnalysis()]: <ReductionOperator, Set<SubArray>> type " +
 									"is expected for the value of key," + "reduction" + " in ACCAnnotation, " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
 						}
 					}
@@ -563,7 +563,7 @@ public class ACCAnalysis extends AnalysisPass
 										}
 									}
 								} catch( Exception e ) {
-									Tools.exit("[ERROR 2 in ACCAnalysis.declareDirectiveAnalysis()]: <String, Set<SubArray>> type " +
+									Tools.exit("[ERROR 2 in ACCAnalysis.declareDirectiveAnalysis()]: <ReductionOperator, Set<SubArray>> type " +
 											"is expected for the value of key," + "reduction" + " in ACCAnnotation, " + lAnnot + AnalysisTools.getEnclosingAnnotationContext(lAnnot));
 								}
 

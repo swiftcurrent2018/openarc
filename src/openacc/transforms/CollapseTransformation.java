@@ -123,6 +123,7 @@ public class CollapseTransformation extends TransformPass {
     indexedLoops.add(accLoop);
     ACCAnnotation collapseAnnot = accLoop.getAnnotation(ACCAnnotation.class, "collapse");
     OmpAnnotation ompAnnot = accLoop.getAnnotation(OmpAnnotation.class, "for");
+    ACCAnnotation iAnnot = accLoop.getAnnotation(ACCAnnotation.class, "internal");
     int collapseLevel = (int)((IntegerLiteral)collapseAnnot.get("collapse")).getValue();
     boolean pnest = true;
     pnest = AnalysisTools.extendedPerfectlyNestedLoopChecking(accLoop, collapseLevel, indexedLoops, null);
@@ -238,6 +239,17 @@ public class CollapseTransformation extends TransformPass {
     		ompPrivSet.add(indexSym.getSymbolName());
     	}
     }
+    if( iAnnot != null) {
+    	Set<Symbol> accPrivateSymbols = (Set<Symbol>)iAnnot.get("accprivate");
+		if( accPrivateSymbols == null ) {
+			accPrivateSymbols = new HashSet<Symbol>();
+			iAnnot.put("accprivate", accPrivateSymbols);
+		}
+		accPrivateSymbols.add(newIndex.getSymbol());
+    	for(Symbol indexSym : indexSymbols ) {
+    		accPrivateSymbols.add(indexSym);
+    	}
+    }
 
     if( !collapseAnnot.containsKey("gang") && !collapseAnnot.containsKey("worker") &&
         !collapseAnnot.containsKey("vector") && !collapseAnnot.containsKey("seq") ) {
@@ -309,6 +321,7 @@ public class CollapseTransformation extends TransformPass {
     ACCAnnotation collapseAnnot = accLoop.getAnnotation(ACCAnnotation.class, "collapse");
     ACCAnnotation loopAnnot = accLoop.getAnnotation(ACCAnnotation.class, "loop");
     OmpAnnotation ompAnnot = accLoop.getAnnotation(OmpAnnotation.class, "for");
+    ACCAnnotation iAnnot = accLoop.getAnnotation(ACCAnnotation.class, "internal");
     int collapseLevel = (int)((IntegerLiteral)collapseAnnot.get("collapse")).getValue();
     boolean pnest = true;
     pnest = AnalysisTools.extendedPerfectlyNestedLoopChecking(accLoop, collapseLevel, indexedLoops, null);
@@ -430,6 +443,17 @@ public class CollapseTransformation extends TransformPass {
     	ompPrivSet.add(newIndex.toString());
     	for(Symbol indexSym : indexSymbols ) {
     		ompPrivSet.add(indexSym.getSymbolName());
+    	}
+    }
+    if( iAnnot != null) {
+    	Set<Symbol> accPrivateSymbols = (Set<Symbol>)iAnnot.get("accprivate");
+		if( accPrivateSymbols == null ) {
+			accPrivateSymbols = new HashSet<Symbol>();
+			iAnnot.put("accprivate", accPrivateSymbols);
+		}
+		accPrivateSymbols.add(newIndex.getSymbol());
+    	for(Symbol indexSym : indexSymbols ) {
+    		accPrivateSymbols.add(indexSym);
     	}
     }
     if( !collapseAnnot.containsKey("gang") && !collapseAnnot.containsKey("worker") &&

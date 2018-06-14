@@ -33,24 +33,27 @@ DEFSET_ACC = -D_N_=$(_N_)
 #      -c //compile the kernel and generate a Quartus II #
 #         //hardware design project without creating a   #
 #         //hardware configuration file.                 #
-#      --profile //instrument the OpenCL kernel pipeline #
+#      -profile //instrument the OpenCL kernel pipeline  #
 #                //with performance counters.            #
-#      --report  //display estimated resource usage on   #
+#      -report  //display estimated resource usage on    #
 #                //the screen.                           #
 #    (default: -march=emulator)                          #
 # AOCL_BOARD: set a target Altera FPGA board             #
-#    - "--board $(AOCL_BOARD)" will be added to the AOC  #
+#    - "-board=$(AOCL_BOARD)" will be added to the AOC   #
 #     in addition to the above flags                     # 
-#    (default: p385_hpc_a7)                              #
+#    - Examples                                          #
+#    p385_hpc_d5 //for Stratix V                         #
+#    p510t_sch_ax115 //for Arria 10 (Nallatech 510T)     #
 ##########################################################
 OMP ?= 0
 MODE ?= normal
-AOCL_BOARD ?= p385_hpc_d5
-#AOCL_BOARD ?= p385_hpc_a7
+#AOCL_BOARD ?= p385_hpc_d5
+AOCL_BOARD ?= p510t_sch_ax115 
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
-#AOCL_FLAGS ?= -v -c --report
-AOCL_FLAGS ?= --report
+#AOCL_FLAGS ?= -v -g -c -report
+AOCL_FLAGS ?= -v -c -report
+#AOCL_FLAGS ?= -v -report
 
 #########################################################
 # Use the following macros to give program-specific     #

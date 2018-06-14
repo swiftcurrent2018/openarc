@@ -1549,10 +1549,10 @@ public abstract class ACC2GPUTranslationTools {
 								tSym = ((AccessSymbol)tSym).getMemberSymbol();
 							}
 							lpriv_var = TransformTools.declareClonedArrayVariable(scope, sArray, localWPSymName, 
-									removeSpecs, addSpecs, true);
+									removeSpecs, addSpecs, false);
 						} else {
 							lpriv_var = TransformTools.declareClonedArrayVariable(scope, sArray, localWPSymName, 
-									removeSpecs, addSpecs, true);
+									removeSpecs, addSpecs, false);
 						}
 					}
 				}

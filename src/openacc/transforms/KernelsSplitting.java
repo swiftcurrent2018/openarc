@@ -253,7 +253,7 @@ public class KernelsSplitting extends TransformPass {
 							accSharedSymbols.removeAll(loopIndexSymbols);
 
 
-							//Step2-5: if loop index variable is not local and not included in the private clause, add it the set.
+							//Step2-5: if loop index variable is not local and not included in the private clause, add it to the set.
 							Set<SubArray> pSet = cAnnot.get("private");
 							if( pSet != null ) {
 								accPrivateSymbols.addAll(AnalysisTools.subarraysToSymbols(pSet, IRSymbolOnly));

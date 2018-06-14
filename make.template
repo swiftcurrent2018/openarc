@@ -54,16 +54,16 @@ help:
 #      -c //compile the kernel and generate a Quartus II #
 #         //hardware design project without creating a   #
 #         //hardware configuration file.                 #
-#      --profile //instrument the OpenCL kernel pipeline #
+#      -profile //instrument the OpenCL kernel pipeline  #
 #                //with performance counters.            #
-#      --report  //display estimated resource usage on   #
+#      -report  //display estimated resource usage on    #
 #                //the screen.                           #
 #    (default: -march=emulator)                          #
 # AOCL_BOARD: set a target Altera FPGA board             #
-#    - "--board $(AOCL_BOARD)" will be added to the AOC  #
+#    - "-board=$(AOCL_BOARD)" will be added to the AOC   #
 #     in addition to the above flags                     # 
 #    - Examples                                          #
-#    p385_hpc_d5 //for Stratix V (default)               #
+#    p385_hpc_d5 //for Stratix V                         #
 #    p510t_sch_ax115 //for Arria 10 (Nallatech 510T)     #
 # POSTCMD: optional commands to be executed after the    #
 #    main compilation                                    #
@@ -221,7 +221,7 @@ COMPILE_HOST: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
 	cd $(CETUS_OUTPUT); grep resilience $(KERNEL_FILE) > /dev/null && cp $(OPENARCLIB)/$(RESILIENCE_FILE) $(OPENARCLIB)/resilience.h ../$(TARGET); cd ../
 
 COMPILE_KERNEL: $($(CETUS_OUTPUT)/$(KERNLE_FILE)) makedirectories
-	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) --board $(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/$(KERNEL_BINARY); fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
+	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) -board=$(AOCL_BOARD) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/$(KERNEL_BINARY); fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
 	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); ./binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
 
 makedirectories:
