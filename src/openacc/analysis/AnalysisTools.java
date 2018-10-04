@@ -3401,6 +3401,10 @@ public abstract class AnalysisTools {
 	 */
 	public static Set<Symbol> getReductionSymbols(Annotatable at, boolean IRSymbolOnly) {
 		ACCAnnotation cAnnot = at.getAnnotation(ACCAnnotation.class, "reduction");
+                if (cAnnot == null) {
+                  return new HashSet<Symbol>();
+                }
+
 		Annotation iAnnot = at.getAnnotation(ACCAnnotation.class, "internal");
 		if( iAnnot == null ) {
 			iAnnot = new ACCAnnotation("internal", "_directive");
@@ -3411,7 +3415,7 @@ public abstract class AnalysisTools {
 		if( accReductionSymbols == null ) {
 			accReductionSymbols = new HashSet<Symbol>();
 			try { 
-				Map valMap = (Map)at.getAnnotation(ACCAnnotation.class, "reduction");
+                                Map valMap = (Map) cAnnot.get("reduction");
 				for( ReductionOperator op : (Set<ReductionOperator>)valMap.keySet() ) {
 					Set<SubArray> valSet = (Set<SubArray>)valMap.get(op); 
 					Set<Symbol> symDSet = null;

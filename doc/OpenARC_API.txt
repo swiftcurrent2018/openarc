@@ -30,6 +30,8 @@ pcreate( list )
 deviceptr( list ) 
 private( list ) 
 firstprivate( list ) 
+pipein (list)
+pipeout (list)
 
 
 #pragma acc kernels [clause[[,] clause]...]
@@ -52,6 +54,8 @@ pcopyout( list )
 present_or_create( list ) 
 pcreate( list ) 
 deviceptr( list ) 
+pipein (list)
+pipeout (list)
 
 
 #pragma acc data [clause[[,] clause]...]
@@ -73,7 +77,7 @@ pcopyout( list )
 present_or_create( list ) 
 pcreate( list ) 
 deviceptr( list ) 
-
+pipe (list)
 
 #pragma acc loop [clause[[,] clause]...]
 	for loop
@@ -260,6 +264,7 @@ unroll(unrollfactor)
 noreductionunroll(list)
 noploopswap
 noloopcollapse
+window(input-variable, output-variable)
 
 
 #pragma openarc ainfo procname(proc-name) kernelid(kernel-id)

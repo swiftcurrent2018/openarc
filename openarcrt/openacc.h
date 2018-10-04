@@ -81,6 +81,24 @@ extern int acc_is_present(h_void* hostPtr, size_t size);
 extern void acc_memcpy_to_device(d_void* dest, h_void* src, size_t bytes);
 extern void acc_memcpy_from_device(h_void* dest, d_void* src, size_t bytes);
 
+/////////////////////////////////////////////////////////// 
+// OpenACC Runtime Library Routines added in Version 2.5 //
+/////////////////////////////////////////////////////////// 
+extern void acc_memcpy_device(d_void* dest, d_void* src, size_t bytes);
+extern void acc_memcpy_device_async(d_void* dest, d_void* src, size_t bytes, int async);
+
+/////////////////////////////////////////////////////////// 
+// OpenACC Runtime Library Routines added in Version 2.6 //
+/////////////////////////////////////////////////////////// 
+extern void acc_attach(h_void** hostPtr);
+extern void acc_attach_async(h_void** hostPtr, int async);
+extern void acc_detach(h_void** hostPtr);
+extern void acc_detach_async(h_void** hostPtr, int async);
+extern void acc_detach_finalize(h_void** hostPtr);
+extern void acc_detach_finalize_async(h_void** hostPtr, int async);
+//extern size_t acc_get_property(int devicenum, acc_device_t devicetype, acc_device_property_t property);
+//extern const char* acc_get_property_string(int devicenum, acc_device_t devicetype, acc_device_property_t property);
+
 //////////////////////////////////////////////////////////////////////
 // Experimental OpenACC Runtime Library Routines for Unified Memory //
 // (Currently, these work only for specific versions of CUDA GPUs.) //

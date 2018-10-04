@@ -121,12 +121,15 @@ public class CollapseTransformation extends TransformPass {
     ArrayList<Symbol> indexSymbols = new ArrayList<Symbol>();
     ArrayList<ForLoop> indexedLoops = new ArrayList<ForLoop>();
     indexedLoops.add(accLoop);
+
     ACCAnnotation collapseAnnot = accLoop.getAnnotation(ACCAnnotation.class, "collapse");
     OmpAnnotation ompAnnot = accLoop.getAnnotation(OmpAnnotation.class, "for");
     ACCAnnotation iAnnot = accLoop.getAnnotation(ACCAnnotation.class, "internal");
+
     int collapseLevel = (int)((IntegerLiteral)collapseAnnot.get("collapse")).getValue();
     boolean pnest = true;
     pnest = AnalysisTools.extendedPerfectlyNestedLoopChecking(accLoop, collapseLevel, indexedLoops, null);
+
     if( !pnest ) {
       Tools.exit("[ERROR] OpenACC collapse clause is applicable only to perfectly nested loops;\n"
           + "Procedure name: " + proc.getSymbolName() + "\nTarget loop: \n" +
@@ -156,6 +159,7 @@ public class CollapseTransformation extends TransformPass {
       cStmt.addStatement(fBody);
       tRefStmt = fBody;
     }
+
     boolean containsConstSymbol = false;
     Set<Symbol> lSymbolSet = cStmt.getSymbols();
     for(Symbol lSym : lSymbolSet) {
@@ -171,6 +175,7 @@ public class CollapseTransformation extends TransformPass {
       Tools.exit("[ERROR in CollapseTransformation] can not find referent statement "
           + "to insert old index calculation statements; exit!" + AnalysisTools.getEnclosingContext(accLoop));
     }
+
     ArrayList<Expression> iterspaceList = new ArrayList<Expression>();
     ArrayList<Expression> lbList = new ArrayList<Expression>();
     Expression collapsedIterSpace = null;
@@ -203,6 +208,7 @@ public class CollapseTransformation extends TransformPass {
         }
       }
     }
+    //
     //Create a new index variable for the newly collapsed loop.
     CompoundStatement procBody = proc.getBody();
 
@@ -484,7 +490,7 @@ public class CollapseTransformation extends TransformPass {
 
     /* Single work-item FPGA kernel */
     if ( FPGASpecificTools.isFPGASingleWorkItemRegion(parallelRegion) ) {
-      FPGASpecificTools.collapseTransformation(accLoop, cStmt, indexSymbols, iterspaceList, collapseLevel);
+      FPGASpecificTools.collapseTransformation(accLoop, cStmt, indexSymbols, iterspaceList, lbList, collapseLevel);
     }
     /* Multiple work item or non-FPGA kernel */
     else {

@@ -402,10 +402,6 @@ public class acc2gpu extends CodeGenPass
 		//////////////////////////////////////////////////////////////////////////////////
 		TransformPass.run(new ACCLoopDirectivePreprocessor(program));
 
-		if( pipelineTransformation > 0 ) {
-			TransformPass.run(new PipeTransformation(program, OPENARC_ARCH==3));
-		}
-		
 		if( AccAnalysisOnly == 3 ) {
 			cleanAnnotations();
 			return;
@@ -459,6 +455,18 @@ public class acc2gpu extends CodeGenPass
 		
 		if( AccReduction > 0 ) {
 			AnalysisPass.run(new AccReduction(program, AccReduction, IRSymbolOnly));
+		}
+		
+		if( slidingWindowTransformation == 2 ) {
+			TransformPass.run(new SlidingWindowTransformation(program));
+		} else if( slidingWindowTransformation == 1 ) {
+			if( OPENARC_ARCH == 3 ) {
+				TransformPass.run(new SlidingWindowTransformation(program));
+			}
+		}
+
+		if( pipelineTransformation > 0 ) {
+			TransformPass.run(new PipeTransformation(program, OPENARC_ARCH==3));
 		}
 		
 		if( AccAnalysisOnly == 5 ) {

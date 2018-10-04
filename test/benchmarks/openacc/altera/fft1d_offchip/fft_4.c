@@ -24,7 +24,12 @@
 // See bigger comments in fft_8.cl for more information.
 // the input is ordered, the output is bit reversed
 
-#include "twid_radix_2_2.cl"
+//#include "twid_radix_2_2.cl"
+
+typedef struct {
+  float x;
+  float y;
+} flt2;
 
 // convenience struct representing the 4 elements processed in parallel
 typedef union {
@@ -37,7 +42,6 @@ typedef union {
   flt2 d[4];
 } flt2x4;
 
-
 typedef struct {
     flt2 i0;
     flt2 i1;
@@ -49,6 +53,11 @@ typedef struct {
     flt2 i1;
 } flt2x2;
 
+typedef struct {
+  flt2 i0;
+  flt2 i1;
+  flt2 i2;
+} flt2x3;
 
 flt2x4 butterfly(flt2x4 data) {
    flt2x4 res;
@@ -86,25 +95,25 @@ flt2x4 swap(flt2x4 data) {
    return data;
 }
 
-flt2x2 delay_data(flt2x2 data, const uint depth, const uint depth_mod_mask, 
-                local flt2x2 *shift_reg, uint inv_count) {
-   uint read_addr  = (0 + inv_count)     & depth_mod_mask; 
-   uint write_addr = (depth + inv_count) & depth_mod_mask; 
+flt2x2 delay_data(flt2x2 data, const int depth, const int depth_mod_mask, 
+                 flt2x2 *shift_reg, int inv_count) {
+   int read_addr  = (0 + inv_count)     & depth_mod_mask; 
+   int write_addr = (depth + inv_count) & depth_mod_mask; 
    shift_reg[write_addr] = data;
    return shift_reg[read_addr];
 }
 
-flt2x4 reorder_data(flt2x4 data, const uint depth, const uint depth_mod_mask,
-      local flt2 *delay1, 
-      local flt2 *delay2, 
-      uint inv_count, const uint stage, bool toggle) {
+flt2x4 reorder_data(flt2x4 data, const int depth, const int depth_mod_mask,
+       flt2 *delay1, 
+       flt2 *delay2, 
+      int inv_count, const int stage, int toggle) {
    // Use disconnected segments of length 'depth + 1' elements starting at 
    // 'shift_reg' to implement the delay elements. At the end of each FFT step, 
    // the contents of the entire buffer is shifted by 1 element
    flt2x2 t;
    t.i0 = data.i1;
    t.i1 = data.i3;
-   t = delay_data(t, depth, depth_mod_mask, (local flt2x2*)delay1, inv_count);
+   t = delay_data(t, depth, depth_mod_mask, ( flt2x2*)delay1, inv_count);
    data.i1 = t.i0;
    data.i3 = t.i1;
    
@@ -119,7 +128,7 @@ flt2x4 reorder_data(flt2x4 data, const uint depth, const uint depth_mod_mask,
 
    t.i0 = data.i0;
    t.i1 = data.i2;
-   t = delay_data(t, depth, depth_mod_mask, (local flt2x2*)delay2, inv_count);
+   t = delay_data(t, depth, depth_mod_mask, ( flt2x2*)delay2, inv_count);
    data.i0 = t.i0;
    data.i2 = t.i1;
    
@@ -133,25 +142,25 @@ flt2 comp_mult(flt2 a, flt2 b) {
    return res;
 }
 
-flt2 twiddle(uint index, uint stage, uint log_size, uint stream) {
+flt2 twiddle(int index, int stage, int log_size, int stream) {
    flt2 twid;
    
-   constant float * twiddles_cos[TWID_STAGES][3] = {{tc00, tc01, tc02}, 
+   const float * twiddles_cos[TWID_STAGES][3] = {{tc00, tc01, tc02}, 
                                                     {tc10, tc11, tc12}, 
                                                     {tc20, tc21, tc22}, 
                                                     {tc30, tc31, tc32}, 
                                                     {tc40, tc41, tc42}};
                                                     
-   constant float * twiddles_sin[TWID_STAGES][3] = {{ts00, ts01, ts02}, 
+   const float * twiddles_sin[TWID_STAGES][3] = {{ts00, ts01, ts02}, 
                                                     {ts10, ts11, ts12}, 
                                                     {ts20, ts21, ts22}, 
                                                     {ts30, ts31, ts32}, 
                                                     {ts40, ts41, ts42}};
 
    // use the hardcoded twiddle fators, if available - otherwise, compute them
-   uint twid_stage = stage >> 1;
+   int twid_stage = stage >> 1;
    if (log_size <= (TWID_STAGES * 2 + 2)) {
-      uint index_mult = 1 << (TWID_STAGES * 2 + 2 - log_size);
+      int index_mult = 1 << (TWID_STAGES * 2 + 2 - log_size);
       twid.x = twiddles_cos[twid_stage][stream][index * index_mult];
       twid.y = twiddles_sin[twid_stage][stream][index * index_mult];
 
@@ -159,7 +168,7 @@ flt2 twiddle(uint index, uint stage, uint log_size, uint stream) {
    return twid;
 }
 
-flt2x3 get_twid(uint index, uint stage, uint log_size) {
+flt2x3 get_twid(int index, int stage, int log_size) {
   flt2x3 result;
   result.i0 = twiddle(index, stage, log_size, 0);
   result.i1 = twiddle(index, stage, log_size, 1);
@@ -175,7 +184,7 @@ flt2x4 complex_rotate_given_twid(flt2x4 data, flt2x3 twid) {
 }
 
 // FFT complex rotation building block
-flt2x4 complex_rotate(flt2x4 data, uint index, uint stage, uint log_size, bool bypass) {
+flt2x4 complex_rotate(flt2x4 data, int index, int stage, int log_size, int bypass) {
   flt2x3 twid = get_twid(index, stage, log_size);
   if (bypass) {
     twid.i0.x = 1.0f; twid.i0.y = 0.0f;
@@ -187,23 +196,23 @@ flt2x4 complex_rotate(flt2x4 data, uint index, uint stage, uint log_size, bool b
 
 typedef struct {
   flt2x4 data;
-  uint size;
-  uint logM;
-  uint step;
-  uint inv_count;
-  uint two_to_logM_m_stage;
-  uint delay;
-  uint delay_mod_mask;
+  int size;
+  int logM;
+  int step;
+  int inv_count;
+  int two_to_logM_m_stage;
+  int delay;
+  int delay_mod_mask;
 } interstage_data;
 
-interstage_data do_single_stage (const uint stage, interstage_data d, 
-                                 local flt2 *delay1,
-                                 local flt2 *delay2)
+interstage_data do_single_stage (const int stage, interstage_data d, 
+                                  flt2 *delay1,
+                                  flt2 *delay2)
 {
-  bool complex_stage = stage & 1;
-  bool process_stage = (stage < (d.logM - 1));
+  int complex_stage = stage & 1;
+  int process_stage = (stage < (d.logM - 1));
 
-  uint data_index = d.step; 
+  int data_index = d.step; 
 
   if (process_stage) d.data = butterfly(d.data);
 
@@ -214,13 +223,13 @@ interstage_data do_single_stage (const uint stage, interstage_data d,
   if (process_stage) d.data = swap(d.data);
 
   // Reordering multiplexers must toggle every 'delay' steps
-  bool toggle = data_index & d.delay;
+  int toggle = data_index & d.delay;
   
 
   // Assign unique sections of the buffer for the set of delay elements at
   // each stage
-  uint delay_arg = process_stage ? d.delay : 0;
-  uint toggle_arg = process_stage ? toggle : 0;
+  int delay_arg = process_stage ? d.delay : 0;
+  int toggle_arg = process_stage ? toggle : 0;
 
   d.data = reorder_data(d.data, delay_arg, d.delay_mod_mask, delay1, delay2, d.inv_count, stage, toggle_arg);
 
@@ -238,22 +247,22 @@ interstage_data do_single_stage (const uint stage, interstage_data d,
 
 
 // process 4 input points towards and a FFT/iFFT of size N, N >= 4
-flt2x4 fft_step(flt2x4 data, uint inv_count, uint step, 
-                  local flt2 *delay1, local flt2 *delay11,
-                  local flt2 *delay2, local flt2 *delay21,
-                  local flt2 *delay3, local flt2 *delay31,
-                  local flt2 *delay4, local flt2 *delay41,
-                  local flt2 *delay5, local flt2 *delay51,
-                  local flt2 *delay6, local flt2 *delay61,
-                  local flt2 *delay7, local flt2 *delay71,
-                  local flt2 *delay8, local flt2 *delay81,
-                  local flt2 *delay9, local flt2 *delay91,
-                  local flt2 *delayA, local flt2 *delayA1,
-                  bool inverse, const uint logN, const uint logM, const uint size) {
+flt2x4 fft_step(flt2x4 data, int inv_count, int step, 
+                   flt2 *delay1,  flt2 *delay11,
+                   flt2 *delay2,  flt2 *delay21,
+                   flt2 *delay3,  flt2 *delay31,
+                   flt2 *delay4,  flt2 *delay41,
+                   flt2 *delay5,  flt2 *delay51,
+                   flt2 *delay6,  flt2 *delay61,
+                   flt2 *delay7,  flt2 *delay71,
+                   flt2 *delay8,  flt2 *delay81,
+                   flt2 *delay9,  flt2 *delay91,
+                   flt2 *delayA,  flt2 *delayA1,
+                  int inverse, const int logN, const int logM, const int size) {
 
 
-    const uint sizeN = 1 << logN;
-    const uint logD = (logN - logM);
+    const int sizeN = 1 << logN;
+    const int logD = (logN - logM);
 
     // Swap real and imaginary components if doing an inverse transform
     if (inverse) {

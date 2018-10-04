@@ -1104,6 +1104,95 @@ public class ASPENModelAnalysis extends AnalysisPass {
 					}
 				}
 			} 
+			if( lExpressionAnalyzer.getIntops() > 0 ) {
+				//[FIXME] For easy hacking, flops resource is still used to represent integer operations.
+				ASPENAnnotation aspenAnnot = at.getAnnotation(ASPENAnnotation.class, "flops");
+				String intType = "integer";
+/*				if( lExpressionAnalyzer.dataTypes != null ) {
+					if( lExpressionAnalyzer.containsDoubles ) {
+						intType = "dp";
+					} else if( lExpressionAnalyzer.containsFloats ) {
+						intType = "sp";
+					}
+				}*/
+				if( aspenAnnot == null ) {
+					aspenAnnot = controlAnnot;
+					ASPENResource flops = new ASPENResource(
+							new IntegerLiteral(lExpressionAnalyzer.getIntops()));
+					if( intType != null ) {
+						ASPENTrait tTrait = new ASPENTrait(intType);
+						flops.addTrait(tTrait);
+					}
+					//[FIXME] Temporarily disabled since current Aspen tools cannot distinguish 
+					//SIMD integer operations from SIMD float operations.
+/*					if( lExpressionAnalyzer.isSIMDizable ) {
+						ASPENTrait tTrait = new ASPENTrait("simd");
+						flops.addTrait(tTrait);
+					}*/
+					Set<ASPENResource> flopsSet = new HashSet<ASPENResource>();
+					flopsSet.add(flops);
+					aspenAnnot.put("flops", flopsSet);
+				} else {
+					Set<ASPENResource> flopsSet = aspenAnnot.get("flops");
+					boolean foundSIMD = false;
+					boolean foundIntops = false;
+					for( ASPENResource flops : flopsSet ) {
+						//[FIXME] Current implementation consider traits only partially (float type).
+						if( !foundIntops ) {
+							Set<ASPENTrait> tTraitSet = flops.getTraitsOfType(ASPENTrait.TraitType.FlopsTrait);
+							if( intType != null ) {
+								for( ASPENTrait tTrait : tTraitSet ) {
+									if( tTrait.getTrait().equals("simd")) {
+										foundSIMD = true;
+									}
+									if( tTrait.getTrait().equals(intType)) {
+										foundIntops = true;
+										break;
+									}
+								}
+							} else {
+								if( tTraitSet.isEmpty() ) {
+									foundIntops = true;
+								}
+							}
+							if( foundIntops ) {
+								Expression value = flops.getValue();
+								if( value instanceof IntegerLiteral ) {
+									IntegerLiteral nValue = 
+										new IntegerLiteral(((IntegerLiteral)value).getValue() + lExpressionAnalyzer.getIntops());
+									nValue.swapWith(value);
+								} else {
+									Expression nValue = new BinaryExpression(value.clone(), BinaryOperator.ADD,
+											new IntegerLiteral(lExpressionAnalyzer.getIntops()));
+									nValue.swapWith(value);
+								}
+								//[FIXME] Temporarily disabled since current Aspen tools cannot distinguish 
+								//SIMD integer operations from SIMD float operations.
+/*								if( lExpressionAnalyzer.isSIMDizable && !foundSIMD ) {
+									ASPENTrait tTrait = new ASPENTrait("simd");
+									flops.addTrait(tTrait);
+								}*/
+								break;
+							}
+						}
+					}
+					if(!foundIntops) {
+						ASPENResource flops = new ASPENResource(
+								new IntegerLiteral(lExpressionAnalyzer.getIntops()));
+						if( intType != null ) {
+							ASPENTrait tTrait = new ASPENTrait(intType);
+							flops.addTrait(tTrait);
+						}
+						//[FIXME] Temporarily disabled since current Aspen tools cannot distinguish 
+						//SIMD integer operations from SIMD float operations.
+/*						if( lExpressionAnalyzer.isSIMDizable ) {
+							ASPENTrait tTrait = new ASPENTrait("simd");
+							flops.addTrait(tTrait);
+						}*/
+						flopsSet.add(flops);
+					}
+				}
+			} 
 			if( !lExpressionAnalyzer.LOADS.isEmpty() ) {
 				Map<Symbol, Map<Expression, Expression>> symStatusMap = lExpressionAnalyzer.LOADS;
 				Set<Symbol> symSet = symStatusMap.keySet();

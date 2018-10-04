@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.11 (Jan. 05, 2018)
+OpenARC V0.12 (Oct. 05, 2018)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -11,7 +11,7 @@ OpenARC provides extensible environment, where various performance
 optimizations, traceability mechanisms, fault tolerance techniques, etc., 
 can be built for better debuggability/performance/resilience on the complex 
 accelerator computing. 
-OpenARC supports the full feature set of OpenACC V1.0 and performs 
+OpenARC supports the full feature set of OpenACC V1.0 (+ subset of V2.0) and performs 
 source-to-source transformations, targeting heterogeneous devices, such as 
 NVIDIA GPUs, AMD GPUs, Intel MICs, and Altera FPGAs.
 Please refer to the OpenARC website (http://ft.ornl.gov/research/openarc) to 
@@ -54,7 +54,7 @@ INSTALLATION
 
     - For Linux/Unix command line users
         
-        If LLVM support is desired, first build LLVM and jllvm as described in jllvm/README-openarc.  (LLVM support is necessary only for NVL-C and FITL, and NOT included in the release version.)
+        If LLVM support is desired, first build LLVM and jllvm as described in jllvm/README-openarc.  (LLVM support is necessary only for NVL-C and FITL, and NOT included in the public release version.)
 
         Run the script build.sh (e.g., $ build.sh bin #compile and create a wrapper script)
 
@@ -190,6 +190,7 @@ pre-compiled by the built-in binBuilder tool (binBuilder_cuda or binBuilder_open
 FEATURES/UPDATES
 -------------------------------------------------------------------------------
 * New features
+	- Add several FPGA-specific optimizations (e.g., collapse optimization, reduction optimization, and sliding-window optimization): see ./README_FPGA_example.txt file to learn an example configuration procedure to use the OpenACC-to-FPGA translation framework.
 
 	- Add new flags: expand-user-source and inlineFunctionTransformation
 
@@ -219,6 +220,7 @@ CONTENTS
 This OpenARC release has the following contents.
 
 * README.md     - This file
+* README_FPGA_example.txt     - Example configuration setup procedure to use OpenACC-to-FPGA framework
 * lib                    - Archived classes (jar)
 * build.sh               - Command line build script
 * build.xml              - Build configuration for Apache Ant

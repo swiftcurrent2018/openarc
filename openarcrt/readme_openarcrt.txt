@@ -1,7 +1,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC Runtime V0.11 (Jan. 05, 2018)
+OpenARC Runtime V0.12 (Oct. 05, 2018)
 
 OpenARC Runtime implements APIs used by the output program translated
 by OpenARC.

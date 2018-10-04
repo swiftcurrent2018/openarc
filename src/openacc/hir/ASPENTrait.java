@@ -31,8 +31,10 @@ public class ASPENTrait extends ASPENExpression {
     private static HashSet<String> data_traits = 
     		new HashSet<String>(Arrays.asList("Array", "Matrix", "3DVolume"
     				));
+    //[FIXME] integer trait is treated as a flops trait; this should be fixed when Aspen supports Integer 
+    //operations as a separate resource.
     private static HashSet<String> flops_traits = 
-    		new HashSet<String>(Arrays.asList("sp", "dp", "simd", "fmad", "complex"));
+    		new HashSet<String>(Arrays.asList("sp", "dp", "simd", "fmad", "complex", "integer"));
     private static HashSet<String> memory_traits = 
     		new HashSet<String>(Arrays.asList("stride", "random"));
     private static HashSet<String> message_traits = 

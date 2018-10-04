@@ -389,6 +389,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
       {
         //Using Altera.
         acc_init_call.addArgument(new NameID("acc_device_altera"));
+        //acc_init_call.addArgument(new NameID("acc_device_intel"));
       } else if(targetArch == 2)
       {
         //Using Xeon Phi
@@ -404,6 +405,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
       {
         //Using Altera.
         acc_shutdown_call.addArgument(new NameID("acc_device_altera"));
+        //acc_shutdown_call.addArgument(new NameID("acc_device_intel"));
       } else if(targetArch == 2)
       {
         //Using Xeon Phi
@@ -1831,7 +1833,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
       //Add OpenCL Extension pragma to enable Altera channel extension. //
       ////////////////////////////////////////////////////////////////////
       if( addPipeEnableMacro ) {
-        PragmaAnnotation pAnnot = new PragmaAnnotation("OPENCL EXTENSION cl_altera_channels : enable");
+        PragmaAnnotation pAnnot = new PragmaAnnotation("OPENCL EXTENSION cl_intel_channels: enable");
         kernelsTranslationUnit.addDeclaration(new AnnotationDeclaration(pAnnot));
         addPipeEnableMacro = false;
       }
@@ -1887,7 +1889,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         {
           Symbol accessSymbol = SymbolTools.getSymbolOf(access.getArrayName());
           if( IRSym.equals(accessSymbol) ) {
-            FunctionCall piperead_call = new FunctionCall(new NameID("read_channel_altera"));
+            //FunctionCall piperead_call = new FunctionCall(new NameID("read_channel_altera"));
+            FunctionCall piperead_call = new FunctionCall(new NameID("read_channel_intel"));
             piperead_call.addArgument(pipeVar);
             piperead_call.swapWith(access);
           }
@@ -1901,13 +1904,14 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
             Traversable parent = access.getParent();
             if( parent instanceof AssignmentExpression ) {
               Expression RHS = ((AssignmentExpression)parent).getRHS().clone();
-              FunctionCall pipewrite_call = new FunctionCall(new NameID("write_channel_altera"));
+              //FunctionCall pipewrite_call = new FunctionCall(new NameID("write_channel_altera")); (deprecated)
+              FunctionCall pipewrite_call = new FunctionCall(new NameID("write_channel_intel"));
               pipewrite_call.addArgument(pipeVar);
               pipewrite_call.addArgument(RHS);
               pipewrite_call.swapWith((AssignmentExpression)parent);
             } else {
               Tools.exit("[ERROR in ACC2OPENCLTranslator.genOpenCLCodesForDataClause()] unsupported access pattern for "
-                  + "pipeout variable " + hostVar + "in the following expression: " + parent + 
+                  + "pipeout variable '" + hostVar + "' in the following expression: " + parent + 
                   "ACC Annotation: " + dAnnot + AnalysisTools.getEnclosingContext(at));
             }
           }
@@ -3810,6 +3814,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
           Expression fArg = fCall.getArgument(0);
           String fArgStr = fArg.toString();
           if( fArgStr.equals("acc_device_altera") ) {
+            //if( fArgStr.equals("acc_device_intel") ) {
             if(targetArch == 3) {
               newExp = new IntegerLiteral(1);
             } else {
@@ -3837,386 +3842,378 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                 new BinaryExpression(fArg.clone(), BinaryOperator.COMPARE_NE, new NameID("acc_device_none")));
           }
           fCall.swapWith(newExp);
+          }
         }
       }
-    }
 
-    //Perform loop permutation if permute clause existing.
-    List<ARCAnnotation> pmAnnots = AnalysisTools.ipCollectPragmas(region, ARCAnnotation.class, "permute", null);
-    if( pmAnnots != null ) {
-      for( ARCAnnotation pmAnnot : pmAnnots ) {
-        Annotatable fAt = pmAnnot.getAnnotatable();
-        if( fAt instanceof ForLoop ) {
-          List<Expression> permuteList = (List<Expression>)pmAnnot.get("permute");
-          ForLoop targetLoop = (ForLoop)fAt;
-          ForLoop outermostLoop = TransformTools.permuteLoops(targetLoop, permuteList, false);
-          if( outermostLoop == null ) {
-            PrintTools.println("\n[WARNING] The permute transformation for the following region is failed. " +
-                "\n Please check whether inserted clause is correct." +
+      //Perform loop permutation if permute clause existing.
+      List<ARCAnnotation> pmAnnots = AnalysisTools.ipCollectPragmas(region, ARCAnnotation.class, "permute", null);
+      if( pmAnnots != null ) {
+        for( ARCAnnotation pmAnnot : pmAnnots ) {
+          Annotatable fAt = pmAnnot.getAnnotatable();
+          if( fAt instanceof ForLoop ) {
+            List<Expression> permuteList = (List<Expression>)pmAnnot.get("permute");
+            ForLoop targetLoop = (ForLoop)fAt;
+            ForLoop outermostLoop = TransformTools.permuteLoops(targetLoop, permuteList, false);
+            if( outermostLoop == null ) {
+              PrintTools.println("\n[WARNING] The permute transformation for the following region is failed. " +
+                  "\n Please check whether inserted clause is correct." +
+                  "\nOpenACC annotation: " + cAnnot +
+                  "\nEnclosing Procedure: " + cProc.getSymbolName() + "\n", 0);
+              continue;
+            } else {
+              if( outermostLoop != targetLoop ) {
+                pmAnnot.remove("permute");
+                ARCAnnotation transAnnot = outermostLoop.getAnnotation(ARCAnnotation.class, "transform");
+                if( transAnnot == null ) {
+                  transAnnot = new ARCAnnotation("transform", "_directive");
+                  outermostLoop.annotate(transAnnot);
+                }
+                transAnnot.put("permute", permuteList);
+              }
+            }
+          } else {
+            PrintTools.println("\n[WARNING] permute clause is applicable only to for-loops; the clause in the " +
+                "following region will be ignored." + 
                 "\nOpenACC annotation: " + cAnnot +
                 "\nEnclosing Procedure: " + cProc.getSymbolName() + "\n", 0);
             continue;
-          } else {
-            if( outermostLoop != targetLoop ) {
-              pmAnnot.remove("permute");
-              ARCAnnotation transAnnot = outermostLoop.getAnnotation(ARCAnnotation.class, "transform");
-              if( transAnnot == null ) {
-                transAnnot = new ARCAnnotation("transform", "_directive");
-                outermostLoop.annotate(transAnnot);
-              }
-              transAnnot.put("permute", permuteList);
-            }
           }
-        } else {
-          PrintTools.println("\n[WARNING] permute clause is applicable only to for-loops; the clause in the " +
-              "following region will be ignored." + 
-              "\nOpenACC annotation: " + cAnnot +
-              "\nEnclosing Procedure: " + cProc.getSymbolName() + "\n", 0);
-          continue;
         }
       }
-    }
 
-    ////////////////////////////////////////////////////////
-    // Auxiliary variables used for GPU kernel conversion //
-    ////////////////////////////////////////////////////////
-    VariableDeclaration bytes_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuBytes");
-    Identifier cloned_bytes = new Identifier((VariableDeclarator)bytes_decl.getDeclarator(0));
-    VariableDeclaration gmem_decl = null;
-    Identifier gmemsize = null;
-    VariableDeclaration smem_decl = null;
-    Identifier smemsize = null;
-    ExpressionStatement gMemAdd_stmt = null;
-    ExpressionStatement gMemSub_stmt =  null;
-    if( opt_addSafetyCheckingCode ) {
-      gmem_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuGmemSize");
-      gmemsize = new Identifier((VariableDeclarator)gmem_decl.getDeclarator(0));					
-      smem_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuSmemSize");
-      smemsize = new Identifier((VariableDeclarator)smem_decl.getDeclarator(0));					
-      gMemAdd_stmt = new ExpressionStatement( new AssignmentExpression(gmemsize,
-            AssignmentOperator.ADD, (Identifier)cloned_bytes.clone()) );
-      gMemSub_stmt = new ExpressionStatement( new AssignmentExpression((Identifier)gmemsize.clone(),
-            AssignmentOperator.SUBTRACT, (Identifier)cloned_bytes.clone()) );
-    }
-    VariableDeclaration numBlocks_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuNumBlocks");
-    Identifier numBlocks = new Identifier((VariableDeclarator)numBlocks_decl.getDeclarator(0));					
-    VariableDeclaration numThreads_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuNumThreads");
-    Identifier numThreads = new Identifier((VariableDeclarator)numThreads_decl.getDeclarator(0));					
-    VariableDeclaration totalNumThreads_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "totalGpuNumThreads");
-    Identifier totalNumThreads = new Identifier((VariableDeclarator)totalNumThreads_decl.getDeclarator(0));					
-    ExpressionStatement gpuBytes_stmt = null;
-    VariableDeclarator rowidSymbol = null;
-
-    // The following variables will be added to each GPU kernel.
-    // int _bid;
-    // int _bsize;
-    // int _tid;
-    // int _gtid;
-    Identifier bid = null;
-    Identifier bsize = null;
-    Identifier tid = null;
-    Identifier gtid = null;
-
-
-    ///////////////////////////////////////////////////////////////////////////////////////
-    // Create a kernel procedure, to which the current compute region is converted into, //
-    // and a function call to the kernel procedure.                                      //
-    ///////////////////////////////////////////////////////////////////////////////////////
-    List<Specifier> new_proc_ret_type = new LinkedList<Specifier>();
-    new_proc_ret_type.add(OpenCLSpecifier.OPENCL_KERNEL);
-    new_proc_ret_type.add(Specifier.VOID);
-
-    Procedure new_proc = new Procedure(new_proc_ret_type,
-        new ProcedureDeclarator(new NameID(new_func_name),
-          new LinkedList()), new CompoundStatement());
-    List<Expression> kernelConf = new ArrayList<Expression>();
-    KernelFunctionCall call_to_new_proc = new KernelFunctionCall(new NameID(
-          new_func_name), new LinkedList(), kernelConf);
-    call_to_new_proc.setLinkedProcedure(new_proc);
-    Statement kernelCall_stmt = new ExpressionStatement(call_to_new_proc);
-
-    /////////////////////////////////////////////////////////////////////////////
-    // Apply LoopCollapse optimization; currently LoopCollapse optimization is //
-    // applied to Sparse Matrix-Vector Product (SPMV) patterns only.           //
-    /////////////////////////////////////////////////////////////////////////////
-    //DEBUG: temporarily disabled due to incomplete implemenation of CUDALoopCollapse.
-    /*		if( opt_LoopCollapse && !noloopcollapse ) {
-                loopCollapseHandler.handleSMVP(region, false);
-                rowidSymbol = loopCollapseHandler.getGpuRowidSymbol();
-                if( rowidSymbol != null) {
-                if( region instanceof ForLoop ) {
-                region = ((ForLoop)region).getBody();
-                }
-                call_to_new_proc.addArgument(new Identifier(rowidSymbol));
-                new_proc.addDeclaration(loopCollapseHandler.getRowidDecl());
-                }
-                }*/
-
-
-    ///////////////////////////////////////////////
-    // Handle array-element-caching on register. //
-    ///////////////////////////////////////////////
-    Set<Symbol> arrayElmtCacheSymbols = ACC2GPUTranslationTools.arrayCachingOnRegister(region, shrdArryOnRegMap, ROShrdArryOnRegSet);
-
-    ///////////////////////////////////////////////////
-    //Set GPU kernel configuration parameters partI. //
-    ///////////////////////////////////////////////////
-    // dim3 dimGrid_kernelname(num_gangsX, num_gangsY, num_gangsZ);
-    // dim3 dimBlock_kernelname(num_workersX, num_workersY, num_workersZ);
-    // gpuNumBlocks = num_gangsX * num_gangsY * num_gangsZ;
-    // gpuNumThreads = num_workersX * num_workersY * num_workersZ;
-    // totalGpuNumThreads = gpuNumThreads * gpuNumBlocks;
-
-    List<Expression> num_workers = new LinkedList<Expression>();
-    List<Expression> num_gangs = new LinkedList<Expression>();
-    Expression totalnumgangs = null;
-    Expression totalnumworkers = null;
-    tAnnot = region.getAnnotation(ACCAnnotation.class, "seq");
-    boolean isSingleTask = false;
-    if( tAnnot != null ) {
-      if( !AnalysisTools.ipContainPragmas(region, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null) ) {
-        isSingleTask = true;
+      ////////////////////////////////////////////////////////
+      // Auxiliary variables used for GPU kernel conversion //
+      ////////////////////////////////////////////////////////
+      VariableDeclaration bytes_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuBytes");
+      Identifier cloned_bytes = new Identifier((VariableDeclarator)bytes_decl.getDeclarator(0));
+      VariableDeclaration gmem_decl = null;
+      Identifier gmemsize = null;
+      VariableDeclaration smem_decl = null;
+      Identifier smemsize = null;
+      ExpressionStatement gMemAdd_stmt = null;
+      ExpressionStatement gMemSub_stmt =  null;
+      if( opt_addSafetyCheckingCode ) {
+        gmem_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuGmemSize");
+        gmemsize = new Identifier((VariableDeclarator)gmem_decl.getDeclarator(0));					
+        smem_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuSmemSize");
+        smemsize = new Identifier((VariableDeclarator)smem_decl.getDeclarator(0));					
+        gMemAdd_stmt = new ExpressionStatement( new AssignmentExpression(gmemsize,
+              AssignmentOperator.ADD, (Identifier)cloned_bytes.clone()) );
+        gMemSub_stmt = new ExpressionStatement( new AssignmentExpression((Identifier)gmemsize.clone(),
+              AssignmentOperator.SUBTRACT, (Identifier)cloned_bytes.clone()) );
       }
-    }
-    if( isSingleTask ) {
-      num_gangs.add(new IntegerLiteral(1));
-      num_gangs.add(new IntegerLiteral(1));
-      num_gangs.add(new IntegerLiteral(1));
-      totalnumgangs = new IntegerLiteral(1);
-      num_workers.add(new IntegerLiteral(1));
-      num_workers.add(new IntegerLiteral(1));
-      num_workers.add(new IntegerLiteral(1));
-      totalnumworkers = new IntegerLiteral(1);
-    } else {
-      if( cRegionKind.equals("parallel") ) {
-        tAnnot = region.getAnnotation(ACCAnnotation.class, "num_gangs");
-        if( tAnnot == null ) {
-          Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] num_gangs clause is missing;\n" +
-              "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
-        } else {
-          num_gangs.add(((Expression)tAnnot.get("num_gangs")).clone());
-          num_gangs.add(new IntegerLiteral(1));
-          num_gangs.add(new IntegerLiteral(1));
-        }
-        totalnumgangs = num_gangs.get(0).clone();
-        tAnnot = region.getAnnotation(ACCAnnotation.class, "num_workers");
-        if( tAnnot == null ) {
-          num_workers.add(new IntegerLiteral(defaultNumWorkers));
-        } else {
-          num_workers.add(((Expression)tAnnot.get("num_workers")).clone());
-        }
-        num_workers.add(new IntegerLiteral(1));
-        num_workers.add(new IntegerLiteral(1));
-        totalnumworkers = num_workers.get(0).clone();
-        if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
+      VariableDeclaration numBlocks_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuNumBlocks");
+      Identifier numBlocks = new Identifier((VariableDeclarator)numBlocks_decl.getDeclarator(0));					
+      VariableDeclaration numThreads_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "gpuNumThreads");
+      Identifier numThreads = new Identifier((VariableDeclarator)numThreads_decl.getDeclarator(0));					
+      VariableDeclaration totalNumThreads_decl = (VariableDeclaration)SymbolTools.findSymbol(global_table, "totalGpuNumThreads");
+      Identifier totalNumThreads = new Identifier((VariableDeclarator)totalNumThreads_decl.getDeclarator(0));					
+      ExpressionStatement gpuBytes_stmt = null;
+      VariableDeclarator rowidSymbol = null;
+
+      // The following variables will be added to each GPU kernel.
+      // int _bid;
+      // int _bsize;
+      // int _tid;
+      // int _gtid;
+      Identifier bid = null;
+      Identifier bsize = null;
+      Identifier tid = null;
+      Identifier gtid = null;
+
+
+      ///////////////////////////////////////////////////////////////////////////////////////
+      // Create a kernel procedure, to which the current compute region is converted into, //
+      // and a function call to the kernel procedure.                                      //
+      ///////////////////////////////////////////////////////////////////////////////////////
+      List<Specifier> new_proc_ret_type = new LinkedList<Specifier>();
+      new_proc_ret_type.add(OpenCLSpecifier.OPENCL_KERNEL);
+      new_proc_ret_type.add(Specifier.VOID);
+
+      Procedure new_proc = new Procedure(new_proc_ret_type,
+          new ProcedureDeclarator(new NameID(new_func_name),
+            new LinkedList()), new CompoundStatement());
+      List<Expression> kernelConf = new ArrayList<Expression>();
+      KernelFunctionCall call_to_new_proc = new KernelFunctionCall(new NameID(
+            new_func_name), new LinkedList(), kernelConf);
+      call_to_new_proc.setLinkedProcedure(new_proc);
+      Statement kernelCall_stmt = new ExpressionStatement(call_to_new_proc);
+
+      /////////////////////////////////////////////////////////////////////////////
+      // Apply LoopCollapse optimization; currently LoopCollapse optimization is //
+      // applied to Sparse Matrix-Vector Product (SPMV) patterns only.           //
+      /////////////////////////////////////////////////////////////////////////////
+      //DEBUG: temporarily disabled due to incomplete implemenation of CUDALoopCollapse.
+      /*		if( opt_LoopCollapse && !noloopcollapse ) {
+                        loopCollapseHandler.handleSMVP(region, false);
+                        rowidSymbol = loopCollapseHandler.getGpuRowidSymbol();
+                        if( rowidSymbol != null) {
+                        if( region instanceof ForLoop ) {
+                        region = ((ForLoop)region).getBody();
+                        }
+                        call_to_new_proc.addArgument(new Identifier(rowidSymbol));
+                        new_proc.addDeclaration(loopCollapseHandler.getRowidDecl());
+                        }
+                        }*/
+
+
+      ///////////////////////////////////////////////
+      // Handle array-element-caching on register. //
+      ///////////////////////////////////////////////
+      Set<Symbol> arrayElmtCacheSymbols = ACC2GPUTranslationTools.arrayCachingOnRegister(region, shrdArryOnRegMap, ROShrdArryOnRegSet);
+
+      ///////////////////////////////////////////////////
+      //Set GPU kernel configuration parameters partI. //
+      ///////////////////////////////////////////////////
+      // dim3 dimGrid_kernelname(num_gangsX, num_gangsY, num_gangsZ);
+      // dim3 dimBlock_kernelname(num_workersX, num_workersY, num_workersZ);
+      // gpuNumBlocks = num_gangsX * num_gangsY * num_gangsZ;
+      // gpuNumThreads = num_workersX * num_workersY * num_workersZ;
+      // totalGpuNumThreads = gpuNumThreads * gpuNumBlocks;
+
+      List<Expression> num_workers = new LinkedList<Expression>();
+      List<Expression> num_gangs = new LinkedList<Expression>();
+      Expression totalnumgangs = null;
+      Expression totalnumworkers = null;
+      tAnnot = region.getAnnotation(ACCAnnotation.class, "seq");
+      boolean isSingleTask = false;
+      if( tAnnot != null ) {
+        if( !AnalysisTools.ipContainPragmas(region, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null) ) {
           isSingleTask = true;
         }
+      }
+      if( isSingleTask ) {
+        num_gangs.add(new IntegerLiteral(1));
+        num_gangs.add(new IntegerLiteral(1));
+        num_gangs.add(new IntegerLiteral(1));
+        totalnumgangs = new IntegerLiteral(1);
+        num_workers.add(new IntegerLiteral(1));
+        num_workers.add(new IntegerLiteral(1));
+        num_workers.add(new IntegerLiteral(1));
+        totalnumworkers = new IntegerLiteral(1);
       } else {
-        tAnnot = region.getAnnotation(ACCAnnotation.class, "gangconf");
-        if( tAnnot == null ) {
-          Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] internal gangconf clause is missing;\n" +
-              "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
-        } else {
-          List<Expression> gangConfs = tAnnot.get("gangconf");
-          int tsize = gangConfs.size();
-          for( int i=0; i<tsize; i++ ) {
-            num_gangs.add(i, gangConfs.get(i).clone());
+        if( cRegionKind.equals("parallel") ) {
+          tAnnot = region.getAnnotation(ACCAnnotation.class, "num_gangs");
+          if( tAnnot == null ) {
+            Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] num_gangs clause is missing;\n" +
+                "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
+          } else {
+            num_gangs.add(((Expression)tAnnot.get("num_gangs")).clone());
+            num_gangs.add(new IntegerLiteral(1));
+            num_gangs.add(new IntegerLiteral(1));
           }
-          for( int i=tsize; i<3; i++ ) {
-            num_gangs.add(i, new IntegerLiteral(1));
+          totalnumgangs = num_gangs.get(0).clone();
+          tAnnot = region.getAnnotation(ACCAnnotation.class, "num_workers");
+          if( tAnnot == null ) {
+            num_workers.add(new IntegerLiteral(defaultNumWorkers));
+          } else {
+            num_workers.add(((Expression)tAnnot.get("num_workers")).clone());
           }
-        }
-        tAnnot = region.getAnnotation(ACCAnnotation.class, "totalnumgangs");
-        if( tAnnot == null ) {
-          Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] internal totalnumgangs clause is missing;\n" +
-              "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
+          num_workers.add(new IntegerLiteral(1));
+          num_workers.add(new IntegerLiteral(1));
+          totalnumworkers = num_workers.get(0).clone();
+          if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
+            isSingleTask = true;
+          }
         } else {
-          totalnumgangs = ((Expression)tAnnot.get("totalnumgangs")).clone();
-        }
-
-        List<ACCAnnotation> tAnnotList = IRTools.collectPragmas(region, ACCAnnotation.class, "workerconf");
-        if( (tAnnotList == null) || tAnnotList.isEmpty() ) {
-          Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] internal workerconf clause is missing;\n" +
-              "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
-        } else {
-          int m = 0;
-          for( ACCAnnotation tAn : tAnnotList ) {
-            List<Expression> workerConfs = tAn.get("workerconf");
-            int tsize = workerConfs.size();
-            if( m == 0 ) {
-              for( int i=0; i<tsize; i++ ) {
-                num_workers.add(i, workerConfs.get(i).clone());
-              }
-              for( int i=tsize; i<3; i++ ) {
-                num_workers.add(i, new IntegerLiteral(1));
-              }
-            } else {
-              for( int i=0; i<tsize; i++ ) {
-                Expression exp1 = num_workers.get(i);
-                Expression exp2 = workerConfs.get(i).clone();
-                Expression exp3 = Symbolic.simplify(new MinMaxExpression(false, exp1, exp2));
-                num_workers.set(i, exp3);
-              }
+          tAnnot = region.getAnnotation(ACCAnnotation.class, "gangconf");
+          if( tAnnot == null ) {
+            Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] internal gangconf clause is missing;\n" +
+                "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
+          } else {
+            List<Expression> gangConfs = tAnnot.get("gangconf");
+            int tsize = gangConfs.size();
+            for( int i=0; i<tsize; i++ ) {
+              num_gangs.add(i, gangConfs.get(i).clone());
             }
-            m++;
-          }
-        }
-        tAnnotList = IRTools.collectPragmas(region, ACCAnnotation.class, "totalnumworkers");
-        if( (tAnnotList == null) || tAnnotList.isEmpty() ) {
-          Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] internal totalnumworkers clause is missing;\n" +
-              "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
-        } else {
-          int m = 0;
-          for( ACCAnnotation tAn : tAnnotList ) {
-            Expression exp1 = tAn.get("totalnumworkers");
-            if( m == 0 ) {
-              totalnumworkers = exp1.clone();
-            } else {
-              totalnumworkers = Symbolic.simplify(new MinMaxExpression(false, totalnumworkers, exp1));
+            for( int i=tsize; i<3; i++ ) {
+              num_gangs.add(i, new IntegerLiteral(1));
             }
-            m++;
+          }
+          tAnnot = region.getAnnotation(ACCAnnotation.class, "totalnumgangs");
+          if( tAnnot == null ) {
+            Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] internal totalnumgangs clause is missing;\n" +
+                "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
+          } else {
+            totalnumgangs = ((Expression)tAnnot.get("totalnumgangs")).clone();
+          }
+
+          List<ACCAnnotation> tAnnotList = IRTools.collectPragmas(region, ACCAnnotation.class, "workerconf");
+          if( (tAnnotList == null) || tAnnotList.isEmpty() ) {
+            Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] internal workerconf clause is missing;\n" +
+                "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
+          } else {
+            int m = 0;
+            for( ACCAnnotation tAn : tAnnotList ) {
+              List<Expression> workerConfs = tAn.get("workerconf");
+              int tsize = workerConfs.size();
+              if( m == 0 ) {
+                for( int i=0; i<tsize; i++ ) {
+                  num_workers.add(i, workerConfs.get(i).clone());
+                }
+                for( int i=tsize; i<3; i++ ) {
+                  num_workers.add(i, new IntegerLiteral(1));
+                }
+              } else {
+                for( int i=0; i<tsize; i++ ) {
+                  Expression exp1 = num_workers.get(i);
+                  Expression exp2 = workerConfs.get(i).clone();
+                  Expression exp3 = Symbolic.simplify(new MinMaxExpression(false, exp1, exp2));
+                  num_workers.set(i, exp3);
+                }
+              }
+              m++;
+            }
+          }
+          tAnnotList = IRTools.collectPragmas(region, ACCAnnotation.class, "totalnumworkers");
+          if( (tAnnotList == null) || tAnnotList.isEmpty() ) {
+            Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] internal totalnumworkers clause is missing;\n" +
+                "Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
+          } else {
+            int m = 0;
+            for( ACCAnnotation tAn : tAnnotList ) {
+              Expression exp1 = tAn.get("totalnumworkers");
+              if( m == 0 ) {
+                totalnumworkers = exp1.clone();
+              } else {
+                totalnumworkers = Symbolic.simplify(new MinMaxExpression(false, totalnumworkers, exp1));
+              }
+              m++;
+            }
+          }
+          if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
+            isSingleTask = true;
           }
         }
-        if( totalnumgangs.toString().equals("1") && totalnumworkers.toString().equals("1") ) {
-          isSingleTask = true;
+      }
+
+      /////////////////////////////////////////////////////////////////////////////////////////
+      // Apply stripmining transformation to fit the iteration size of a worksharing loop to //
+      // the specified gang/worker sizes.                                                    //
+      /////////////////////////////////////////////////////////////////////////////////////////
+      // DEBUG: Don't apply in FPGA single task reduction context. This transformation currently 
+      // adds unwanted get_group_id() function calls. This should be fixed.
+      // ==> Don't apply if it is a single task.
+
+      //List<ACCAnnotation> reduction_annots = IRTools.collectPragmas(region, ACCAnnotation.class, "reduction");
+      //if (!(isSingleTask && targetArch == 3 && reduction_annots != null && reduction_annots.size() > 0)) {
+      if( !isSingleTask ) {
+        ForLoop newLoop = worksharingLoopStripmining(cProc, cAnnot, cRegionKind);
+        if( newLoop != null ) { //Target region is changed; update related local references.
+          if( confRefStmt == region ) {
+            confRefStmt = newLoop;
+            confRefParent = (CompoundStatement)newLoop.getParent();
+          }
+          region = newLoop;
+          cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
         }
       }
-    }
 
-    /////////////////////////////////////////////////////////////////////////////////////////
-    // Apply stripmining transformation to fit the iteration size of a worksharing loop to //
-    // the specified gang/worker sizes.                                                    //
-    /////////////////////////////////////////////////////////////////////////////////////////
-    // DEBUG: Don't apply in FPGA single task reduction context. This transformation currently 
-    // adds unwanted get_group_id() function calls. This should be fixed.
-    // ==> Don't apply if it is a single task.
+      if( enableFaultInjection ) {
+        //Assign a random number to target thread ID (_ti_targetThread).
+        //e.g., _ti_targetThread = HI_genrandom_int(# of total threads);
+        Symbol tThreadSym =  (Symbol)cAnnot.remove("targetThread");
+        if( tThreadSym != null ) {
+          //[TODO] Check ftthread clause in the current region or in enclosing 
+          //resilience region.
+          Expression ftthread = null;
+          ARCAnnotation ttAnnot = region.getAnnotation(ARCAnnotation.class, "ftthread");
+          if(  ttAnnot == null ) {
+            ttAnnot = AnalysisTools.ipFindFirstPragmaInParent(region, 
+                ARCAnnotation.class, "resilience", null, null);
+          }
+          if( (ttAnnot != null) && ttAnnot.containsKey("ftthread") ) {
+            ftthread = ttAnnot.get("ftthread");
+          }
+          Expression REXP = null;
+          if( ftthread == null ) {
+            FunctionCall fCall = new FunctionCall(new NameID("HI_genrandom_int"));
+            fCall.addArgument(Symbolic.multiply(totalnumgangs.clone(), totalnumworkers.clone()));
+            REXP = fCall;
+          } else {
+            REXP = ftthread.clone();
+          }
+          Statement thStmt = new ExpressionStatement(new AssignmentExpression(new Identifier(tThreadSym),
+                AssignmentOperator.NORMAL, REXP));
+          CompoundStatement tPStmt = (CompoundStatement)region.getParent();
+          tPStmt.addStatementBefore(region, thStmt);
 
-    //List<ACCAnnotation> reduction_annots = IRTools.collectPragmas(region, ACCAnnotation.class, "reduction");
-    //if (!(isSingleTask && targetArch == 3 && reduction_annots != null && reduction_annots.size() > 0)) {
-    if( !isSingleTask ) {
-      ForLoop newLoop = worksharingLoopStripmining(cProc, cAnnot, cRegionKind);
-      if( newLoop != null ) { //Target region is changed; update related local references.
-        if( confRefStmt == region ) {
-          confRefStmt = newLoop;
-          confRefParent = (CompoundStatement)newLoop.getParent();
         }
-        region = newLoop;
-        cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
       }
-    }
 
-    if( enableFaultInjection ) {
-      //Assign a random number to target thread ID (_ti_targetThread).
-      //e.g., _ti_targetThread = HI_genrandom_int(# of total threads);
-      Symbol tThreadSym =  (Symbol)cAnnot.remove("targetThread");
-      if( tThreadSym != null ) {
-        //[TODO] Check ftthread clause in the current region or in enclosing 
-        //resilience region.
-        Expression ftthread = null;
-        ARCAnnotation ttAnnot = region.getAnnotation(ARCAnnotation.class, "ftthread");
-        if(  ttAnnot == null ) {
-          ttAnnot = AnalysisTools.ipFindFirstPragmaInParent(region, 
-              ARCAnnotation.class, "resilience", null, null);
-        }
-        if( (ttAnnot != null) && ttAnnot.containsKey("ftthread") ) {
-          ftthread = ttAnnot.get("ftthread");
-        }
-        Expression REXP = null;
-        if( ftthread == null ) {
-          FunctionCall fCall = new FunctionCall(new NameID("HI_genrandom_int"));
-          fCall.addArgument(Symbolic.multiply(totalnumgangs.clone(), totalnumworkers.clone()));
-          REXP = fCall;
-        } else {
-          REXP = ftthread.clone();
-        }
-        Statement thStmt = new ExpressionStatement(new AssignmentExpression(new Identifier(tThreadSym),
-              AssignmentOperator.NORMAL, REXP));
-        CompoundStatement tPStmt = (CompoundStatement)region.getParent();
-        tPStmt.addStatementBefore(region, thStmt);
+      List<Statement> preList = new LinkedList<Statement>(); 
+      List<Statement> postList = new LinkedList<Statement>(); 
 
-      }
-    }
+      //////////////////////////////////////////
+      // Handle private/firstprivate clauses. //
+      //////////////////////////////////////////
 
-    List<Statement> preList = new LinkedList<Statement>(); 
-    List<Statement> postList = new LinkedList<Statement>(); 
-
-    //////////////////////////////////////////
-    // Handle private/firstprivate clauses. //
-    //////////////////////////////////////////
-    // DEBUG: This should be fixed to always apply on FPGA
-    // Don't apply:
-    //    #pragma acc parallel/kernels loop reduction(...)
-    // Do apply:
-    //    #pragma acc parallel/kernels 
-    //      #pragma acc loop
-    
-    //if (!(isSingleTask && targetArch == 3 && region.containsAnnotation(ACCAnnotation.class, "reduction") )) {
-    //if( !isSingleTask ) {
       OpenCLTranslationTools.privateTransformation(cProc, region, cRegionKind, ifCond, asyncID, confRefStmt, prefixStmts,
           postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
           opt_addSafetyCheckingCode, arrayElmtCacheSymbols, isSingleTask);
-    //}
-    if( SkipGPUTranslation == 3 ) {
-      return;
-    }
 
-    //////////////////////////////////////
-    // Perform reduction transformation //
-    //////////////////////////////////////
+      if( SkipGPUTranslation == 3 ) {
+        return;
+      }
 
-    if (isSingleTask) {
-    	if( targetArch == 3 ) {
-    		Statement newregion = FPGASpecificTools.reductionTransformation(cProc, region, cRegionKind, 
-    				call_to_new_proc, new_proc, IRSymbolOnly, isSingleTask);
-    		if( (newregion != null) && (newregion != region) ) {
-    			if( confRefStmt == region ) {
-    				confRefStmt = newregion;
-    				confRefParent = (CompoundStatement)newregion.getParent();
-    			}
-    			region = newregion;
-    			cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
-    		}
-    	}
-    	OpenCLTranslationTools.singleTaskReductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
-    			postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
-    			opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
-    			memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
-    } else {
-    	OpenCLTranslationTools.reductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
-    			postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
-    			opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
-    			memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
-    }
+      //////////////////////////////////////
+      // Perform reduction transformation //
+      //////////////////////////////////////
 
-    if( SkipGPUTranslation == 4 ) {
-      return;
-    }
+      if (isSingleTask) {
+        if( targetArch == 3 ) {
+          Statement newregion = FPGASpecificTools.reductionTransformation(cProc, region, cRegionKind, 
+              call_to_new_proc, new_proc, IRSymbolOnly, isSingleTask);
+          if( (newregion != null) && (newregion != region) ) {
+            if( confRefStmt == region ) {
+              confRefStmt = newregion;
+              confRefParent = (CompoundStatement)newregion.getParent();
+            }
+            region = newregion;
+            cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
+          }
+        }
+        OpenCLTranslationTools.singleTaskReductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
+            postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
+            opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
+            memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
+      } else {
+        OpenCLTranslationTools.reductionTransformation(cProc, region, cRegionKind, redIfCond, asyncID, confRefStmt, prefixStmts,
+            postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
+            opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
+            memtrVerification, marginOfError, SIMDWidth, minCheckValue, localRedVarConf);
+      }
 
-    ///////////////////////////////////////////////////
-    // Handle kernels/parallel loop with seq clause. //
-    ///////////////////////////////////////////////////
-    if( (region instanceof ForLoop) && region.containsAnnotation(ACCAnnotation.class, "seq") &&
-        !AnalysisTools.ipContainPragmas(region, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null)) {
-      ACC2GPUTranslationTools.seqKernelLoopTransformation(cProc, (ForLoop)region, cRegionKind, ifCond, asyncID, confRefStmt,
-          preList, postList, prefixStmts, postscriptStmts, call_to_new_proc, new_proc, main_TrUnt, 
-          OpenACCHeaderEndMap, IRSymbolOnly, opt_addSafetyCheckingCode, targetModel, opt_AssumeNoAliasing);
-    }
+      if( SkipGPUTranslation == 4 ) {
+        return;
+      }
 
-    //////////////////////////////////////////////////////////////////////////
-    // Insert barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE) calls for //
-    // each #pragam acc barrier directive.                                  //
-    // CLK_LOCAL_MEM_FENCE - The barrier function will either flush any     //
-    //   variables stored in local memory or queue a memory fence to ensure //
-    //   correct ordering of memory operations to local memory.             //
-    // CLK_GLOBAL_MEM_FENCE - The barrier function will queue a memory fence//
-    //   to ensure correct ordering of memory operations to global memory.  //
-    //   This can be useful when work-items, for example, write to buffer or//
-    //   image objects and then want to read the updated data.              //
-    //////////////////////////////////////////////////////////////////////////
-    List<ACCAnnotation> barrierAnnots = AnalysisTools.ipCollectPragmas(
-        region, ACCAnnotation.class, "barrier", null);
-    if( barrierAnnots != null ) {
-      /*			FunctionCall syncCall = new FunctionCall(new NameID("barrier"));
+      ///////////////////////////////////////////////////
+      // Handle kernels/parallel loop with seq clause. //
+      ///////////////////////////////////////////////////
+      if( (region instanceof ForLoop) && region.containsAnnotation(ACCAnnotation.class, "seq") &&
+          !AnalysisTools.ipContainPragmas(region, ACCAnnotation.class, ACCAnnotation.parallelWorksharingClauses, false, null)) {
+        ACC2GPUTranslationTools.seqKernelLoopTransformation(cProc, (ForLoop)region, cRegionKind, ifCond, asyncID, confRefStmt,
+            preList, postList, prefixStmts, postscriptStmts, call_to_new_proc, new_proc, main_TrUnt, 
+            OpenACCHeaderEndMap, IRSymbolOnly, opt_addSafetyCheckingCode, targetModel, opt_AssumeNoAliasing);
+      }
+
+      //////////////////////////////////////////////////////////////////////////
+      // Insert barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE) calls for //
+      // each #pragam acc barrier directive.                                  //
+      // CLK_LOCAL_MEM_FENCE - The barrier function will either flush any     //
+      //   variables stored in local memory or queue a memory fence to ensure //
+      //   correct ordering of memory operations to local memory.             //
+      // CLK_GLOBAL_MEM_FENCE - The barrier function will queue a memory fence//
+      //   to ensure correct ordering of memory operations to global memory.  //
+      //   This can be useful when work-items, for example, write to buffer or//
+      //   image objects and then want to read the updated data.              //
+      //////////////////////////////////////////////////////////////////////////
+      List<ACCAnnotation> barrierAnnots = AnalysisTools.ipCollectPragmas(
+          region, ACCAnnotation.class, "barrier", null);
+      if( barrierAnnots != null ) {
+        /*			FunctionCall syncCall = new FunctionCall(new NameID("barrier"));
                                 syncCall.addArgument(new BinaryExpression(new NameID("CLK_LOCAL_MEM_FENCE"),
                                 BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("CLK_GLOBAL_MEM_FENCE")));
                                 ExpressionStatement syncCallStmt = new ExpressionStatement(syncCall);
@@ -4226,527 +4223,527 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                                 syncCStmt.annotate(bAnnot);
                                 bStmt.swapWith(syncCStmt);
                                 }*/
-      for( ACCAnnotation bAnnot : barrierAnnots ) {
-        Statement bStmt = (Statement)bAnnot.getAnnotatable();
-        FunctionCall syncCall = new FunctionCall(new NameID("barrier"));
-        String bArg = bAnnot.get("barrier");
-        if( bArg.equals("acc_mem_fence_local") ) {
-          syncCall.addArgument(new NameID("CLK_LOCAL_MEM_FENCE"));
+        for( ACCAnnotation bAnnot : barrierAnnots ) {
+          Statement bStmt = (Statement)bAnnot.getAnnotatable();
+          FunctionCall syncCall = new FunctionCall(new NameID("barrier"));
+          String bArg = bAnnot.get("barrier");
+          if( bArg.equals("acc_mem_fence_local") ) {
+            syncCall.addArgument(new NameID("CLK_LOCAL_MEM_FENCE"));
 
-        } else if( bArg.equals("acc_mem_fence_global") ) {
-          syncCall.addArgument(new NameID("CLK_GLOBAL_MEM_FENCE"));
+          } else if( bArg.equals("acc_mem_fence_global") ) {
+            syncCall.addArgument(new NameID("CLK_GLOBAL_MEM_FENCE"));
+          } else {
+            syncCall.addArgument(new BinaryExpression(new NameID("CLK_LOCAL_MEM_FENCE"),
+                  BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("CLK_GLOBAL_MEM_FENCE")));
+          }
+          ExpressionStatement syncCallStmt = new ExpressionStatement(syncCall);
+          syncCallStmt.annotate(bAnnot);
+          bStmt.swapWith(syncCallStmt);
+        }
+      }
+
+      pitchedSymMap.clear();
+      textureSymMap.clear();
+      textureOffsetMap.clear();
+      constantSymMap.clear();
+      Set<Symbol> callerProcSymSet = new HashSet<Symbol>();
+      // Perform kernel code conversion for each shared symbol
+      Collection<Symbol> sortedSet = AnalysisTools.getSortedCollection(accSharedMap.keySet());
+      for( Symbol sharedSym : sortedSet ) {
+        SubArray sArray = accSharedMap.get(sharedSym);
+        Expression hostVar = sArray.getArrayName();
+
+        List<Specifier> removeSpecs = new ArrayList<Specifier>();
+        removeSpecs.add(Specifier.STATIC);
+        removeSpecs.add(Specifier.CONST);
+        removeSpecs.add(Specifier.EXTERN);
+        List<Specifier> typeSpecs = new ArrayList<Specifier>();
+        Boolean isStruct = false;
+        Symbol IRSym = sharedSym;
+        //PrintTools.println(sharedSym.toString() + " " + isScalar + " " + isStruct + " " + cudaSharedROSet.contains(sharedSym) + " " +  accDevicePtrSet.contains(sharedSym), 0);
+        if( sharedSym instanceof PseudoSymbol ) {
+          IRSym = ((PseudoSymbol)sharedSym).getIRSymbol();
+        }
+        if( IRSymbolOnly ) {
+          hostVar = new Identifier(IRSym);
+          typeSpecs.addAll(((VariableDeclaration)IRSym.getDeclaration()).getSpecifiers());
+          isStruct = SymbolTools.isStruct(IRSym, region);
         } else {
-          syncCall.addArgument(new BinaryExpression(new NameID("CLK_LOCAL_MEM_FENCE"),
-                BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("CLK_GLOBAL_MEM_FENCE")));
+          Symbol tSym = sharedSym;
+          while( tSym instanceof AccessSymbol ) {
+            tSym = ((AccessSymbol)tSym).getMemberSymbol();
+          }
+          typeSpecs.addAll(((VariableDeclaration)tSym.getDeclaration()).getSpecifiers());
+          isStruct = SymbolTools.isStruct(tSym, region);
         }
-        ExpressionStatement syncCallStmt = new ExpressionStatement(syncCall);
-        syncCallStmt.annotate(bAnnot);
-        bStmt.swapWith(syncCallStmt);
-      }
-    }
-
-    pitchedSymMap.clear();
-    textureSymMap.clear();
-    textureOffsetMap.clear();
-    constantSymMap.clear();
-    Set<Symbol> callerProcSymSet = new HashSet<Symbol>();
-    // Perform kernel code conversion for each shared symbol
-    Collection<Symbol> sortedSet = AnalysisTools.getSortedCollection(accSharedMap.keySet());
-    for( Symbol sharedSym : sortedSet ) {
-      SubArray sArray = accSharedMap.get(sharedSym);
-      Expression hostVar = sArray.getArrayName();
-
-      List<Specifier> removeSpecs = new ArrayList<Specifier>();
-      removeSpecs.add(Specifier.STATIC);
-      removeSpecs.add(Specifier.CONST);
-      removeSpecs.add(Specifier.EXTERN);
-      List<Specifier> typeSpecs = new ArrayList<Specifier>();
-      Boolean isStruct = false;
-      Symbol IRSym = sharedSym;
-      //PrintTools.println(sharedSym.toString() + " " + isScalar + " " + isStruct + " " + cudaSharedROSet.contains(sharedSym) + " " +  accDevicePtrSet.contains(sharedSym), 0);
-      if( sharedSym instanceof PseudoSymbol ) {
-        IRSym = ((PseudoSymbol)sharedSym).getIRSymbol();
-      }
-      if( IRSymbolOnly ) {
-        hostVar = new Identifier(IRSym);
-        typeSpecs.addAll(((VariableDeclaration)IRSym.getDeclaration()).getSpecifiers());
-        isStruct = SymbolTools.isStruct(IRSym, region);
-      } else {
-        Symbol tSym = sharedSym;
-        while( tSym instanceof AccessSymbol ) {
-          tSym = ((AccessSymbol)tSym).getMemberSymbol();
-        }
-        typeSpecs.addAll(((VariableDeclaration)tSym.getDeclaration()).getSpecifiers());
-        isStruct = SymbolTools.isStruct(tSym, region);
-      }
-      typeSpecs.removeAll(removeSpecs);
-      //Replace C restrict keyword to CUDA __restrict__ keyword.
-      /*			if( typeSpecs.remove(Specifier.RESTRICT) ) {
+        typeSpecs.removeAll(removeSpecs);
+        //Replace C restrict keyword to CUDA __restrict__ keyword.
+        /*			if( typeSpecs.remove(Specifier.RESTRICT) ) {
                                 typeSpecs.add(OpenCLSpecifier.RESTRICT);
                                 }*/
 
-      Boolean isArray = SymbolTools.isArray(sharedSym);
-      Boolean isPointer = SymbolTools.isPointer(sharedSym);
-      if( sharedSym instanceof NestedDeclarator ) {
-        isPointer = true;
-      }
-      for( Object tObj : typeSpecs ) {
-        if( tObj instanceof UserSpecifier ) {
-          IDExpression tExp = ((UserSpecifier)tObj).getIDExpression();
-          String tExpStr = tExp.getName();
-          if( !tExpStr.startsWith("struct") && !tExpStr.startsWith("enum") ) {
-            Declaration tDecl = SymbolTools.findSymbol(global_table, tExp);
-            if( tDecl != null ) {
-              if( tDecl instanceof VariableDeclaration ) {
-                if( ((VariableDeclaration)tDecl).getSpecifiers().contains(Specifier.TYPEDEF) ) {
-                  Declarator tDeclr = ((VariableDeclaration)tDecl).getDeclarator(0);
-                  if( tDeclr instanceof NestedDeclarator ) {
-                    isPointer =  true;
-                    break;
-                  } else if( tDeclr instanceof VariableDeclarator ) {
-                    if( SymbolTools.isArray((VariableDeclarator)tDeclr) ) {
-                      isArray= true;
+        Boolean isArray = SymbolTools.isArray(sharedSym);
+        Boolean isPointer = SymbolTools.isPointer(sharedSym);
+        if( sharedSym instanceof NestedDeclarator ) {
+          isPointer = true;
+        }
+        for( Object tObj : typeSpecs ) {
+          if( tObj instanceof UserSpecifier ) {
+            IDExpression tExp = ((UserSpecifier)tObj).getIDExpression();
+            String tExpStr = tExp.getName();
+            if( !tExpStr.startsWith("struct") && !tExpStr.startsWith("enum") ) {
+              Declaration tDecl = SymbolTools.findSymbol(global_table, tExp);
+              if( tDecl != null ) {
+                if( tDecl instanceof VariableDeclaration ) {
+                  if( ((VariableDeclaration)tDecl).getSpecifiers().contains(Specifier.TYPEDEF) ) {
+                    Declarator tDeclr = ((VariableDeclaration)tDecl).getDeclarator(0);
+                    if( tDeclr instanceof NestedDeclarator ) {
+                      isPointer =  true;
                       break;
-                    } else if( SymbolTools.isPointer((VariableDeclarator)tDeclr) ) {
-                      isPointer= true;
-                      break;
+                    } else if( tDeclr instanceof VariableDeclarator ) {
+                      if( SymbolTools.isArray((VariableDeclarator)tDeclr) ) {
+                        isArray= true;
+                        break;
+                      } else if( SymbolTools.isPointer((VariableDeclarator)tDeclr) ) {
+                        isPointer= true;
+                        break;
+                      }
                     }
                   }
                 }
               }
             }
-          }
-          break;
-        }
-      }
-
-      Boolean isScalar = !isArray && !isPointer;
-
-      List<Expression> startList = new LinkedList<Expression>();
-      List<Expression> lengthList = new LinkedList<Expression>();
-      boolean foundDimensions = AnalysisTools.extractDimensionInfo(sArray, startList, lengthList, IRSymbolOnly, region);
-      int dimension = lengthList.size();
-      if( (!foundDimensions) && (dimension>1) ) {
-        //It's OK to miss the left-most dimension.
-        boolean missingDimFound = false;
-        for(int m=1; m<dimension; m++) {
-          if( lengthList.get(m) == null ) {
-            missingDimFound = true;
             break;
           }
         }
-        if( missingDimFound ) {
-          Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] Dimension information of the following variable is" +
-              "unknown: " + sArray.getArrayName() + "\nOpenACC directive: " + cAnnot +
-              "\nThe ACC2GPU translation failed!");
+
+        Boolean isScalar = !isArray && !isPointer;
+
+        List<Expression> startList = new LinkedList<Expression>();
+        List<Expression> lengthList = new LinkedList<Expression>();
+        boolean foundDimensions = AnalysisTools.extractDimensionInfo(sArray, startList, lengthList, IRSymbolOnly, region);
+        int dimension = lengthList.size();
+        if( (!foundDimensions) && (dimension>1) ) {
+          //It's OK to miss the left-most dimension.
+          boolean missingDimFound = false;
+          for(int m=1; m<dimension; m++) {
+            if( lengthList.get(m) == null ) {
+              missingDimFound = true;
+              break;
+            }
+          }
+          if( missingDimFound ) {
+            Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] Dimension information of the following variable is" +
+                "unknown: " + sArray.getArrayName() + "\nOpenACC directive: " + cAnnot +
+                "\nThe ACC2GPU translation failed!");
+          }
         }
-      }
-      //PrintTools.println("sArray: " + sArray + ", dimension: " + lengthList.size() + ", sArray.getArrayDimension(): " + sArray.getArrayDimension() + "\n" , 0);
+        //PrintTools.println("sArray: " + sArray + ", dimension: " + lengthList.size() + ", sArray.getArrayDimension(): " + sArray.getArrayDimension() + "\n" , 0);
 
-      Symbol gpuSym = null;
-      Identifier gpuVar = null;
-      Identifier kParamVar = null;
-      String symNameBase = null;
-      if( sharedSym instanceof AccessSymbol) {
-        symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)sharedSym);
-      } else {
-        symNameBase = sharedSym.getSymbolName();
-      }
-      String gpuVarName = "gpu__" + symNameBase;
-      String constVarName = "const__" + symNameBase;
-      String textureVarName = "texture__" + symNameBase;
-      String pitchVarName = "pitch__" + symNameBase;
-      String kParamVarName = symNameBase;
-      if( !SymbolTools.isGlobal(IRSym) ) {
-        constVarName += "__" + cProc.getSymbolName();
-        textureVarName += "__" + cProc.getSymbolName();
-      }
+        Symbol gpuSym = null;
+        Identifier gpuVar = null;
+        Identifier kParamVar = null;
+        String symNameBase = null;
+        if( sharedSym instanceof AccessSymbol) {
+          symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)sharedSym);
+        } else {
+          symNameBase = sharedSym.getSymbolName();
+        }
+        String gpuVarName = "gpu__" + symNameBase;
+        String constVarName = "const__" + symNameBase;
+        String textureVarName = "texture__" + symNameBase;
+        String pitchVarName = "pitch__" + symNameBase;
+        String kParamVarName = symNameBase;
+        if( !SymbolTools.isGlobal(IRSym) ) {
+          constVarName += "__" + cProc.getSymbolName();
+          textureVarName += "__" + cProc.getSymbolName();
+        }
 
 
-      if( accDevicePtrSet.contains(sharedSym) ) {
-        //Create a kernel parameter for the shared array variable.
-        ArrayList addSpecs;
-        //Compile may not be able to detect whether the device buffer is created as R/O or not, disabling below.
-        /*				if( cudaConstantSet.contains(sharedSym) ) {
+        if( accDevicePtrSet.contains(sharedSym) ) {
+          //Create a kernel parameter for the shared array variable.
+          ArrayList addSpecs;
+          //Compile may not be able to detect whether the device buffer is created as R/O or not, disabling below.
+          /*				if( cudaConstantSet.contains(sharedSym) ) {
                                         addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_CONSTANT));
                                         } else {
                                         addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
                                         }*/
-        addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
-        kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true, opt_AssumeNoAliasing);
-        callerProcSymSet.add(kParamVar.getSymbol());
-        if( dimension == 1 ) {
-          call_to_new_proc.addArgument(hostVar.clone());
-        } else {
-          // Insert argument to the kernel function call
-          //Cast the device pointer variable to pointer-to-array type if it is. 
-          // Ex: (float (*)[SIZE2]) x
-          List castspecs = new LinkedList();
-          castspecs.addAll(typeSpecs);
-          /*
-           * FIXME: NestedDeclarator was used for (*)[SIZE2], but this may not be 
-           * semantically correct way to represent (*)[SIZE2] in IR.
-           */
-          List tindices = new LinkedList();
-          for( int i=1; i<dimension; i++) {
-            tindices.add(lengthList.get(i).clone());
-          }
-          ArraySpecifier aspec = new ArraySpecifier(tindices);
-          List tailSpecs = new ArrayList(1);
-          tailSpecs.add(aspec);
-          VariableDeclarator childDeclr = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, new NameID(""));
-          NestedDeclarator nestedDeclr = new NestedDeclarator(new ArrayList(), childDeclr, null, tailSpecs);
-          castspecs.add(nestedDeclr);
-          call_to_new_proc.addArgument(new Typecast(castspecs, (Identifier)hostVar.clone()));
-        }
-        // Replace all instances of the shared variable to the parameter variable
-        if( sharedSym instanceof AccessSymbol ) {
-          TransformTools.replaceAccessExpressions(region, (AccessSymbol)sharedSym, kParamVar);
-        } else {
-          TransformTools.replaceAll(region, hostVar, kParamVar);
-        }
-        continue;
-      }
-
-      if( isScalar && !isStruct ) {
-        if( cudaSharedROSet.contains(sharedSym) ) {
-          // Create a GPU kernel parameter corresponding to shared_var
-          VariableDeclarator kParam_declarator = new VariableDeclarator(new NameID(kParamVarName));
-          callerProcSymSet.add(kParam_declarator);
-          VariableDeclaration kParam_decl = new VariableDeclaration(typeSpecs,
-              kParam_declarator);
-          kParamVar = new Identifier(kParam_declarator);
-          new_proc.addDeclaration(kParam_decl);
-
-          // Insert argument to the kernel function call
-          if( sharedSym instanceof AccessSymbol ) {
-            AccessExpression accExp = AnalysisTools.accessSymbolToExpression((AccessSymbol)sharedSym, null);
-            call_to_new_proc.addArgument(accExp);
+          addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
+          kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true, opt_AssumeNoAliasing);
+          callerProcSymSet.add(kParamVar.getSymbol());
+          if( dimension == 1 ) {
+            call_to_new_proc.addArgument(hostVar.clone());
           } else {
-            call_to_new_proc.addArgument(new Identifier(sharedSym));
+            // Insert argument to the kernel function call
+            //Cast the device pointer variable to pointer-to-array type if it is. 
+            // Ex: (float (*)[SIZE2]) x
+            List castspecs = new LinkedList();
+            castspecs.addAll(typeSpecs);
+            /*
+             * FIXME: NestedDeclarator was used for (*)[SIZE2], but this may not be 
+             * semantically correct way to represent (*)[SIZE2] in IR.
+             */
+            List tindices = new LinkedList();
+            for( int i=1; i<dimension; i++) {
+              tindices.add(lengthList.get(i).clone());
+            }
+            ArraySpecifier aspec = new ArraySpecifier(tindices);
+            List tailSpecs = new ArrayList(1);
+            tailSpecs.add(aspec);
+            VariableDeclarator childDeclr = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, new NameID(""));
+            NestedDeclarator nestedDeclr = new NestedDeclarator(new ArrayList(), childDeclr, null, tailSpecs);
+            castspecs.add(nestedDeclr);
+            call_to_new_proc.addArgument(new Typecast(castspecs, (Identifier)hostVar.clone()));
           }
-
-          // Replace the instance of shared variable with the new gpu_var.
+          // Replace all instances of the shared variable to the parameter variable
           if( sharedSym instanceof AccessSymbol ) {
             TransformTools.replaceAccessExpressions(region, (AccessSymbol)sharedSym, kParamVar);
           } else {
-            TransformTools.replaceAll(region, new Identifier(sharedSym), kParamVar);
+            TransformTools.replaceAll(region, hostVar, kParamVar);
           }
           continue;
         }
-      }
 
-      MallocType mallocT = MallocType.NormalMalloc;
-      boolean isConstArray = false;
-      if( cudaConstantSet.contains(sharedSym) ) {
-        mallocT = MallocType.ConstantMalloc;
-        if( dimension > 0 ) {
-          boolean constantDimension = true;
-          for( Expression tDim : lengthList ) {
-            if( (tDim == null) || !(tDim instanceof IntegerLiteral) ) {
-              constantDimension = false;
-              break;
+        if( isScalar && !isStruct ) {
+          if( cudaSharedROSet.contains(sharedSym) ) {
+            // Create a GPU kernel parameter corresponding to shared_var
+            VariableDeclarator kParam_declarator = new VariableDeclarator(new NameID(kParamVarName));
+            callerProcSymSet.add(kParam_declarator);
+            VariableDeclaration kParam_decl = new VariableDeclaration(typeSpecs,
+                kParam_declarator);
+            kParamVar = new Identifier(kParam_declarator);
+            new_proc.addDeclaration(kParam_decl);
+
+            // Insert argument to the kernel function call
+            if( sharedSym instanceof AccessSymbol ) {
+              AccessExpression accExp = AnalysisTools.accessSymbolToExpression((AccessSymbol)sharedSym, null);
+              call_to_new_proc.addArgument(accExp);
+            } else {
+              call_to_new_proc.addArgument(new Identifier(sharedSym));
             }
+
+            // Replace the instance of shared variable with the new gpu_var.
+            if( sharedSym instanceof AccessSymbol ) {
+              TransformTools.replaceAccessExpressions(region, (AccessSymbol)sharedSym, kParamVar);
+            } else {
+              TransformTools.replaceAll(region, new Identifier(sharedSym), kParamVar);
+            }
+            continue;
           }
-          if( constantDimension ) {
-            mallocT = MallocType.ConstantMalloc;
-            if( SymbolTools.isArray(sharedSym) && !SymbolTools.isPointer(sharedSym) 
-                && sharedSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
-              isConstArray = true;
+        }
+
+        MallocType mallocT = MallocType.NormalMalloc;
+        boolean isConstArray = false;
+        if( cudaConstantSet.contains(sharedSym) ) {
+          mallocT = MallocType.ConstantMalloc;
+          if( dimension > 0 ) {
+            boolean constantDimension = true;
+            for( Expression tDim : lengthList ) {
+              if( (tDim == null) || !(tDim instanceof IntegerLiteral) ) {
+                constantDimension = false;
+                break;
+              }
+            }
+            if( constantDimension ) {
+              mallocT = MallocType.ConstantMalloc;
+              if( SymbolTools.isArray(sharedSym) && !SymbolTools.isPointer(sharedSym) 
+                  && sharedSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+                isConstArray = true;
+              }
             }
           }
         }
-      }
-      Set<Symbol> symSet = null;
+        Set<Symbol> symSet = null;
 
-      if( isConstArray && (mallocT == MallocType.ConstantMalloc) ) {
-        symSet = kernelsTranslationUnit.getSymbols();
-        Symbol constSym = AnalysisTools.findsSymbol(symSet, constVarName);
-        if( constSym == null ) {
-          //constant symbol should have been created by either handleDataClause() or handleUpdate().
-          Tools.exit("[ERROR in ACC2OPENCLTranslation.extractComputeRegion()] Can't find __constant variable (" + constVarName + 
-              ") corresponding to the host variable, " + hostVar + "; exit the program!\nEnclosing procedure: " + 
+        if( isConstArray && (mallocT == MallocType.ConstantMalloc) ) {
+          symSet = kernelsTranslationUnit.getSymbols();
+          Symbol constSym = AnalysisTools.findsSymbol(symSet, constVarName);
+          if( constSym == null ) {
+            //constant symbol should have been created by either handleDataClause() or handleUpdate().
+            Tools.exit("[ERROR in ACC2OPENCLTranslation.extractComputeRegion()] Can't find __constant variable (" + constVarName + 
+                ") corresponding to the host variable, " + hostVar + "; exit the program!\nEnclosing procedure: " + 
+                cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
+          }
+          Identifier constVar = new Identifier(constSym);
+          // Replace the instance of shared variable with the new gpu_var.
+          if( sharedSym instanceof AccessSymbol ) {
+            TransformTools.replaceAccessExpressions(region, (AccessSymbol)sharedSym, constVar);
+          } else {
+            TransformTools.replaceAll(region, new Identifier(sharedSym), constVar);
+          }
+          constantSymMap.put(constSym, constSym);
+          callerProcSymSet.add(constSym);
+          continue;
+        }
+
+        SymbolTable targetSymbolTable = AnalysisTools.getIRSymbolScope(IRSym, region.getParent());
+        if( targetSymbolTable instanceof Procedure ) {
+          targetSymbolTable = ((Procedure)targetSymbolTable).getBody();
+        }
+        if( targetSymbolTable instanceof CompoundStatement ) {
+          if( AnalysisTools.ipFindFirstPragmaInParent(region, OmpAnnotation.class, new HashSet(Arrays.asList("parallel", "task")), false, null, null) != null ) { 
+            targetSymbolTable = (CompoundStatement)region.getParent();
+          }
+        }
+
+        //FIXME: below will work only for scalar variable, since multiple instances of array variables
+        //are possible in the registerRO and registerRW clauses.
+        boolean useRegister = false;
+        boolean useSharedMemory = false;
+        boolean ROData = false;
+        if( cudaRegisterSet.contains(sharedSym) ) {
+          useRegister = true;
+        }
+        if( cudaRegisterROSet.contains(sharedSym) ) {
+          useRegister = true;
+          ROData = true;
+        }
+        if( cudaSharedSet.contains(sharedSym) ) {
+          useSharedMemory = true;
+        }
+        if( cudaSharedROSet.contains(sharedSym) ) {
+          useSharedMemory = true;
+          ROData = true;
+        }
+
+        /////////////////////////////////////////////////////////////
+        // Find a GPU device variable corresponding to shared_var. //
+        // Ex: float * gpu__b;                                     //
+        /////////////////////////////////////////////////////////////
+        symSet = targetSymbolTable.getSymbols();
+        gpuSym = AnalysisTools.findsSymbol(symSet, gpuVarName);
+        gpuVar = new Identifier(gpuSym);
+        if( gpuSym == null ) {
+          Tools.exit("[ERROR in ACC2OPENCLTranslation.extractComputeRegion()] Can't find device variable corresponding" +
+              " to the host variable, " + hostVar + "; exit the program!\nEnclosing procedure: " + 
               cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
         }
-        Identifier constVar = new Identifier(constSym);
-        // Replace the instance of shared variable with the new gpu_var.
-        if( sharedSym instanceof AccessSymbol ) {
-          TransformTools.replaceAccessExpressions(region, (AccessSymbol)sharedSym, constVar);
-        } else {
-          TransformTools.replaceAll(region, new Identifier(sharedSym), constVar);
-        }
-        constantSymMap.put(constSym, constSym);
-        callerProcSymSet.add(constSym);
-        continue;
-      }
 
-      SymbolTable targetSymbolTable = AnalysisTools.getIRSymbolScope(IRSym, region.getParent());
-      if( targetSymbolTable instanceof Procedure ) {
-        targetSymbolTable = ((Procedure)targetSymbolTable).getBody();
-      }
-      if( targetSymbolTable instanceof CompoundStatement ) {
-        if( AnalysisTools.ipFindFirstPragmaInParent(region, OmpAnnotation.class, new HashSet(Arrays.asList("parallel", "task")), false, null, null) != null ) { 
-          targetSymbolTable = (CompoundStatement)region.getParent();
-        }
-      }
-
-      //FIXME: below will work only for scalar variable, since multiple instances of array variables
-      //are possible in the registerRO and registerRW clauses.
-      boolean useRegister = false;
-      boolean useSharedMemory = false;
-      boolean ROData = false;
-      if( cudaRegisterSet.contains(sharedSym) ) {
-        useRegister = true;
-      }
-      if( cudaRegisterROSet.contains(sharedSym) ) {
-        useRegister = true;
-        ROData = true;
-      }
-      if( cudaSharedSet.contains(sharedSym) ) {
-        useSharedMemory = true;
-      }
-      if( cudaSharedROSet.contains(sharedSym) ) {
-        useSharedMemory = true;
-        ROData = true;
-      }
-
-      /////////////////////////////////////////////////////////////
-      // Find a GPU device variable corresponding to shared_var. //
-      // Ex: float * gpu__b;                                     //
-      /////////////////////////////////////////////////////////////
-      symSet = targetSymbolTable.getSymbols();
-      gpuSym = AnalysisTools.findsSymbol(symSet, gpuVarName);
-      gpuVar = new Identifier(gpuSym);
-      if( gpuSym == null ) {
-        Tools.exit("[ERROR in ACC2OPENCLTranslation.extractComputeRegion()] Can't find device variable corresponding" +
-            " to the host variable, " + hostVar + "; exit the program!\nEnclosing procedure: " + 
-            cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
-      }
-
-      if( isScalar ) 
-      {
-        OpenCLTranslationTools.scalarSharedConv(sharedSym, symNameBase, typeSpecs,
-            gpuSym, region, new_proc, call_to_new_proc, useRegister, false, ROData, isSingleTask, preList, postList);
-        //We done need to insert scalar symbol to callerProcSymSet.
-      } 
-      else 
-      {
-        //Create a kernel parameter for the shared array variable.
-        //Add __global or __constant specifier for device memory
-        ArrayList addSpecs;
-        //[CAUTION] Temporarily remove accPresentSet checking part (Mar. 31, 2016 Seyong Lee).
-        //if( cudaConstantSet.contains(sharedSym)  && !accPresentSet.contains(sharedSym)) {
-        if( cudaConstantSet.contains(sharedSym) ) {
-          addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_CONSTANT));
-        } else {
-          addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
-        }
-        kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true, opt_AssumeNoAliasing);
-        Symbol kParamSym = kParamVar.getSymbol();
-        callerProcSymSet.add(kParamSym);
-        // Insert argument to the kernel function call
-        if( dimension == 1 ) {
-          call_to_new_proc.addArgument(gpuVar.clone());
-        } else {
-          //Cast the gpu variable to pointer-to-array type 
-          // Ex: (float (*)[SIZE2]) gpu__x
-          List castspecs = new LinkedList();
-          castspecs.addAll(typeSpecs);
-          /*
-           * FIXME: NestedDeclarator was used for (*)[SIZE2], but this may not be 
-           * semantically correct way to represent (*)[SIZE2] in IR.
-           */
-          List tindices = new LinkedList();
-          for( int i=1; i<dimension; i++) {
-            tindices.add(lengthList.get(i).clone());
+        if( isScalar ) 
+        {
+          OpenCLTranslationTools.scalarSharedConv(sharedSym, symNameBase, typeSpecs,
+              gpuSym, region, new_proc, call_to_new_proc, useRegister, false, ROData, isSingleTask, preList, postList);
+          //We done need to insert scalar symbol to callerProcSymSet.
+        } 
+        else 
+        {
+          //Create a kernel parameter for the shared array variable.
+          //Add __global or __constant specifier for device memory
+          ArrayList addSpecs;
+          //[CAUTION] Temporarily remove accPresentSet checking part (Mar. 31, 2016 Seyong Lee).
+          //if( cudaConstantSet.contains(sharedSym)  && !accPresentSet.contains(sharedSym)) {
+          if( cudaConstantSet.contains(sharedSym) ) {
+            addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_CONSTANT));
+          } else {
+            addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
           }
-          ArraySpecifier aspec = new ArraySpecifier(tindices);
-          List tailSpecs = new ArrayList(1);
-          tailSpecs.add(aspec);
-          VariableDeclarator childDeclr = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, new NameID(" "));
-          NestedDeclarator nestedDeclr = new NestedDeclarator(new ArrayList(), childDeclr, null, tailSpecs);
-          castspecs.add(nestedDeclr);
-          call_to_new_proc.addArgument(new Typecast(castspecs, (Identifier)gpuVar.clone()));
+          kParamVar = TransformTools.declareClonedVariable(new_proc, sharedSym, kParamVarName, removeSpecs, addSpecs, true, opt_AssumeNoAliasing);
+          Symbol kParamSym = kParamVar.getSymbol();
+          callerProcSymSet.add(kParamSym);
+          // Insert argument to the kernel function call
+          if( dimension == 1 ) {
+            call_to_new_proc.addArgument(gpuVar.clone());
+          } else {
+            //Cast the gpu variable to pointer-to-array type 
+            // Ex: (float (*)[SIZE2]) gpu__x
+            List castspecs = new LinkedList();
+            castspecs.addAll(typeSpecs);
+            /*
+             * FIXME: NestedDeclarator was used for (*)[SIZE2], but this may not be 
+             * semantically correct way to represent (*)[SIZE2] in IR.
+             */
+            List tindices = new LinkedList();
+            for( int i=1; i<dimension; i++) {
+              tindices.add(lengthList.get(i).clone());
+            }
+            ArraySpecifier aspec = new ArraySpecifier(tindices);
+            List tailSpecs = new ArrayList(1);
+            tailSpecs.add(aspec);
+            VariableDeclarator childDeclr = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, new NameID(" "));
+            NestedDeclarator nestedDeclr = new NestedDeclarator(new ArrayList(), childDeclr, null, tailSpecs);
+            castspecs.add(nestedDeclr);
+            call_to_new_proc.addArgument(new Typecast(castspecs, (Identifier)gpuVar.clone()));
+          }
+
+          if( mallocT == MallocType.NormalMalloc ) {
+            //Some array-caching optimization may be put here.
+          } else if( mallocT == MallocType.ConstantMalloc ) {
+            //Some array-caching optimization may be put here.
+          }
+          // Replace all instances of the shared variable to the paremeter variable
+          if( sharedSym instanceof AccessSymbol ) {
+            TransformTools.replaceAccessExpressions(region, (AccessSymbol)sharedSym, kParamVar);
+          } else {
+            TransformTools.replaceAll(region, hostVar, kParamVar);
+          }
+        }
         }
 
-        if( mallocT == MallocType.NormalMalloc ) {
-          //Some array-caching optimization may be put here.
-        } else if( mallocT == MallocType.ConstantMalloc ) {
-          //Some array-caching optimization may be put here.
+        /////////////////////////////////////////////////////////////
+        //Handle device functions called in the current GPU kernel.//
+        /////////////////////////////////////////////////////////////
+        String TrUntCnt = null;
+        int i = 0;
+        for( Traversable tt : program.getChildren() ) {
+          if( parentTrUnt.equals(tt) ) {
+            TrUntCnt = new IntegerLiteral(i).toString();
+            break;
+          }
+          i++;
         }
-        // Replace all instances of the shared variable to the paremeter variable
-        if( sharedSym instanceof AccessSymbol ) {
-          TransformTools.replaceAccessExpressions(region, (AccessSymbol)sharedSym, kParamVar);
+        //If the same procedure is called in kernel regions in different translation units,
+        //these should be handled separately.
+        devProcMap = tr2DevProcMap.get(parentTrUnt);
+        if( devProcMap == null ) {
+          devProcMap = new HashMap<Procedure, Map<String, Procedure>>();
+          tr2DevProcMap.put(parentTrUnt, devProcMap);
+        }
+        Stack<Procedure> devProcStack = new Stack<Procedure>();
+        devProcCloning(region, parentTrUnt, TrUntCnt, callerProcSymSet, devProcStack);
+
+
+        ///////////////////////////////////////////////////
+        //Set GPU kernel configuration parameters partII. //
+        ///////////////////////////////////////////////////
+
+        //Dim3Specifier dim3Spec = new Dim3Specifier(num_gangs.get(0), num_gangs.get(1), num_gangs.get(2));
+        //VariableDeclarator dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), dim3Spec);
+        //Identifier dimGrid = new Identifier(dimGrid_declarator);
+        //Declaration dimGrid_decl = new VariableDeclaration(OpenCLSpecifier.CUDA_DIM3, dimGrid_declarator);
+        //TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimGrid_decl));
+
+        VariableDeclarator dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
+        Identifier dimGrid = new Identifier(dimGrid_declarator);
+        Declaration dimGrid_decl = new VariableDeclaration(OpenCLSpecifier.INT, dimGrid_declarator);
+        DeclarationStatement dimGrid_stmt = new DeclarationStatement(dimGrid_decl);
+        TransformTools.addStatementBefore(confRefParent, confRefStmt, dimGrid_stmt);
+        for(int j = 2; j >= 0; j--)
+        {
+          AssignmentExpression assignmentExpression = new AssignmentExpression(
+              new ArrayAccess(new NameID("dimGrid_"+new_func_name), new IntegerLiteral(j)),
+              AssignmentOperator.NORMAL,
+              num_gangs.get(j).clone()
+              );
+          TransformTools.addStatementAfter(confRefParent, dimGrid_stmt, new ExpressionStatement(assignmentExpression));
+        }
+
+        //Dim3Specifier dim3Spec = new Dim3Specifier(num_workers.get(0), num_workers.get(1), num_workers.get(2));
+        //VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), dim3Spec);
+        //Identifier dimBlock = new Identifier(dimBlock_declarator);
+        //Declaration dimBlock_decl = new VariableDeclaration(OpenCLSpecifier.CUDA_DIM3, dimBlock_declarator);
+        //TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimBlock_decl));
+
+        VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
+        Identifier dimBlock = new Identifier(dimBlock_declarator);
+        Declaration dimBlock_decl = new VariableDeclaration(OpenCLSpecifier.INT, dimBlock_declarator);
+        DeclarationStatement dimBlock_stmt = new DeclarationStatement(dimBlock_decl);
+        TransformTools.addStatementBefore(confRefParent, confRefStmt, dimBlock_stmt);
+        for(int j = 2; j >= 0; j--)
+        {
+          AssignmentExpression assignmentExpression = new AssignmentExpression(
+              new ArrayAccess(new NameID("dimBlock_"+new_func_name), new IntegerLiteral(j)),
+              AssignmentOperator.NORMAL,
+              num_workers.get(j).clone()
+              );
+          TransformTools.addStatementAfter(confRefParent, dimBlock_stmt, new ExpressionStatement(assignmentExpression));
+        }
+
+        //Set reqd_work_group_size attribute to the kernel procedure.
+        //e.g., __attribute__((reqd_work_group_size(128,1,1))
+        //Used for Altera OpenCL.
+        List<Expression> wg_size = new ArrayList<Expression>(3);
+        boolean nonIntLiteral = false;
+        for( int m=0; m<3; m++ ) {
+          Expression tExp = num_workers.get(m);
+          if( tExp instanceof IntegerLiteral ) {
+            wg_size.add(tExp.clone());
+          } else {
+            nonIntLiteral = true;
+            break;
+          }
+        }
+        AttributeSpecifier kernel_attributes = new AttributeSpecifier();
+        if( !nonIntLiteral ) {
+          //reqd_work_group_size attribute accepts integer literal as arguments only.
+          kernel_attributes.addAttribute(new AttributeSpecifier.Attribute("reqd_work_group_size", wg_size));
+        }
+        if( targetArch == 3 ) {
+          //Add num_simd_work_items and num_compute_unit attributes, which are used only for Altera OpenCL.
+          if( (num_simd_work_items != null) && (num_simd_work_items instanceof IntegerLiteral) ) {
+            AttributeSpecifier.Attribute tAttribute = new AttributeSpecifier.Attribute("num_simd_work_items", num_simd_work_items);
+            kernel_attributes.addAttribute(tAttribute);
+          }
+          if( (num_compute_units != null) && (num_compute_units instanceof IntegerLiteral) ) {
+            AttributeSpecifier.Attribute tAttribute = new AttributeSpecifier.Attribute("num_compute_units", num_compute_units);
+            kernel_attributes.addAttribute(tAttribute);
+          }
+        }
+        new_proc.setAttributeSpecifier(kernel_attributes);
+
+        AssignmentExpression assignExp = new AssignmentExpression(numBlocks.clone(), AssignmentOperator.NORMAL, totalnumgangs);
+        ExpressionStatement estmt = new ExpressionStatement(assignExp);
+        if( ifCond == null ) {
+          confRefParent.addStatementBefore(confRefStmt, estmt);
         } else {
-          TransformTools.replaceAll(region, hostVar, kParamVar);
+          ifCondBody.addStatement(estmt);
         }
-      }
-      }
 
-      /////////////////////////////////////////////////////////////
-      //Handle device functions called in the current GPU kernel.//
-      /////////////////////////////////////////////////////////////
-      String TrUntCnt = null;
-      int i = 0;
-      for( Traversable tt : program.getChildren() ) {
-        if( parentTrUnt.equals(tt) ) {
-          TrUntCnt = new IntegerLiteral(i).toString();
-          break;
-        }
-        i++;
-      }
-      //If the same procedure is called in kernel regions in different translation units,
-      //these should be handled separately.
-      devProcMap = tr2DevProcMap.get(parentTrUnt);
-      if( devProcMap == null ) {
-        devProcMap = new HashMap<Procedure, Map<String, Procedure>>();
-        tr2DevProcMap.put(parentTrUnt, devProcMap);
-      }
-      Stack<Procedure> devProcStack = new Stack<Procedure>();
-      devProcCloning(region, parentTrUnt, TrUntCnt, callerProcSymSet, devProcStack);
-
-
-      ///////////////////////////////////////////////////
-      //Set GPU kernel configuration parameters partII. //
-      ///////////////////////////////////////////////////
-
-      //Dim3Specifier dim3Spec = new Dim3Specifier(num_gangs.get(0), num_gangs.get(1), num_gangs.get(2));
-      //VariableDeclarator dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), dim3Spec);
-      //Identifier dimGrid = new Identifier(dimGrid_declarator);
-      //Declaration dimGrid_decl = new VariableDeclaration(OpenCLSpecifier.CUDA_DIM3, dimGrid_declarator);
-      //TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimGrid_decl));
-
-      VariableDeclarator dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
-      Identifier dimGrid = new Identifier(dimGrid_declarator);
-      Declaration dimGrid_decl = new VariableDeclaration(OpenCLSpecifier.INT, dimGrid_declarator);
-      DeclarationStatement dimGrid_stmt = new DeclarationStatement(dimGrid_decl);
-      TransformTools.addStatementBefore(confRefParent, confRefStmt, dimGrid_stmt);
-      for(int j = 2; j >= 0; j--)
-      {
-        AssignmentExpression assignmentExpression = new AssignmentExpression(
-            new ArrayAccess(new NameID("dimGrid_"+new_func_name), new IntegerLiteral(j)),
-            AssignmentOperator.NORMAL,
-            num_gangs.get(j).clone()
-            );
-        TransformTools.addStatementAfter(confRefParent, dimGrid_stmt, new ExpressionStatement(assignmentExpression));
-      }
-
-      //Dim3Specifier dim3Spec = new Dim3Specifier(num_workers.get(0), num_workers.get(1), num_workers.get(2));
-      //VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), dim3Spec);
-      //Identifier dimBlock = new Identifier(dimBlock_declarator);
-      //Declaration dimBlock_decl = new VariableDeclaration(OpenCLSpecifier.CUDA_DIM3, dimBlock_declarator);
-      //TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimBlock_decl));
-
-      VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
-      Identifier dimBlock = new Identifier(dimBlock_declarator);
-      Declaration dimBlock_decl = new VariableDeclaration(OpenCLSpecifier.INT, dimBlock_declarator);
-      DeclarationStatement dimBlock_stmt = new DeclarationStatement(dimBlock_decl);
-      TransformTools.addStatementBefore(confRefParent, confRefStmt, dimBlock_stmt);
-      for(int j = 2; j >= 0; j--)
-      {
-        AssignmentExpression assignmentExpression = new AssignmentExpression(
-            new ArrayAccess(new NameID("dimBlock_"+new_func_name), new IntegerLiteral(j)),
-            AssignmentOperator.NORMAL,
-            num_workers.get(j).clone()
-            );
-        TransformTools.addStatementAfter(confRefParent, dimBlock_stmt, new ExpressionStatement(assignmentExpression));
-      }
-
-      //Set reqd_work_group_size attribute to the kernel procedure.
-      //e.g., __attribute__((reqd_work_group_size(128,1,1))
-      //Used for Altera OpenCL.
-      List<Expression> wg_size = new ArrayList<Expression>(3);
-      boolean nonIntLiteral = false;
-      for( int m=0; m<3; m++ ) {
-        Expression tExp = num_workers.get(m);
-        if( tExp instanceof IntegerLiteral ) {
-          wg_size.add(tExp.clone());
+        assignExp = new AssignmentExpression(numThreads.clone(), AssignmentOperator.NORMAL, totalnumworkers);
+        estmt = new ExpressionStatement(assignExp);
+        if( ifCond == null ) {
+          confRefParent.addStatementBefore(confRefStmt, estmt);
         } else {
-          nonIntLiteral = true;
-          break;
+          ifCondBody.addStatement(estmt);
         }
-      }
-      AttributeSpecifier kernel_attributes = new AttributeSpecifier();
-      if( !nonIntLiteral ) {
-        //reqd_work_group_size attribute accepts integer literal as arguments only.
-        kernel_attributes.addAttribute(new AttributeSpecifier.Attribute("reqd_work_group_size", wg_size));
-      }
-      if( targetArch == 3 ) {
-        //Add num_simd_work_items and num_compute_unit attributes, which are used only for Altera OpenCL.
-        if( (num_simd_work_items != null) && (num_simd_work_items instanceof IntegerLiteral) ) {
-          AttributeSpecifier.Attribute tAttribute = new AttributeSpecifier.Attribute("num_simd_work_items", num_simd_work_items);
-          kernel_attributes.addAttribute(tAttribute);
+
+        assignExp = new AssignmentExpression(totalNumThreads.clone(), AssignmentOperator.NORMAL, 
+            Symbolic.multiply(totalnumgangs.clone(), totalnumworkers.clone()));
+        estmt = new ExpressionStatement(assignExp);
+        if( ifCond == null ) {
+          confRefParent.addStatementBefore(confRefStmt, estmt);
+        } else {
+          ifCondBody.addStatement(estmt);
         }
-        if( (num_compute_units != null) && (num_compute_units instanceof IntegerLiteral) ) {
-          AttributeSpecifier.Attribute tAttribute = new AttributeSpecifier.Attribute("num_compute_units", num_compute_units);
-          kernel_attributes.addAttribute(tAttribute);
+        List<Traversable> prefixList = prefixStmts.getChildren();
+        for( Traversable tPref : prefixList ) {
+          if( tPref instanceof DeclarationStatement ) {
+            DeclarationStatement declStmt = (DeclarationStatement)tPref;
+            Declaration decl = declStmt.getDeclaration();
+            decl.setParent(null);
+            confRefParent.addDeclaration(decl);
+          } else {
+            Statement stmt = (Statement)tPref;
+            stmt.setParent(null);
+            if( ifCond == null ) {
+              confRefParent.addStatementBefore(confRefStmt, stmt);
+            } else {
+              ifCondBody.addStatement(stmt);
+            }
+          }
         }
-      }
-      new_proc.setAttributeSpecifier(kernel_attributes);
+        if( ifCond != null ) {
+          IfStatement ifStmt = new IfStatement(ifCond.clone(), ifCondBody);
+          confRefParent.addStatementBefore(confRefStmt, ifStmt);
+        }
 
-      AssignmentExpression assignExp = new AssignmentExpression(numBlocks.clone(), AssignmentOperator.NORMAL, totalnumgangs);
-      ExpressionStatement estmt = new ExpressionStatement(assignExp);
-      if( ifCond == null ) {
-        confRefParent.addStatementBefore(confRefStmt, estmt);
-      } else {
-        ifCondBody.addStatement(estmt);
-      }
 
-      assignExp = new AssignmentExpression(numThreads.clone(), AssignmentOperator.NORMAL, totalnumworkers);
-      estmt = new ExpressionStatement(assignExp);
-      if( ifCond == null ) {
-        confRefParent.addStatementBefore(confRefStmt, estmt);
-      } else {
-        ifCondBody.addStatement(estmt);
-      }
-
-      assignExp = new AssignmentExpression(totalNumThreads.clone(), AssignmentOperator.NORMAL, 
-          Symbolic.multiply(totalnumgangs.clone(), totalnumworkers.clone()));
-      estmt = new ExpressionStatement(assignExp);
-      if( ifCond == null ) {
-        confRefParent.addStatementBefore(confRefStmt, estmt);
-      } else {
-        ifCondBody.addStatement(estmt);
-      }
-      List<Traversable> prefixList = prefixStmts.getChildren();
-      for( Traversable tPref : prefixList ) {
-        if( tPref instanceof DeclarationStatement ) {
-          DeclarationStatement declStmt = (DeclarationStatement)tPref;
-          Declaration decl = declStmt.getDeclaration();
+        List<Traversable> postscriptList = postscriptStmts.getChildren();
+        List<DeclarationStatement> declStmts = new LinkedList<DeclarationStatement>();
+        for(Traversable tPref : postscriptList ) {
+          if( tPref instanceof DeclarationStatement ) {
+            DeclarationStatement declStmt = (DeclarationStatement)tPref;
+            declStmts.add(declStmt);
+          }
+        }
+        for( DeclarationStatement declS : declStmts ) {
+          postscriptStmts.removeChild(declS);
+          Declaration decl = declS.getDeclaration();
           decl.setParent(null);
           confRefParent.addDeclaration(decl);
-        } else {
-          Statement stmt = (Statement)tPref;
-          stmt.setParent(null);
-          if( ifCond == null ) {
-            confRefParent.addStatementBefore(confRefStmt, stmt);
-          } else {
-            ifCondBody.addStatement(stmt);
-          }
         }
-      }
-      if( ifCond != null ) {
-        IfStatement ifStmt = new IfStatement(ifCond.clone(), ifCondBody);
-        confRefParent.addStatementBefore(confRefStmt, ifStmt);
-      }
-
-
-      List<Traversable> postscriptList = postscriptStmts.getChildren();
-      List<DeclarationStatement> declStmts = new LinkedList<DeclarationStatement>();
-      for(Traversable tPref : postscriptList ) {
-        if( tPref instanceof DeclarationStatement ) {
-          DeclarationStatement declStmt = (DeclarationStatement)tPref;
-          declStmts.add(declStmt);
-        }
-      }
-      for( DeclarationStatement declS : declStmts ) {
-        postscriptStmts.removeChild(declS);
-        Declaration decl = declS.getDeclaration();
-        decl.setParent(null);
-        confRefParent.addDeclaration(decl);
-      }
-      if( postscriptStmts.getChildren().size() > 0 ) {
-        /*			assignExp = new AssignmentExpression(numBlocks.clone(), AssignmentOperator.NORMAL, totalnumgangs.clone());
+        if( postscriptStmts.getChildren().size() > 0 ) {
+          /*			assignExp = new AssignmentExpression(numBlocks.clone(), AssignmentOperator.NORMAL, totalnumgangs.clone());
                                 estmt = new ExpressionStatement(assignExp);
                                 Traversable pS = postscriptStmts.getChildren().get(0);
                                 postscriptStmts.addStatementBefore((Statement)pS, estmt);
@@ -4762,680 +4759,680 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                                     confRefParent.addStatementAfter(confRefStmt, (Statement)tP);
                                   }
                                 }
-      }
-      assignExp = new AssignmentExpression(numBlocks.clone(), AssignmentOperator.NORMAL, totalnumgangs.clone());
-      estmt = new ExpressionStatement(assignExp);
-      ((CompoundStatement)region.getParent()).addStatementAfter(region, estmt);
-
-      //////////////////////////////////////////////////////////////////////////////////
-      //If extractTuningParameters option is on, insert iteration space infomation to //
-      //the tuning-parameter file as a comment.                                       //
-      //////////////////////////////////////////////////////////////////////////////////
-      if( tuningParamFile != null ) {
-        ARCAnnotation aAnnot = region.getAnnotation(ARCAnnotation.class, "ainfo");
-        String kernelID;
-        if( aAnnot != null ) {
-          kernelID = aAnnot.toString();
-        } else {
-          kernelID = "#" + call_to_new_proc.getName().toString();
         }
-        try {
-          BufferedWriter out = new BufferedWriter(new FileWriter(tuningParamFile, true));
-          out.write(kernelID + " totalnumthreads=" + 
-              Symbolic.multiply(totalnumgangs.clone(), totalnumworkers.clone()));
-          out.newLine();
-          out.close();
-        } catch (Exception e) {
-          PrintTools.println("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] writing to a file, "+ tuningParamFile + 
-              ", failed.", 0);
-        }
-      }
+        assignExp = new AssignmentExpression(numBlocks.clone(), AssignmentOperator.NORMAL, totalnumgangs.clone());
+        estmt = new ExpressionStatement(assignExp);
+        ((CompoundStatement)region.getParent()).addStatementAfter(region, estmt);
 
-      StringLiteral refName = null;
-      if( memtrVerification ) {
-        List<FunctionCall> fCallList = IRTools.getFunctionCalls(program);
-        //Get refname to be used for memory-transfer verification.
-        ACCAnnotation iAnnot = region.getAnnotation(ACCAnnotation.class, "refname");
-        if( iAnnot == null ) {
-          StringBuilder str = new StringBuilder("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can not find referenc name " +
-              "used for memory transfer verification; please turn off the verification option " +
-              "(programVerification != 1).\n" +
-              "OpenACC Annotation: " + cAnnot + "\n");
-          if( cProc != null ) {
-            str.append("Enclosing Procedure: " + cProc.getSymbolName() + "\n");
-          } else if( parentTrUnt != null ) {
-            str.append("Enclosing File: " + parentTrUnt.getInputFilename() + "\n");
+        //////////////////////////////////////////////////////////////////////////////////
+        //If extractTuningParameters option is on, insert iteration space infomation to //
+        //the tuning-parameter file as a comment.                                       //
+        //////////////////////////////////////////////////////////////////////////////////
+        if( tuningParamFile != null ) {
+          ARCAnnotation aAnnot = region.getAnnotation(ARCAnnotation.class, "ainfo");
+          String kernelID;
+          if( aAnnot != null ) {
+            kernelID = aAnnot.toString();
+          } else {
+            kernelID = "#" + call_to_new_proc.getName().toString();
           }
-          Tools.exit(str.toString());
-        } else {
-          refName = new StringLiteral((String)iAnnot.get("refname"));
+          try {
+            BufferedWriter out = new BufferedWriter(new FileWriter(tuningParamFile, true));
+            out.write(kernelID + " totalnumthreads=" + 
+                Symbolic.multiply(totalnumgangs.clone(), totalnumworkers.clone()));
+            out.newLine();
+            out.close();
+          } catch (Exception e) {
+            PrintTools.println("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] writing to a file, "+ tuningParamFile + 
+                ", failed.", 0);
+          }
         }
-        tAnnot = region.getAnnotation(ACCAnnotation.class, "tempinternal");
-        if( tAnnot != null ) {
-          List<ACCAnnotation> pragmas = region.getAnnotations(ACCAnnotation.class);
-          Map<Symbol, Symbol> g2lSymMap = new HashMap<Symbol, Symbol>();
-          //Remove tempinternal annotation.
-          region.removeAnnotations(ACCAnnotation.class);
-          for( ACCAnnotation nAnnot : pragmas ) {
-            if( !nAnnot.containsKey("tempinternal") ) {
-              region.annotate(nAnnot);
+
+        StringLiteral refName = null;
+        if( memtrVerification ) {
+          List<FunctionCall> fCallList = IRTools.getFunctionCalls(program);
+          //Get refname to be used for memory-transfer verification.
+          ACCAnnotation iAnnot = region.getAnnotation(ACCAnnotation.class, "refname");
+          if( iAnnot == null ) {
+            StringBuilder str = new StringBuilder("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can not find referenc name " +
+                "used for memory transfer verification; please turn off the verification option " +
+                "(programVerification != 1).\n" +
+                "OpenACC Annotation: " + cAnnot + "\n");
+            if( cProc != null ) {
+              str.append("Enclosing Procedure: " + cProc.getSymbolName() + "\n");
+            } else if( parentTrUnt != null ) {
+              str.append("Enclosing File: " + parentTrUnt.getInputFilename() + "\n");
             }
+            Tools.exit(str.toString());
+          } else {
+            refName = new StringLiteral((String)iAnnot.get("refname"));
           }
-          CompoundStatement cStmt = (CompoundStatement)region.getParent();
-          Set<Symbol> accessedSyms = null;
-          Set<Symbol> firstWriteSet = tAnnot.get("firstwriteSet");
-          Set<Symbol> firstReadSet = tAnnot.get("firstreadSet");
-          Set<Symbol> mayKilledSet = tAnnot.get("maykilled");
-          Set<Symbol> deadSet = tAnnot.get("dead");
-          Set<Symbol> checkSet = new HashSet<Symbol>();
-          if( firstWriteSet != null ) {
-            checkSet.addAll(firstWriteSet);
-          }
-          if( firstReadSet != null ) {
-            checkSet.addAll(firstReadSet);
-          }
-          if( mayKilledSet != null ) {
-            checkSet.addAll(mayKilledSet);
-          }
-          if( deadSet != null ) {
-            checkSet.addAll(deadSet);
-          }
-          if( !checkSet.isEmpty() ) {
-            //Find local symbol visible in the current procedure scope.
-            //accessedSyms = AnalysisTools.getAccessedVariables(region, IRSymbolOnly);
-            accessedSyms = new HashSet<Symbol>(sortedSet);
-            if( accessedSyms != null ) {
-              for( Symbol lSym : accessedSyms ) {
-                List symbolInfo = new ArrayList(2);
-                if( AnalysisTools.SymbolStatus.OrgSymbolFound(
-                      AnalysisTools.findOrgSymbol(lSym, region, true, null, symbolInfo, fCallList)) ) {
-                  Symbol gSym = (Symbol)symbolInfo.get(0);
-                  if( checkSet.contains(gSym) ) {
-                    g2lSymMap.put(gSym, lSym);
+          tAnnot = region.getAnnotation(ACCAnnotation.class, "tempinternal");
+          if( tAnnot != null ) {
+            List<ACCAnnotation> pragmas = region.getAnnotations(ACCAnnotation.class);
+            Map<Symbol, Symbol> g2lSymMap = new HashMap<Symbol, Symbol>();
+            //Remove tempinternal annotation.
+            region.removeAnnotations(ACCAnnotation.class);
+            for( ACCAnnotation nAnnot : pragmas ) {
+              if( !nAnnot.containsKey("tempinternal") ) {
+                region.annotate(nAnnot);
+              }
+            }
+            CompoundStatement cStmt = (CompoundStatement)region.getParent();
+            Set<Symbol> accessedSyms = null;
+            Set<Symbol> firstWriteSet = tAnnot.get("firstwriteSet");
+            Set<Symbol> firstReadSet = tAnnot.get("firstreadSet");
+            Set<Symbol> mayKilledSet = tAnnot.get("maykilled");
+            Set<Symbol> deadSet = tAnnot.get("dead");
+            Set<Symbol> checkSet = new HashSet<Symbol>();
+            if( firstWriteSet != null ) {
+              checkSet.addAll(firstWriteSet);
+            }
+            if( firstReadSet != null ) {
+              checkSet.addAll(firstReadSet);
+            }
+            if( mayKilledSet != null ) {
+              checkSet.addAll(mayKilledSet);
+            }
+            if( deadSet != null ) {
+              checkSet.addAll(deadSet);
+            }
+            if( !checkSet.isEmpty() ) {
+              //Find local symbol visible in the current procedure scope.
+              //accessedSyms = AnalysisTools.getAccessedVariables(region, IRSymbolOnly);
+              accessedSyms = new HashSet<Symbol>(sortedSet);
+              if( accessedSyms != null ) {
+                for( Symbol lSym : accessedSyms ) {
+                  List symbolInfo = new ArrayList(2);
+                  if( AnalysisTools.SymbolStatus.OrgSymbolFound(
+                        AnalysisTools.findOrgSymbol(lSym, region, true, null, symbolInfo, fCallList)) ) {
+                    Symbol gSym = (Symbol)symbolInfo.get(0);
+                    if( checkSet.contains(gSym) ) {
+                      g2lSymMap.put(gSym, lSym);
+                    }
                   }
                 }
               }
             }
-          }
-          if( firstWriteSet != null ) {
-            for( Symbol gsym : firstWriteSet ) {
-              FunctionCall checkCall = new FunctionCall(new NameID("HI_check_write"));
-              Expression hostVar = null;
-              Symbol lsym = g2lSymMap.get(gsym);
-              if( lsym == null ) {
-                Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can't find locally visible symbol " +
-                    "for the first-write symbol: " + gsym + "\nEnclosing procedure: " + 
-                    cProc.getSymbolName() + "\n");
+            if( firstWriteSet != null ) {
+              for( Symbol gsym : firstWriteSet ) {
+                FunctionCall checkCall = new FunctionCall(new NameID("HI_check_write"));
+                Expression hostVar = null;
+                Symbol lsym = g2lSymMap.get(gsym);
+                if( lsym == null ) {
+                  Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can't find locally visible symbol " +
+                      "for the first-write symbol: " + gsym + "\nEnclosing procedure: " + 
+                      cProc.getSymbolName() + "\n");
+                }
+                if( lsym instanceof AccessSymbol ) {
+                  hostVar = AnalysisTools.accessSymbolToExpression((AccessSymbol)lsym, null);
+                } else {
+                  hostVar = new Identifier(lsym);
+                }
+                if( !SymbolTools.isArray(lsym) && !SymbolTools.isPointer(lsym) ) { //scalar
+                  checkCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
+                        hostVar.clone()));
+                } else {
+                  checkCall.addArgument(hostVar.clone());
+                }
+                checkCall.addArgument(new NameID("acc_device_gpu"));
+                checkCall.addArgument(new StringLiteral(hostVar.toString()));
+                checkCall.addArgument(refName.clone());
+                if( loopIndex != null ) {
+                  checkCall.addArgument(loopIndex.clone());
+                } else {
+                  checkCall.addArgument(new NameID("INT_MIN"));
+                }
+                cStmt.addStatementBefore(region, new ExpressionStatement(checkCall));
               }
-              if( lsym instanceof AccessSymbol ) {
-                hostVar = AnalysisTools.accessSymbolToExpression((AccessSymbol)lsym, null);
-              } else {
-                hostVar = new Identifier(lsym);
-              }
-              if( !SymbolTools.isArray(lsym) && !SymbolTools.isPointer(lsym) ) { //scalar
-                checkCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
-                      hostVar.clone()));
-              } else {
-                checkCall.addArgument(hostVar.clone());
-              }
-              checkCall.addArgument(new NameID("acc_device_gpu"));
-              checkCall.addArgument(new StringLiteral(hostVar.toString()));
-              checkCall.addArgument(refName.clone());
-              if( loopIndex != null ) {
-                checkCall.addArgument(loopIndex.clone());
-              } else {
-                checkCall.addArgument(new NameID("INT_MIN"));
-              }
-              cStmt.addStatementBefore(region, new ExpressionStatement(checkCall));
             }
-          }
-          if( firstReadSet != null ) {
-            for( Symbol gsym : firstReadSet ) {
-              FunctionCall checkCall = new FunctionCall(new NameID("HI_check_read"));
-              Expression hostVar = null;
-              Symbol lsym = g2lSymMap.get(gsym);
-              if( lsym == null ) {
-                Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can't find locally visible symbol " +
-                    "for the first-read symbol: " + gsym + "\nEnclosing procedure: " + 
-                    cProc.getSymbolName() + "\n");
+            if( firstReadSet != null ) {
+              for( Symbol gsym : firstReadSet ) {
+                FunctionCall checkCall = new FunctionCall(new NameID("HI_check_read"));
+                Expression hostVar = null;
+                Symbol lsym = g2lSymMap.get(gsym);
+                if( lsym == null ) {
+                  Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can't find locally visible symbol " +
+                      "for the first-read symbol: " + gsym + "\nEnclosing procedure: " + 
+                      cProc.getSymbolName() + "\n");
+                }
+                if( cudaSharedROSet.contains(lsym) ) {
+                  continue;   //Skip generating check_read() call for scalar variable cached in
+                  //CUDA shared memory.
+                }
+                if( lsym instanceof AccessSymbol ) {
+                  hostVar = AnalysisTools.accessSymbolToExpression((AccessSymbol)lsym, null);
+                } else {
+                  hostVar = new Identifier(lsym);
+                }
+                if( !SymbolTools.isArray(lsym) && !SymbolTools.isPointer(lsym) ) { //scalar
+                  checkCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
+                        hostVar.clone()));
+                } else {
+                  checkCall.addArgument(hostVar.clone());
+                }
+                checkCall.addArgument(new NameID("acc_device_gpu"));
+                checkCall.addArgument(new StringLiteral(hostVar.toString()));
+                checkCall.addArgument(refName.clone());
+                if( loopIndex != null ) {
+                  checkCall.addArgument(loopIndex.clone());
+                } else {
+                  checkCall.addArgument(new NameID("INT_MIN"));
+                }
+                cStmt.addStatementBefore(region, new ExpressionStatement(checkCall));
               }
-              if( cudaSharedROSet.contains(lsym) ) {
-                continue;   //Skip generating check_read() call for scalar variable cached in
-                //CUDA shared memory.
-              }
-              if( lsym instanceof AccessSymbol ) {
-                hostVar = AnalysisTools.accessSymbolToExpression((AccessSymbol)lsym, null);
-              } else {
-                hostVar = new Identifier(lsym);
-              }
-              if( !SymbolTools.isArray(lsym) && !SymbolTools.isPointer(lsym) ) { //scalar
-                checkCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
-                      hostVar.clone()));
-              } else {
-                checkCall.addArgument(hostVar.clone());
-              }
-              checkCall.addArgument(new NameID("acc_device_gpu"));
-              checkCall.addArgument(new StringLiteral(hostVar.toString()));
-              checkCall.addArgument(refName.clone());
-              if( loopIndex != null ) {
-                checkCall.addArgument(loopIndex.clone());
-              } else {
-                checkCall.addArgument(new NameID("INT_MIN"));
-              }
-              cStmt.addStatementBefore(region, new ExpressionStatement(checkCall));
             }
-          }
-          if( mayKilledSet != null ) {
-            for( Symbol gsym : mayKilledSet ) {
-              FunctionCall checkCall = new FunctionCall(new NameID("HI_reset_status"));
-              Expression hostVar = null;
-              Symbol lsym = g2lSymMap.get(gsym);
-              if( lsym == null ) {
-                Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can't find locally visible symbol " +
-                    "for the may-killed symbol: " + gsym + "\nEnclosing procedure: " + 
-                    cProc.getSymbolName() + "\n");
+            if( mayKilledSet != null ) {
+              for( Symbol gsym : mayKilledSet ) {
+                FunctionCall checkCall = new FunctionCall(new NameID("HI_reset_status"));
+                Expression hostVar = null;
+                Symbol lsym = g2lSymMap.get(gsym);
+                if( lsym == null ) {
+                  Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can't find locally visible symbol " +
+                      "for the may-killed symbol: " + gsym + "\nEnclosing procedure: " + 
+                      cProc.getSymbolName() + "\n");
+                }
+                if( lsym instanceof AccessSymbol ) {
+                  hostVar = AnalysisTools.accessSymbolToExpression((AccessSymbol)lsym, null);
+                } else {
+                  hostVar = new Identifier(lsym);
+                }
+                if( !SymbolTools.isArray(lsym) && !SymbolTools.isPointer(lsym) ) { //scalar
+                  checkCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
+                        hostVar.clone()));
+                } else {
+                  checkCall.addArgument(hostVar.clone());
+                }
+                checkCall.addArgument(new NameID("acc_device_host"));
+                checkCall.addArgument(new NameID("HI_maystale"));
+                //checkCall.addArgument(new NameID("INT_MIN"));
+                checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
+                cStmt.addStatementAfter(region, new ExpressionStatement(checkCall));
               }
-              if( lsym instanceof AccessSymbol ) {
-                hostVar = AnalysisTools.accessSymbolToExpression((AccessSymbol)lsym, null);
-              } else {
-                hostVar = new Identifier(lsym);
-              }
-              if( !SymbolTools.isArray(lsym) && !SymbolTools.isPointer(lsym) ) { //scalar
-                checkCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
-                      hostVar.clone()));
-              } else {
-                checkCall.addArgument(hostVar.clone());
-              }
-              checkCall.addArgument(new NameID("acc_device_host"));
-              checkCall.addArgument(new NameID("HI_maystale"));
-              //checkCall.addArgument(new NameID("INT_MIN"));
-              checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
-              cStmt.addStatementAfter(region, new ExpressionStatement(checkCall));
             }
-          }
-          if( deadSet != null ) {
-            for( Symbol gsym : deadSet ) {
-              FunctionCall checkCall = new FunctionCall(new NameID("HI_reset_status"));
-              Expression hostVar = null;
-              Symbol lsym = g2lSymMap.get(gsym);
-              if( lsym == null ) {
-                System.err.println("g2lSymMap" + g2lSymMap);
-                Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can't find locally visible symbol " +
-                    "for the dead symbol: " + gsym + "\nEnclosing procedure: " + 
-                    cProc.getSymbolName() + "\n");
+            if( deadSet != null ) {
+              for( Symbol gsym : deadSet ) {
+                FunctionCall checkCall = new FunctionCall(new NameID("HI_reset_status"));
+                Expression hostVar = null;
+                Symbol lsym = g2lSymMap.get(gsym);
+                if( lsym == null ) {
+                  System.err.println("g2lSymMap" + g2lSymMap);
+                  Tools.exit("[ERROR in ACC2OPENCLTranslator.extractComputeRegion()] can't find locally visible symbol " +
+                      "for the dead symbol: " + gsym + "\nEnclosing procedure: " + 
+                      cProc.getSymbolName() + "\n");
+                }
+                if( lsym instanceof AccessSymbol ) {
+                  hostVar = AnalysisTools.accessSymbolToExpression((AccessSymbol)lsym, null);
+                } else {
+                  hostVar = new Identifier(lsym);
+                }
+                if( !SymbolTools.isArray(lsym) && !SymbolTools.isPointer(lsym) ) { //scalar
+                  checkCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
+                        hostVar.clone()));
+                } else {
+                  checkCall.addArgument(hostVar.clone());
+                }
+                checkCall.addArgument(new NameID("acc_device_host"));
+                checkCall.addArgument(new NameID("HI_notstale"));
+                //checkCall.addArgument(new NameID("INT_MIN"));
+                checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
+                cStmt.addStatementAfter(region, new ExpressionStatement(checkCall));
               }
-              if( lsym instanceof AccessSymbol ) {
-                hostVar = AnalysisTools.accessSymbolToExpression((AccessSymbol)lsym, null);
-              } else {
-                hostVar = new Identifier(lsym);
-              }
-              if( !SymbolTools.isArray(lsym) && !SymbolTools.isPointer(lsym) ) { //scalar
-                checkCall.addArgument( new UnaryExpression(UnaryOperator.ADDRESS_OF, 
-                      hostVar.clone()));
-              } else {
-                checkCall.addArgument(hostVar.clone());
-              }
-              checkCall.addArgument(new NameID("acc_device_host"));
-              checkCall.addArgument(new NameID("HI_notstale"));
-              //checkCall.addArgument(new NameID("INT_MIN"));
-              checkCall.addArgument(new NameID("DEFAULT_QUEUE"));
-              cStmt.addStatementAfter(region, new ExpressionStatement(checkCall));
             }
           }
         }
-      }
 
-      //////////////////////////////////////////////////////////////
-      //Add GPU kernel configuration to the kernel function call. //
-      //////////////////////////////////////////////////////////////
-      //the dimension of the grid is the first argument, and then that of thread block comes.
-      kernelConf.add((Identifier)dimGrid.clone()); 
-      kernelConf.add((Identifier)dimBlock.clone());
-      kernelConf.add(new IntegerLiteral(0));
-      if( asyncID == null ) {
-        //			kernelConf.add(new IntegerLiteral(0));
-        kernelConf.add(null);
-      } else {
-        //FunctionCall getAsyncHandle = new FunctionCall(new NameID("HI_get_async_handle"));
-        //getAsyncHandle.addArgument(asyncID.clone());
-        //kernelConf.add(getAsyncHandle);
-        kernelConf.add(asyncID.clone());
-      }
-      if( (waitslist != null) && (!waitslist.isEmpty()) ) {
-        kernelConf.add(new IntegerLiteral(waitslist.size()));
-        boolean allBuiltinVars = true;
-        for( Expression tWaitArg : (List<Expression>) waitslist ) {
-          if( !(tWaitArg instanceof ArrayAccess) ) {
-            allBuiltinVars = false;
-            break;
-          } else if( !((ArrayAccess)tWaitArg).getArrayName().toString().equals("openarc_waits") ) {
-            allBuiltinVars = false;
-            break;
-          }
+        //////////////////////////////////////////////////////////////
+        //Add GPU kernel configuration to the kernel function call. //
+        //////////////////////////////////////////////////////////////
+        //the dimension of the grid is the first argument, and then that of thread block comes.
+        kernelConf.add((Identifier)dimGrid.clone()); 
+        kernelConf.add((Identifier)dimBlock.clone());
+        kernelConf.add(new IntegerLiteral(0));
+        if( asyncID == null ) {
+          //			kernelConf.add(new IntegerLiteral(0));
+          kernelConf.add(null);
+        } else {
+          //FunctionCall getAsyncHandle = new FunctionCall(new NameID("HI_get_async_handle"));
+          //getAsyncHandle.addArgument(asyncID.clone());
+          //kernelConf.add(getAsyncHandle);
+          kernelConf.add(asyncID.clone());
         }
-        if( !allBuiltinVars ) {
-          CompoundStatement parentCStmt = (CompoundStatement)region.getParent();
-          i=0;
+        if( (waitslist != null) && (!waitslist.isEmpty()) ) {
+          kernelConf.add(new IntegerLiteral(waitslist.size()));
+          boolean allBuiltinVars = true;
           for( Expression tWaitArg : (List<Expression>) waitslist ) {
-            AssignmentExpression tAExp = new AssignmentExpression(
-                new ArrayAccess(new NameID("openarc_waits"), new IntegerLiteral(i)),
-                AssignmentOperator.NORMAL,
-                tWaitArg.clone());
-            parentCStmt.addStatementBefore(region, new ExpressionStatement(tAExp));
-            i++;
+            if( !(tWaitArg instanceof ArrayAccess) ) {
+              allBuiltinVars = false;
+              break;
+            } else if( !((ArrayAccess)tWaitArg).getArrayName().toString().equals("openarc_waits") ) {
+              allBuiltinVars = false;
+              break;
+            }
+          }
+          if( !allBuiltinVars ) {
+            CompoundStatement parentCStmt = (CompoundStatement)region.getParent();
+            i=0;
+            for( Expression tWaitArg : (List<Expression>) waitslist ) {
+              AssignmentExpression tAExp = new AssignmentExpression(
+                  new ArrayAccess(new NameID("openarc_waits"), new IntegerLiteral(i)),
+                  AssignmentOperator.NORMAL,
+                  tWaitArg.clone());
+              parentCStmt.addStatementBefore(region, new ExpressionStatement(tAExp));
+              i++;
+            }
           }
         }
-      }
-      call_to_new_proc.setConfArguments(kernelConf);
+        call_to_new_proc.setConfArguments(kernelConf);
 
-      //////////////////////////////
-      //Perform actual outlining. //
-      //////////////////////////////
-      region.swapWith(kernelCall_stmt);
-      if( confRefStmt == region ) {
-        confRefStmt = kernelCall_stmt;
-        confRefParent = (CompoundStatement)confRefStmt.getParent();
-      }
-      CompoundStatement kernelRegion = null;
-      if( region instanceof ForLoop ) {
-        kernelRegion = new_proc.getBody();
-        Statement dummyStmt = new AnnotationStatement();
-        kernelRegion.addStatement(dummyStmt);
-        dummyStmt.swapWith(region);
-        for( Statement preS : preList ) {
-          kernelRegion.addStatementBefore(region, preS);
+        //////////////////////////////
+        //Perform actual outlining. //
+        //////////////////////////////
+        region.swapWith(kernelCall_stmt);
+        if( confRefStmt == region ) {
+          confRefStmt = kernelCall_stmt;
+          confRefParent = (CompoundStatement)confRefStmt.getParent();
         }
-        int pSize = postList.size();
-        for( int m=pSize-1; m>=0; m-- ) {
-          kernelRegion.addStatementAfter(region, postList.get(m));
-        }
-      } else {
-        kernelRegion = new_proc.getBody();
-        region.swapWith(kernelRegion);
-        kernelRegion = (CompoundStatement)region;
-      }
-      while ( !devProcStack.isEmpty() ) {
-        Procedure tProc = devProcStack.pop();
-        parentTrUnt.removeChild(tProc);
-        kernelsTranslationUnit.addDeclaration(tProc);
-      }
-
-      // Put the new_proc in the separate file
-      kernelsTranslationUnit.addDeclaration(new_proc);
-      accKernelsList.add(new_proc.getSymbolName());
-
-      //If typedef or other user-types are used, their definition should 
-      //be added to the kernelsTranslationUnit.
-      Set<Symbol> usedSymbols = SymbolTools.getSymbols(new_proc);
-      usedSymbols.addAll(SymbolTools.getLocalSymbols(new_proc.getBody()));
-      //Add enum symbols.
-      Set<Symbol> tAccessedSymbols = SymbolTools.getAccessedSymbols(new_proc.getBody());
-      for( Symbol tASym : tAccessedSymbols ) {
-        Declaration tADecl = tASym.getDeclaration();
-        if( tADecl instanceof Enumeration ) {
-          usedSymbols.add(tASym);
-        }
-      }
-      copyUserSpecifierDeclarations(kernelsTranslationUnit, kernelCall_stmt, usedSymbols, accHeaderDecl);
-
-      /* put new_proc before the calling proc (avoids prototypes) */
-      //((TranslationUnit) cProc.getParent()).addDeclarationBefore(cProc,new_proc);
-
-      //DEBUG: seq loop may still need _tid for Worker-Single Mode. 
-      //Disable the below condition.
-      //Instead, the initial values for _tid 
-      //and _bsize can be simplified if isSingleTask is true.
-      //if( !isSingleTask ) {
-      if( true ) {
-        /*
-         * Create expressions for calculating global GPU thread ID (_gtid), local thread ID (_tid), 
-         * global thread block ID (_bid), and thread block size (_bsize).
-         *     _bid = get_group_id(0) + get_group_id(1)*get_num_groups(0) + get_group_id(2)*get_num_groups(0)*get_num_groups(1);
-         *     _bsize = get_local_size(0)*get_local_size(1)*get_local_size(2);
-         *     _tid = get_local_id(0) + get_local_id(1)*get_local_size(0) + get_local_id(2)*get_local_size(0)*get_local_size(1);
-         *     _gtid = _tid + (_bid * _bsize);
-         * [CAUTION] get_local_id(), get_local_size(), get_group_id(), and get_num_groups() are OpenCL-built-in
-         * functions, and thus they don't have any declarations; Range Analysis 
-         * can not decide the types of these functions, and therefore, ignore these.
-         */ 
-        VariableDeclarator gtid_declarator = new VariableDeclarator(new NameID("_gtid"));
-        //gtid_declarator.setInitializer(new Initializer(biexp2));
-        VariableDeclaration gtid_decl = new VariableDeclaration(Specifier.INT, gtid_declarator);
-        gtid = new Identifier(gtid_declarator);
-        BinaryExpression biexp1 = new BinaryExpression(new NameID("get_group_id(1)"), 
-            BinaryOperator.MULTIPLY, new NameID("get_num_groups(0)"));
-        BinaryExpression biexp2 = new BinaryExpression(new NameID("get_group_id(0)"),
-            BinaryOperator.ADD, biexp1);
-        biexp1 = new BinaryExpression(new NameID("get_group_id(2)"), BinaryOperator.MULTIPLY, 
-            new BinaryExpression(new NameID("get_num_groups(0)"), BinaryOperator.MULTIPLY, new NameID("get_num_groups(1)")));
-        biexp2 = new BinaryExpression(biexp2, BinaryOperator.ADD, biexp1);
-        VariableDeclarator bid_declarator = new VariableDeclarator(new NameID("_bid"));
-        //bid_declarator.setInitializer(new Initializer(biexp2));
-        Declaration bid_decl = new VariableDeclaration(Specifier.INT, bid_declarator);
-        bid = new Identifier(bid_declarator);
-        ExpressionStatement bidInitStmt;
-        if( isSingleTask ) {
-        	bidInitStmt = new ExpressionStatement(new AssignmentExpression(bid.clone(), AssignmentOperator.NORMAL,
-        			new IntegerLiteral(0)));
-        } else {
-        	bidInitStmt = new ExpressionStatement(new AssignmentExpression(bid.clone(), AssignmentOperator.NORMAL,
-        			biexp2));
-        }
-        Statement gtidRefStmt = null;
-        boolean bidIncluded = false;
-        if( IRTools.containsExpression(kernelRegion, bid) || IRTools.containsExpression(kernelRegion, gtid) ) {
-          bidIncluded = true;
-          kernelRegion.addDeclaration(bid_decl);
-          Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
-          kernelRegion.addStatementAfter(last_decl_stmt, bidInitStmt);
-          gtidRefStmt = bidInitStmt;
-          TransformTools.replaceAll(kernelRegion, bid, bid);
-        }
-
-        biexp1 = new BinaryExpression(new BinaryExpression(new NameID("get_local_size(0)"), BinaryOperator.MULTIPLY, 
-              new NameID("get_local_size(1)")), BinaryOperator.MULTIPLY, new NameID("get_local_size(2)"));
-        VariableDeclarator bsize_declarator = new VariableDeclarator(new NameID("_bsize"));
-        //bsize_declarator.setInitializer(new Initializer(biexp1));
-        Declaration bsize_decl = new VariableDeclaration(Specifier.INT, bsize_declarator);
-        bsize = new Identifier(bsize_declarator);
-        ExpressionStatement bsizeInitStmt;
-        if( isSingleTask ) {
-          bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
-                new IntegerLiteral(1)));
-        } else {
-          bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
-                biexp1));
-        }
-        if( IRTools.containsExpression(kernelRegion, bsize) || IRTools.containsExpression(kernelRegion, gtid) ) {
-          kernelRegion.addDeclaration(bsize_decl);
-          Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
-          kernelRegion.addStatementAfter(last_decl_stmt, bsizeInitStmt);
-          TransformTools.replaceAll(kernelRegion, bsize, bsize);
-        }
-
-        biexp1 = new BinaryExpression(new NameID("get_local_id(1)"), 
-            BinaryOperator.MULTIPLY, new NameID("get_local_size(0)"));
-        biexp2 = new BinaryExpression(new NameID("get_local_id(0)"),
-            BinaryOperator.ADD, biexp1);
-        biexp1 = new BinaryExpression(new NameID("get_local_id(2)"), BinaryOperator.MULTIPLY, 
-            new BinaryExpression(new NameID("get_local_size(0)"), BinaryOperator.MULTIPLY, new NameID("get_local_size(1)")));
-        biexp2 = new BinaryExpression(biexp2, BinaryOperator.ADD, biexp1);
-        VariableDeclarator tid_declarator = new VariableDeclarator(new NameID("_tid"));
-        //tid_declarator.setInitializer(new Initializer(biexp2));
-        Declaration tid_decl = new VariableDeclaration(Specifier.INT, tid_declarator);
-        tid = new Identifier(tid_declarator);
-        ExpressionStatement tidInitStmt;
-        if( isSingleTask ) {
-          tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
-                new IntegerLiteral(0)));
-        } else {
-          tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
-                biexp2));
-        }
-        boolean tidIncluded = false;
-        if( IRTools.containsExpression(kernelRegion, tid) || IRTools.containsExpression(kernelRegion, gtid)) {
-          tidIncluded = true;
-          kernelRegion.addDeclaration(tid_decl);
-          Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
-          kernelRegion.addStatementAfter(last_decl_stmt, tidInitStmt);
-          if( gtidRefStmt == null ) {
-            gtidRefStmt = tidInitStmt;
+        CompoundStatement kernelRegion = null;
+        if( region instanceof ForLoop ) {
+          kernelRegion = new_proc.getBody();
+          Statement dummyStmt = new AnnotationStatement();
+          kernelRegion.addStatement(dummyStmt);
+          dummyStmt.swapWith(region);
+          for( Statement preS : preList ) {
+            kernelRegion.addStatementBefore(region, preS);
           }
-          TransformTools.replaceAll(kernelRegion, tid, tid);
+          int pSize = postList.size();
+          for( int m=pSize-1; m>=0; m-- ) {
+            kernelRegion.addStatementAfter(region, postList.get(m));
+          }
+        } else {
+          kernelRegion = new_proc.getBody();
+          region.swapWith(kernelRegion);
+          kernelRegion = (CompoundStatement)region;
+        }
+        while ( !devProcStack.isEmpty() ) {
+          Procedure tProc = devProcStack.pop();
+          parentTrUnt.removeChild(tProc);
+          kernelsTranslationUnit.addDeclaration(tProc);
         }
 
-        biexp1 = new BinaryExpression(bid.clone(), 
-            BinaryOperator.MULTIPLY, bsize.clone());
-        biexp2 = new BinaryExpression(tid.clone(), BinaryOperator.ADD, biexp1);
-        ExpressionStatement gtidInitStmt = new ExpressionStatement(new AssignmentExpression(gtid.clone(), AssignmentOperator.NORMAL,
-              biexp2));
-        if( IRTools.containsExpression(kernelRegion, gtid) ) {
-          if( !bidIncluded ) {
+        // Put the new_proc in the separate file
+        kernelsTranslationUnit.addDeclaration(new_proc);
+        accKernelsList.add(new_proc.getSymbolName());
+
+        //If typedef or other user-types are used, their definition should 
+        //be added to the kernelsTranslationUnit.
+        Set<Symbol> usedSymbols = SymbolTools.getSymbols(new_proc);
+        usedSymbols.addAll(SymbolTools.getLocalSymbols(new_proc.getBody()));
+        //Add enum symbols.
+        Set<Symbol> tAccessedSymbols = SymbolTools.getAccessedSymbols(new_proc.getBody());
+        for( Symbol tASym : tAccessedSymbols ) {
+          Declaration tADecl = tASym.getDeclaration();
+          if( tADecl instanceof Enumeration ) {
+            usedSymbols.add(tASym);
+          }
+        }
+        copyUserSpecifierDeclarations(kernelsTranslationUnit, kernelCall_stmt, usedSymbols, accHeaderDecl);
+
+        /* put new_proc before the calling proc (avoids prototypes) */
+        //((TranslationUnit) cProc.getParent()).addDeclarationBefore(cProc,new_proc);
+
+        //DEBUG: seq loop may still need _tid for Worker-Single Mode. 
+        //Disable the below condition.
+        //Instead, the initial values for _tid 
+        //and _bsize can be simplified if isSingleTask is true.
+        //if( !isSingleTask ) {
+        if( true ) {
+          /*
+           * Create expressions for calculating global GPU thread ID (_gtid), local thread ID (_tid), 
+           * global thread block ID (_bid), and thread block size (_bsize).
+           *     _bid = get_group_id(0) + get_group_id(1)*get_num_groups(0) + get_group_id(2)*get_num_groups(0)*get_num_groups(1);
+           *     _bsize = get_local_size(0)*get_local_size(1)*get_local_size(2);
+           *     _tid = get_local_id(0) + get_local_id(1)*get_local_size(0) + get_local_id(2)*get_local_size(0)*get_local_size(1);
+           *     _gtid = _tid + (_bid * _bsize);
+           * [CAUTION] get_local_id(), get_local_size(), get_group_id(), and get_num_groups() are OpenCL-built-in
+           * functions, and thus they don't have any declarations; Range Analysis 
+           * can not decide the types of these functions, and therefore, ignore these.
+           */ 
+          VariableDeclarator gtid_declarator = new VariableDeclarator(new NameID("_gtid"));
+          //gtid_declarator.setInitializer(new Initializer(biexp2));
+          VariableDeclaration gtid_decl = new VariableDeclaration(Specifier.INT, gtid_declarator);
+          gtid = new Identifier(gtid_declarator);
+          BinaryExpression biexp1 = new BinaryExpression(new NameID("get_group_id(1)"), 
+              BinaryOperator.MULTIPLY, new NameID("get_num_groups(0)"));
+          BinaryExpression biexp2 = new BinaryExpression(new NameID("get_group_id(0)"),
+              BinaryOperator.ADD, biexp1);
+          biexp1 = new BinaryExpression(new NameID("get_group_id(2)"), BinaryOperator.MULTIPLY, 
+              new BinaryExpression(new NameID("get_num_groups(0)"), BinaryOperator.MULTIPLY, new NameID("get_num_groups(1)")));
+          biexp2 = new BinaryExpression(biexp2, BinaryOperator.ADD, biexp1);
+          VariableDeclarator bid_declarator = new VariableDeclarator(new NameID("_bid"));
+          //bid_declarator.setInitializer(new Initializer(biexp2));
+          Declaration bid_decl = new VariableDeclaration(Specifier.INT, bid_declarator);
+          bid = new Identifier(bid_declarator);
+          ExpressionStatement bidInitStmt;
+          if( isSingleTask ) {
+            bidInitStmt = new ExpressionStatement(new AssignmentExpression(bid.clone(), AssignmentOperator.NORMAL,
+                  new IntegerLiteral(0)));
+          } else {
+            bidInitStmt = new ExpressionStatement(new AssignmentExpression(bid.clone(), AssignmentOperator.NORMAL,
+                  biexp2));
+          }
+          Statement gtidRefStmt = null;
+          boolean bidIncluded = false;
+          if( IRTools.containsExpression(kernelRegion, bid) || IRTools.containsExpression(kernelRegion, gtid) ) {
+            bidIncluded = true;
             kernelRegion.addDeclaration(bid_decl);
             Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
             kernelRegion.addStatementAfter(last_decl_stmt, bidInitStmt);
-            if( gtidRefStmt == null ) {
-              gtidRefStmt = bidInitStmt;
-            }
+            gtidRefStmt = bidInitStmt;
+            TransformTools.replaceAll(kernelRegion, bid, bid);
           }
-          if( !tidIncluded ) {
+
+          biexp1 = new BinaryExpression(new BinaryExpression(new NameID("get_local_size(0)"), BinaryOperator.MULTIPLY, 
+                new NameID("get_local_size(1)")), BinaryOperator.MULTIPLY, new NameID("get_local_size(2)"));
+          VariableDeclarator bsize_declarator = new VariableDeclarator(new NameID("_bsize"));
+          //bsize_declarator.setInitializer(new Initializer(biexp1));
+          Declaration bsize_decl = new VariableDeclaration(Specifier.INT, bsize_declarator);
+          bsize = new Identifier(bsize_declarator);
+          ExpressionStatement bsizeInitStmt;
+          if( isSingleTask ) {
+            bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
+                  new IntegerLiteral(1)));
+          } else {
+            bsizeInitStmt = new ExpressionStatement(new AssignmentExpression(bsize.clone(), AssignmentOperator.NORMAL,
+                  biexp1));
+          }
+          if( IRTools.containsExpression(kernelRegion, bsize) || IRTools.containsExpression(kernelRegion, gtid) ) {
+            kernelRegion.addDeclaration(bsize_decl);
+            Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
+            kernelRegion.addStatementAfter(last_decl_stmt, bsizeInitStmt);
+            TransformTools.replaceAll(kernelRegion, bsize, bsize);
+          }
+
+          biexp1 = new BinaryExpression(new NameID("get_local_id(1)"), 
+              BinaryOperator.MULTIPLY, new NameID("get_local_size(0)"));
+          biexp2 = new BinaryExpression(new NameID("get_local_id(0)"),
+              BinaryOperator.ADD, biexp1);
+          biexp1 = new BinaryExpression(new NameID("get_local_id(2)"), BinaryOperator.MULTIPLY, 
+              new BinaryExpression(new NameID("get_local_size(0)"), BinaryOperator.MULTIPLY, new NameID("get_local_size(1)")));
+          biexp2 = new BinaryExpression(biexp2, BinaryOperator.ADD, biexp1);
+          VariableDeclarator tid_declarator = new VariableDeclarator(new NameID("_tid"));
+          //tid_declarator.setInitializer(new Initializer(biexp2));
+          Declaration tid_decl = new VariableDeclaration(Specifier.INT, tid_declarator);
+          tid = new Identifier(tid_declarator);
+          ExpressionStatement tidInitStmt;
+          if( isSingleTask ) {
+            tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
+                  new IntegerLiteral(0)));
+          } else {
+            tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL,
+                  biexp2));
+          }
+          boolean tidIncluded = false;
+          if( IRTools.containsExpression(kernelRegion, tid) || IRTools.containsExpression(kernelRegion, gtid)) {
+            tidIncluded = true;
             kernelRegion.addDeclaration(tid_decl);
             Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
             kernelRegion.addStatementAfter(last_decl_stmt, tidInitStmt);
             if( gtidRefStmt == null ) {
               gtidRefStmt = tidInitStmt;
             }
+            TransformTools.replaceAll(kernelRegion, tid, tid);
           }
-          kernelRegion.addDeclaration(gtid_decl);
-          //Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
-          kernelRegion.addStatementAfter(gtidRefStmt, gtidInitStmt);
-          TransformTools.replaceAll(kernelRegion, gtid, gtid);
+
+          biexp1 = new BinaryExpression(bid.clone(), 
+              BinaryOperator.MULTIPLY, bsize.clone());
+          biexp2 = new BinaryExpression(tid.clone(), BinaryOperator.ADD, biexp1);
+          ExpressionStatement gtidInitStmt = new ExpressionStatement(new AssignmentExpression(gtid.clone(), AssignmentOperator.NORMAL,
+                biexp2));
+          if( IRTools.containsExpression(kernelRegion, gtid) ) {
+            if( !bidIncluded ) {
+              kernelRegion.addDeclaration(bid_decl);
+              Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
+              kernelRegion.addStatementAfter(last_decl_stmt, bidInitStmt);
+              if( gtidRefStmt == null ) {
+                gtidRefStmt = bidInitStmt;
+              }
+            }
+            if( !tidIncluded ) {
+              kernelRegion.addDeclaration(tid_decl);
+              Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
+              kernelRegion.addStatementAfter(last_decl_stmt, tidInitStmt);
+              if( gtidRefStmt == null ) {
+                gtidRefStmt = tidInitStmt;
+              }
+            }
+            kernelRegion.addDeclaration(gtid_decl);
+            //Statement last_decl_stmt = IRTools.getLastDeclarationStatement(kernelRegion);
+            kernelRegion.addStatementAfter(gtidRefStmt, gtidInitStmt);
+            TransformTools.replaceAll(kernelRegion, gtid, gtid);
+          }
+
+          /////////////////////////////////////////////////////////////// 
+          // Modify target region to be outlined as a kernel function  //
+          //     - Remove the outmost OMP parallel for loop.           //
+          //     - Add necessary GPU thread mapping statements.        //
+          /////////////////////////////////////////////////////////////// 
         }
 
-        /////////////////////////////////////////////////////////////// 
-        // Modify target region to be outlined as a kernel function  //
-        //     - Remove the outmost OMP parallel for loop.           //
-        //     - Add necessary GPU thread mapping statements.        //
-        /////////////////////////////////////////////////////////////// 
-      }
+        Traversable parent = kernelCall_stmt.getParent();
 
-      Traversable parent = kernelCall_stmt.getParent();
+        if( SkipGPUTranslation == 5 ) {
+          return;
+        }
 
-      if( SkipGPUTranslation == 5 ) {
-    	  return;
-      }
+        //Convert worksharing loops into if-statements. 
+        OpenCLTranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers, opt_skipKernelLoopBoundChecking, isSingleTask);
 
-      //Convert worksharing loops into if-statements. 
-      OpenCLTranslationTools.worksharingLoopTransformation(cProc, kernelRegion, region, cRegionKind, defaultNumWorkers, opt_skipKernelLoopBoundChecking, isSingleTask);
-
-      //[DEBUG] We don't need this since each kernel call in the default queue will be followed by HI_synchronize() call.
-      /*		if( opt_forceSyncKernelCall ) {
-      //FunctionCall syncCall = new FunctionCall(new NameID("cudaThreadSynchronize"));
-      FunctionCall syncCall = new FunctionCall(new NameID("HI_synchronize"));
-      if( parent instanceof CompoundStatement ) {
-      ((CompoundStatement)parent).addStatementAfter(kernelCall_stmt, new ExpressionStatement(syncCall));
-      } else {
-      Tools.exit(pass_name + "[Error in extractKernelRegion()] Kernel call statement (" +
-      kernelCall_stmt + ") does not have a parent!");
-      }
-      }*/
-
-      if( opt_addSafetyCheckingCode ) {
-        /////////////////////////////////////////////
-        // Add GPU global memory usage check code. //
-        /////////////////////////////////////////////
-        Expression MemCheckExp = new BinaryExpression((Identifier)gmemsize.clone(),
-            BinaryOperator.COMPARE_GT, new NameID("MAX_GMSIZE")); 
-        FunctionCall MemWarningCall = new FunctionCall(new NameID("printf"));
-        StringLiteral warningMsg = new StringLiteral("[WARNING] size of allocated GPU global memory" +
-            " (%u) exceeds the given limit (%d)\\n");
-        MemWarningCall.addArgument(warningMsg);
-        MemWarningCall.addArgument((Identifier)gmemsize.clone());
-        MemWarningCall.addArgument( new NameID("MAX_GMSIZE"));
-        IfStatement gMemCheckStmt = new IfStatement(MemCheckExp, 
-            new ExpressionStatement(MemWarningCall));
-        /////////////////////////////////////////////
-        // Add GPU shared memory usage check code. //
-        /////////////////////////////////////////////
-        MemCheckExp = new BinaryExpression((Identifier)smemsize.clone(),
-            BinaryOperator.COMPARE_GT, new NameID("MAX_SMSIZE")); 
-        MemWarningCall = new FunctionCall(new NameID("printf"));
-        warningMsg = new StringLiteral("[WARNING] size of allocated GPU shared memory" +
-            " (%d) exceeds the given limit (%d)\\n");
-        MemWarningCall.addArgument(warningMsg);
-        MemWarningCall.addArgument((Identifier)smemsize.clone());
-        MemWarningCall.addArgument( new NameID("MAX_SMSIZE"));
-        IfStatement sMemCheckStmt = new IfStatement(MemCheckExp, 
-            new ExpressionStatement(MemWarningCall));
+        //[DEBUG] We don't need this since each kernel call in the default queue will be followed by HI_synchronize() call.
+        /*		if( opt_forceSyncKernelCall ) {
+        //FunctionCall syncCall = new FunctionCall(new NameID("cudaThreadSynchronize"));
+        FunctionCall syncCall = new FunctionCall(new NameID("HI_synchronize"));
         if( parent instanceof CompoundStatement ) {
-          ((CompoundStatement)parent).addStatementBefore(kernelCall_stmt, gMemCheckStmt);
-          ((CompoundStatement)parent).addStatementBefore(kernelCall_stmt, sMemCheckStmt);
+        ((CompoundStatement)parent).addStatementAfter(kernelCall_stmt, new ExpressionStatement(syncCall));
         } else {
-          Tools.exit(pass_name + "[Error in extractKernelRegion()] Kernel call statement (" +
-              kernelCall_stmt + ") does not have a parent!");
+        Tools.exit(pass_name + "[Error in extractKernelRegion()] Kernel call statement (" +
+        kernelCall_stmt + ") does not have a parent!");
         }
-      }
+        }*/
 
-      /*
-       * The original OpenACC annotation will be inserted into this new kernel function
-       * if the original region is compoundstatement.
-       * [CAUTION] Symbols in the annotation are not the ones used in
-       * the kernel region; they refer to original CPU symbols, but not
-       * GPU device symbols.
-       * [CAUTION] This insertion violates OpenACC semantics.
-       */
-      if( region instanceof CompoundStatement ) {
-        List<Annotation> annots = region.getAnnotations();
-        if( annots != null ) {
-          for(Annotation annot : annots) {
-            kernelCall_stmt.annotate(annot);
+        if( opt_addSafetyCheckingCode ) {
+          /////////////////////////////////////////////
+          // Add GPU global memory usage check code. //
+          /////////////////////////////////////////////
+          Expression MemCheckExp = new BinaryExpression((Identifier)gmemsize.clone(),
+              BinaryOperator.COMPARE_GT, new NameID("MAX_GMSIZE")); 
+          FunctionCall MemWarningCall = new FunctionCall(new NameID("printf"));
+          StringLiteral warningMsg = new StringLiteral("[WARNING] size of allocated GPU global memory" +
+              " (%u) exceeds the given limit (%d)\\n");
+          MemWarningCall.addArgument(warningMsg);
+          MemWarningCall.addArgument((Identifier)gmemsize.clone());
+          MemWarningCall.addArgument( new NameID("MAX_GMSIZE"));
+          IfStatement gMemCheckStmt = new IfStatement(MemCheckExp, 
+              new ExpressionStatement(MemWarningCall));
+          /////////////////////////////////////////////
+          // Add GPU shared memory usage check code. //
+          /////////////////////////////////////////////
+          MemCheckExp = new BinaryExpression((Identifier)smemsize.clone(),
+              BinaryOperator.COMPARE_GT, new NameID("MAX_SMSIZE")); 
+          MemWarningCall = new FunctionCall(new NameID("printf"));
+          warningMsg = new StringLiteral("[WARNING] size of allocated GPU shared memory" +
+              " (%d) exceeds the given limit (%d)\\n");
+          MemWarningCall.addArgument(warningMsg);
+          MemWarningCall.addArgument((Identifier)smemsize.clone());
+          MemWarningCall.addArgument( new NameID("MAX_SMSIZE"));
+          IfStatement sMemCheckStmt = new IfStatement(MemCheckExp, 
+              new ExpressionStatement(MemWarningCall));
+          if( parent instanceof CompoundStatement ) {
+            ((CompoundStatement)parent).addStatementBefore(kernelCall_stmt, gMemCheckStmt);
+            ((CompoundStatement)parent).addStatementBefore(kernelCall_stmt, sMemCheckStmt);
+          } else {
+            Tools.exit(pass_name + "[Error in extractKernelRegion()] Kernel call statement (" +
+                kernelCall_stmt + ") does not have a parent!");
           }
-          region.removeAnnotations();
         }
-      } else {
-        //profile-related annotations and resilience annotations are moved to the new kernel function.
-        List<Annotation> annots = region.getAnnotations();
-        List<Annotation> newAnnots = new LinkedList<Annotation>();
-        if( annots != null ) {
-          for(Annotation annot : annots) {
-            if( annot.containsKey("resilience") || annot.containsKey("profile") ) {
+
+        /*
+         * The original OpenACC annotation will be inserted into this new kernel function
+         * if the original region is compoundstatement.
+         * [CAUTION] Symbols in the annotation are not the ones used in
+         * the kernel region; they refer to original CPU symbols, but not
+         * GPU device symbols.
+         * [CAUTION] This insertion violates OpenACC semantics.
+         */
+        if( region instanceof CompoundStatement ) {
+          List<Annotation> annots = region.getAnnotations();
+          if( annots != null ) {
+            for(Annotation annot : annots) {
               kernelCall_stmt.annotate(annot);
-            } else {
-              newAnnots.add(annot);
             }
+            region.removeAnnotations();
           }
-          region.removeAnnotations();
-          if( !newAnnots.isEmpty() ) {
-            for( Annotation annot : newAnnots ) {
-              region.annotate(annot);
+        } else {
+          //profile-related annotations and resilience annotations are moved to the new kernel function.
+          List<Annotation> annots = region.getAnnotations();
+          List<Annotation> newAnnots = new LinkedList<Annotation>();
+          if( annots != null ) {
+            for(Annotation annot : annots) {
+              if( annot.containsKey("resilience") || annot.containsKey("profile") ) {
+                kernelCall_stmt.annotate(annot);
+              } else {
+                newAnnots.add(annot);
+              }
+            }
+            region.removeAnnotations();
+            if( !newAnnots.isEmpty() ) {
+              for( Annotation annot : newAnnots ) {
+                region.annotate(annot);
+              }
             }
           }
         }
+
+        PrintTools.println("[extractComputeRegion() ends] current Procedure: " + cProc.getSymbolName()
+            + "\nOpenACC annotation: " + cAnnot +"\n", 1);
+
       }
 
-      PrintTools.println("[extractComputeRegion() ends] current Procedure: " + cProc.getSymbolName()
-          + "\nOpenACC annotation: " + cAnnot +"\n", 1);
-
-    }
-
-    private void devProcCloning(Traversable at, TranslationUnit trUnt, String TrCnt, 
-        Set<Symbol> callerParamSymSet, Stack<Procedure> devProcStack) {
-      List<FunctionCall> funcList = IRTools.getFunctionCalls(at);
-      if( funcList != null ) {
-        for( FunctionCall fCall : funcList ) {
-          Procedure c_proc = AnalysisTools.findProcedure(fCall);
-          if( (c_proc != null) && (!StandardLibrary.contains(fCall)) ) {
-            FunctionCall new_fCall = null;
-            String callContext = "";
-            String offsetTails = ""; //used to differentiate offsets to texture variable argument. 
-            Map<String, Procedure> devProcContextMap;
-            if( !devProcMap.containsKey(c_proc) ) {
-              devProcContextMap = new HashMap<String, Procedure>();
-              devProcMap.put(c_proc, devProcContextMap);
-            } else {
-              devProcContextMap = devProcMap.get(c_proc);
-            }
-            //Generate calling context string.
-            List<Symbol> argSymList = new ArrayList<Symbol>(fCall.getArguments().size());
-            for( Expression argExp : fCall.getArguments() ) {
-              //Step1: find argument symbol which is a parameber symbol of the calling procedure.
-              Symbol argSym = SymbolTools.getSymbolOf(argExp);
-              if( argSym == null ) {
-                if( argExp instanceof BinaryExpression ) {
-                  //find argSym which is a parameter symbol of the calling procedure.
-                  Set<Symbol> sSet = SymbolTools.getAccessedSymbols(argExp);
-                  sSet.retainAll(callerParamSymSet);
-                  for( Symbol tSym : sSet ) {
-                    if( argSym == null ) {
-                      argSym = tSym;
-                    } else {
-                      if( SymbolTools.isPointer(tSym) || SymbolTools.isArray(tSym) ) {
+      private void devProcCloning(Traversable at, TranslationUnit trUnt, String TrCnt, 
+          Set<Symbol> callerParamSymSet, Stack<Procedure> devProcStack) {
+        List<FunctionCall> funcList = IRTools.getFunctionCalls(at);
+        if( funcList != null ) {
+          for( FunctionCall fCall : funcList ) {
+            Procedure c_proc = AnalysisTools.findProcedure(fCall);
+            if( (c_proc != null) && (!StandardLibrary.contains(fCall)) ) {
+              FunctionCall new_fCall = null;
+              String callContext = "";
+              String offsetTails = ""; //used to differentiate offsets to texture variable argument. 
+              Map<String, Procedure> devProcContextMap;
+              if( !devProcMap.containsKey(c_proc) ) {
+                devProcContextMap = new HashMap<String, Procedure>();
+                devProcMap.put(c_proc, devProcContextMap);
+              } else {
+                devProcContextMap = devProcMap.get(c_proc);
+              }
+              //Generate calling context string.
+              List<Symbol> argSymList = new ArrayList<Symbol>(fCall.getArguments().size());
+              for( Expression argExp : fCall.getArguments() ) {
+                //Step1: find argument symbol which is a parameber symbol of the calling procedure.
+                Symbol argSym = SymbolTools.getSymbolOf(argExp);
+                if( argSym == null ) {
+                  if( argExp instanceof BinaryExpression ) {
+                    //find argSym which is a parameter symbol of the calling procedure.
+                    Set<Symbol> sSet = SymbolTools.getAccessedSymbols(argExp);
+                    sSet.retainAll(callerParamSymSet);
+                    for( Symbol tSym : sSet ) {
+                      if( argSym == null ) {
                         argSym = tSym;
-                        //FIXME: if multiple non-scalar parameter symbols exist, we can not
-                        //know which is correct symbol, but not checked here.
+                      } else {
+                        if( SymbolTools.isPointer(tSym) || SymbolTools.isArray(tSym) ) {
+                          argSym = tSym;
+                          //FIXME: if multiple non-scalar parameter symbols exist, we can not
+                          //know which is correct symbol, but not checked here.
+                        }
                       }
                     }
                   }
                 }
-              }
-              if( argSym instanceof AccessSymbol ) {
-                argSym = null; 	//if argument is access expression, 
-                //it should be considered as normal type.
-              }
-              if( !callerParamSymSet.contains(argSym) ) {
-                argSym = null;
-              }
-              //Step2: find argument symbol type.
-              argSymList.add(argSym);
-              if( argSym == null ) {
-                callContext += "0"; //normal type
-              } else {
-                if( pitchedSymMap.containsKey(argSym) ) {
-                  callContext += "1";
-                } else if( textureSymMap.containsKey(argSym)) {
-                  callContext += "2";
-                  if( argExp instanceof BinaryExpression ) {
-                    BinaryExpression tExp = (BinaryExpression)argExp;
-                    Symbol tSym = SymbolTools.getSymbolOf(tExp.getLHS());
-                    Expression offset = null;
-                    boolean foundArgSym = false;
-                    if( argSym == tSym ) {
-                      offset = tExp.getRHS();
-                      foundArgSym = true;
-                    } else {
-                      tSym = SymbolTools.getSymbolOf(tExp.getRHS());
+                if( argSym instanceof AccessSymbol ) {
+                  argSym = null; 	//if argument is access expression, 
+                  //it should be considered as normal type.
+                }
+                if( !callerParamSymSet.contains(argSym) ) {
+                  argSym = null;
+                }
+                //Step2: find argument symbol type.
+                argSymList.add(argSym);
+                if( argSym == null ) {
+                  callContext += "0"; //normal type
+                } else {
+                  if( pitchedSymMap.containsKey(argSym) ) {
+                    callContext += "1";
+                  } else if( textureSymMap.containsKey(argSym)) {
+                    callContext += "2";
+                    if( argExp instanceof BinaryExpression ) {
+                      BinaryExpression tExp = (BinaryExpression)argExp;
+                      Symbol tSym = SymbolTools.getSymbolOf(tExp.getLHS());
+                      Expression offset = null;
+                      boolean foundArgSym = false;
                       if( argSym == tSym ) {
-                        offset = tExp.getLHS();
+                        offset = tExp.getRHS();
                         foundArgSym = true;
+                      } else {
+                        tSym = SymbolTools.getSymbolOf(tExp.getRHS());
+                        if( argSym == tSym ) {
+                          offset = tExp.getLHS();
+                          foundArgSym = true;
+                        }
                       }
-                    }
-                    boolean tooComplex = false;
-                    if( !foundArgSym ) {
-                      tooComplex = true;
-                    } else {
-                      //DEBUG: current implementation handles only simple binary expressions 
-                      //such as (a + 1).
-                      if( offset instanceof IntegerLiteral ) {
-                        BinaryOperator bOp = tExp.getOperator();
-                        if( bOp.equals(BinaryOperator.ADD)) {
-                          textureOffsetMap.put(argSym, offset);
-                          offsetTails += offset.toString();
-                        } else if( bOp.equals(BinaryOperator.SUBTRACT) ) {
-                          long iVal = ((IntegerLiteral)offset).getValue();
-                          offset = new IntegerLiteral(-1*iVal);
-                          offsetTails += offset.toString();
-                          textureOffsetMap.put(argSym, offset);
+                      boolean tooComplex = false;
+                      if( !foundArgSym ) {
+                        tooComplex = true;
+                      } else {
+                        //DEBUG: current implementation handles only simple binary expressions 
+                        //such as (a + 1).
+                        if( offset instanceof IntegerLiteral ) {
+                          BinaryOperator bOp = tExp.getOperator();
+                          if( bOp.equals(BinaryOperator.ADD)) {
+                            textureOffsetMap.put(argSym, offset);
+                            offsetTails += offset.toString();
+                          } else if( bOp.equals(BinaryOperator.SUBTRACT) ) {
+                            long iVal = ((IntegerLiteral)offset).getValue();
+                            offset = new IntegerLiteral(-1*iVal);
+                            offsetTails += offset.toString();
+                            textureOffsetMap.put(argSym, offset);
+                          } else {
+                            tooComplex = true;
+                          }
                         } else {
                           tooComplex = true;
                         }
-                      } else {
-                        tooComplex = true;
+                      }
+                      if( tooComplex ) {
+                        Tools.exit("[ERROR in ACC2OPENCLTranslator.devProcCloning()] texture symbol (" + 
+                            argSym.getSymbolName() + ") is passed to a device function (" + c_proc.getSymbolName() +
+                            ") in a complex argument expression (" + argExp + "); the current implemenation can not " +
+                            "handle this. Either manually inline this device function, or do not cache the variable on " +
+                            "the texture cache.");
                       }
                     }
-                    if( tooComplex ) {
-                      Tools.exit("[ERROR in ACC2OPENCLTranslator.devProcCloning()] texture symbol (" + 
-                          argSym.getSymbolName() + ") is passed to a device function (" + c_proc.getSymbolName() +
-                          ") in a complex argument expression (" + argExp + "); the current implemenation can not " +
-                          "handle this. Either manually inline this device function, or do not cache the variable on " +
-                          "the texture cache.");
-                    }
+                  } else if( constantSymMap.containsKey(argSym)) {
+                    callContext += "3";
+                  } else { //normal type
+                    callContext += "0";
                   }
-                } else if( constantSymMap.containsKey(argSym)) {
-                  callContext += "3";
-                } else { //normal type
-                  callContext += "0";
                 }
               }
-            }
-            if( !offsetTails.equals("") ) {
-              callContext += offsetTails;
-            }
-            TranslationUnit tu = (TranslationUnit)c_proc.getParent();
-            if( !devProcContextMap.containsKey(callContext) ) {
-              boolean cloneProcedure = true;
-              //FIXME: the original procedure should not be used for device procedure if it is used kernels across different
-              //translation units and calling contexts are different; for now, cloning is always enforced conversatively.
-              /*						if( devProcContextMap.isEmpty() && (tu == trUnt) ) {
+              if( !offsetTails.equals("") ) {
+                callContext += offsetTails;
+              }
+              TranslationUnit tu = (TranslationUnit)c_proc.getParent();
+              if( !devProcContextMap.containsKey(callContext) ) {
+                boolean cloneProcedure = true;
+                //FIXME: the original procedure should not be used for device procedure if it is used kernels across different
+                //translation units and calling contexts are different; for now, cloning is always enforced conversatively.
+                /*						if( devProcContextMap.isEmpty() && (tu == trUnt) ) {
                                                                 ACCAnnotation rAnnot = c_proc.getAnnotation(ACCAnnotation.class, "routine");
                                                                 if (rAnnot != null ) {
                                                                 if (rAnnot.containsKey("nohost")) {
@@ -5443,369 +5440,370 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                                                                 }
                                                                 }
                                                                 }*/
-              List<VariableDeclaration> oldParamList = 
-                (List<VariableDeclaration>)c_proc.getParameters();
-              CompoundStatement body;
-              String new_proc_name;
-              Procedure new_proc;
-              if( cloneProcedure ) {
-                /////////////////////////////
-                // Clone current procedure //
-                /////////////////////////////
-                //FIXME: if the current procedure has routine bind clause, and if the argument is different
-                //from the procedure name, below transformation should be skipped, but the current kernel
-                //translation pass may not recognize the other implementation correctly. To fix this, the
-                //other implementation should not have any global variable accessed without parameter passing.
-                //If a procedure has a static variable, it should not be cloned.
-                //Set<Symbol> symSet = SymbolTools.getVariableSymbols(c_proc.getBody());
-                Set<Symbol> symSet = SymbolTools.getLocalSymbols(c_proc.getBody());
-                Set<Symbol> staticSyms = AnalysisTools.getStaticVariables(symSet);
-                if( !staticSyms.isEmpty() ) {
-                  Tools.exit("[ERROR in GlobalVariableParameterization] if a procedure has static variables," +
-                      "it can not be cloned; for correct transformation, either \"disableStatic2GlobalConversion\" " +
-                      "option should be disabled or static variables should be manually promoted to global ones.\n" +
-                      "Procedure name: " + c_proc.getSymbolName() + "\n");
+                List<VariableDeclaration> oldParamList = 
+                  (List<VariableDeclaration>)c_proc.getParameters();
+                CompoundStatement body;
+                String new_proc_name;
+                Procedure new_proc;
+                if( cloneProcedure ) {
+                  /////////////////////////////
+                  // Clone current procedure //
+                  /////////////////////////////
+                  //FIXME: if the current procedure has routine bind clause, and if the argument is different
+                  //from the procedure name, below transformation should be skipped, but the current kernel
+                  //translation pass may not recognize the other implementation correctly. To fix this, the
+                  //other implementation should not have any global variable accessed without parameter passing.
+                  //If a procedure has a static variable, it should not be cloned.
+                  //Set<Symbol> symSet = SymbolTools.getVariableSymbols(c_proc.getBody());
+                  Set<Symbol> symSet = SymbolTools.getLocalSymbols(c_proc.getBody());
+                  Set<Symbol> staticSyms = AnalysisTools.getStaticVariables(symSet);
+                  if( !staticSyms.isEmpty() ) {
+                    Tools.exit("[ERROR in GlobalVariableParameterization] if a procedure has static variables," +
+                        "it can not be cloned; for correct transformation, either \"disableStatic2GlobalConversion\" " +
+                        "option should be disabled or static variables should be manually promoted to global ones.\n" +
+                        "Procedure name: " + c_proc.getSymbolName() + "\n");
+                  }
+                  List<Specifier> return_types = c_proc.getReturnType();
+                  //OpenCL does not require special specifier for device function
+                  //return_types.add(0, OpenCLSpecifier.CUDA_DEVICE);
+                  body = (CompoundStatement)c_proc.getBody().clone();
+                  new_proc_name = "dev__" + c_proc.getSymbolName() + "_TU" + TrCnt + "_CT" + devProcContextMap.size();
+                  NameID new_procID = new NameID(new_proc_name);
+                  new_proc = new Procedure(return_types,
+                      new ProcedureDeclarator(new_procID,
+                        new LinkedList()), body);	
+                  //////////////////////////////////////////////////////////
+                  // Create a new function call for the cloned procedure. //
+                  //////////////////////////////////////////////////////////
+                  if( fCall != null ) {
+                    new_fCall = new FunctionCall(new NameID(new_proc_name));
+                    fCall.swapWith(new_fCall);
+                  }
+                } else {
+                  body = c_proc.getBody();
+                  new_proc_name = c_proc.getSymbolName();
+                  new_proc = c_proc;
+                  new_fCall = fCall;
                 }
-                List<Specifier> return_types = c_proc.getReturnType();
-                //OpenCL does not require special specifier for device function
-                //return_types.add(0, OpenCLSpecifier.CUDA_DEVICE);
-                body = (CompoundStatement)c_proc.getBody().clone();
-                new_proc_name = "dev__" + c_proc.getSymbolName() + "_TU" + TrCnt + "_CT" + devProcContextMap.size();
-                NameID new_procID = new NameID(new_proc_name);
-                new_proc = new Procedure(return_types,
-                    new ProcedureDeclarator(new_procID,
-                      new LinkedList()), body);	
+                devProcContextMap.put(callContext, new_proc);
+                ///////////////////////////////////////////////
+                // Update function parameters and arguments. //
+                ///////////////////////////////////////////////
+                Set<Symbol> newCallerParamSymSet = new HashSet<Symbol>();
+                List<Expression> oldArgList = (List<Expression>)fCall.getArguments();
+                List<VariableDeclaration> extraParamList = new LinkedList<VariableDeclaration>();
+                List<Expression> extraArgList = new LinkedList<Expression>();
+                int oldParamListSize = oldParamList.size();
+                if( oldParamListSize == 1 ) {
+
+                  Object obj = oldParamList.get(0);
+                  String paramS = obj.toString();
+                  // Remove any leading or trailing whitespace.
+                  paramS = paramS.trim();
+                  if( paramS.equals(Specifier.VOID.toString()) ) {
+                    oldParamListSize = 0;
+                  }
+                }
+                if( oldParamListSize > 0 ) {
+                  int i=0;
+                  for( VariableDeclaration param : oldParamList ) {
+                    Symbol param_declarator = (Symbol)param.getDeclarator(0);
+                    List<Specifier> typeSpecs = new ArrayList<Specifier>();
+                    Symbol argSym = argSymList.get(i);
+                    boolean isScalar = true;
+                    if( SymbolTools.isArray(param_declarator) || SymbolTools.isPointer(param_declarator) ) {
+                      isScalar = false;
+                    }
+                    if( !isScalar && (argSym != null) ) {
+                      if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+                        typeSpecs.add(OpenCLSpecifier.OPENCL_GLOBAL);
+                      } else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+                        typeSpecs.add(OpenCLSpecifier.OPENCL_CONSTANT);
+                      } else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+                        typeSpecs.add(OpenCLSpecifier.OPENCL_LOCAL);
+                      }
+                    }
+                    typeSpecs.addAll(param.getSpecifiers());
+                    /*								if( typeSpecs.remove(Specifier.RESTRICT) ) {
+                                                                                param.getSpecifiers().remove(Specifier.RESTRICT);
+                                                                                param.getSpecifiers().add(OpenCLSpecifier.RESTRICT);
+                                                                                typeSpecs.add(OpenCLSpecifier.RESTRICT);
+                                                                                }*/
+                    VariableDeclaration cloned_decl = (VariableDeclaration)param.clone();
+                    if( !isScalar && (argSym != null) ) {
+                      if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+                        cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);;
+                      } else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+                        cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_CONSTANT);;
+                      } else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+                        cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_LOCAL);;
+                      }
+                    }
+                    Identifier paramID = new Identifier(param_declarator);
+                    Symbol cloned_param_declr = (Symbol) cloned_decl.getDeclarator(0);
+                    if( cloneProcedure ) {
+                      newCallerParamSymSet.add(cloned_param_declr);
+                    } else {
+                      newCallerParamSymSet.add(param_declarator);
+                    }
+                    if( !callContext.equals("") ) {
+                      char symType = callContext.charAt(i);
+                      if( symType == '1' ) { //pitched malloc
+                        String pitchVarName = "pitch__" + cloned_param_declr.getSymbolName();
+                        VariableDeclarator pitch_declarator = new VariableDeclarator(new NameID(pitchVarName));
+                        VariableDeclaration pitch_decl = new VariableDeclaration(OpenACCSpecifier.SIZE_T, 
+                            pitch_declarator);
+                        Identifier paramPitchID = new Identifier(pitch_declarator);
+                        extraParamList.add(pitch_decl);
+                        Identifier argPitchID = new Identifier(pitchedSymMap.get(argSym));
+                        extraArgList.add(argPitchID);
+                        if( cloneProcedure ) {
+                          pitchedSymMap.put(cloned_param_declr, pitch_declarator);
+                        } else {
+                          pitchedSymMap.put(param_declarator, pitch_declarator);
+                        }
+                        /* 
+                         * If MallocPitch is used to allocate 2 dimensional array, gpu_a,
+                         * replace array access expression with pointer access expression with pitch
+                         * Ex: gpu__a[i][k] => *((float *)((char *)gpu__a + i * pitch__a) + k)
+                         */
+                        if( cloneProcedure ) {
+                          CUDATranslationTools.pitchedAccessConv(param_declarator, 
+                              new Identifier(cloned_param_declr), typeSpecs,
+                              paramPitchID, body);
+                        } else {
+                          CUDATranslationTools.pitchedAccessConv(param_declarator, 
+                              new Identifier(param_declarator), typeSpecs,
+                              paramPitchID, body);
+                        }
+                      } else if( symType == '2' ) { //texture memory
+                        Symbol textureSym = textureSymMap.get(argSym);
+                        if( cloneProcedure ) {
+                          textureSymMap.put(cloned_param_declr, textureSym);
+                        } else {
+                          textureSymMap.put(param_declarator, textureSym);
+                        }
+                        Expression offset = textureOffsetMap.get(argSym);
+                        CUDATranslationTools.textureConv(param_declarator, new Identifier(textureSym), body, offset);
+                      } else if( symType == '3' ) { //constant memory
+                        //Symbol constantSym = constantSymMap.get(argSym);
+                        if( cloneProcedure ) {
+                          constantSymMap.put(cloned_param_declr, cloned_param_declr);
+                        } else {
+                          constantSymMap.put(param_declarator, param_declarator);
+                        }
+                        //DEBUG: above assumes address passing of constant symbol is allowed.
+                        //Then, we don't need additional replacement.
+                      }
+                    }
+                    if( cloneProcedure ) {
+                      new_proc.addDeclaration(cloned_decl);
+                      //Instead of cloning, move the argument to the new function call.
+                      //new_fCall.addArgument(oldArgList.get(i).clone());
+                      Expression argExp = oldArgList.get(i);
+                      //fCall.removeChild(argExp);
+                      //Expression.removeChild() is not allowed; instead use swapping.
+                      Expression dummyExp = new NameID("dummyArg");
+                      new_fCall.addArgument(dummyExp);
+                      dummyExp.swapWith(argExp);
+                      Identifier cloned_ID = new Identifier(cloned_param_declr);
+                      TransformTools.replaceAll((Traversable) body, paramID, cloned_ID);
+                    }
+                    i++;
+                  }
+                  //Add extra parameters and arguments.
+                  i=0;
+                  for( VariableDeclaration extParam : extraParamList ) {
+                    new_proc.addDeclaration(extParam);
+                    new_fCall.addArgument(extraArgList.get(i));
+                    i++;
+                  }
+                }
+                if( cloneProcedure ) {
+                  //Replace consant array symbols with the compiler-generated global constant array symbol.
+                  Set<Symbol> pAccessedSymbols = AnalysisTools.getAccessedVariables(body, true);
+                  Set<Symbol> kernelGlobalSymbols = kernelsTranslationUnit.getSymbols();
+                  for(Symbol pSym : pAccessedSymbols) {
+                    if( SymbolTools.isGlobal(pSym) ) {
+                      if( SymbolTools.isArray(pSym) && !SymbolTools.isPointer(pSym) 
+                          && pSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+                        String symNameBase = null;
+                        if( pSym instanceof AccessSymbol) {
+                          symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)pSym);
+                        } else {
+                          symNameBase = pSym.getSymbolName();
+                        }
+                        String constVarName = "const__" + symNameBase;
+                        Symbol IRSym = pSym;
+                        if( pSym instanceof PseudoSymbol ) {
+                          IRSym = ((PseudoSymbol)pSym).getIRSymbol();
+                        }
+                        if( !SymbolTools.isGlobal(IRSym) ) {
+                          constVarName += "__" + c_proc.getSymbolName();
+                        }
+                        Symbol constSym = AnalysisTools.findsSymbol(kernelGlobalSymbols, constVarName);
+                        if( constSym == null ) {
+                          //constant symbol should have been created by either handleDataClause() or handleUpdate().
+                          Tools.exit("[ERROR in ACC2OPENCLTranslation.devProcCloning()] Can't find __constant variable (" + constVarName + 
+                              ") corresponding to the host variable, " + pSym.getSymbolName() + "; exit the program!\nEnclosing procedure: " + 
+                              c_proc.getSymbolName() + "\n");
+                        }
+                        Identifier constVar = new Identifier(constSym);
+                        // Replace the instance of shared variable with the new gpu_var.
+                        if( pSym instanceof AccessSymbol ) {
+                          TransformTools.replaceAccessExpressions(body, (AccessSymbol)pSym, constVar);
+                        } else {
+                          TransformTools.replaceAll(body, new Identifier(pSym), constVar);
+                        }
+                      }
+
+                    }
+                  }
+                }
+
+                if( cloneProcedure ) {
+                  ////////////////////////////
+                  // Add the new procedure. //
+                  ////////////////////////////
+                  trUnt.addDeclaration(new_proc);
+                  devProcStack.push(new_proc);
+                  ////////////////////////////////////////////////////////////////////////
+                  //If the current procedure has annotations, copy them to the new one. //
+                  ////////////////////////////////////////////////////////////////////////
+                  List<Annotation> cAnnotList = c_proc.getAnnotations();
+                  if( (cAnnotList != null) && (!cAnnotList.isEmpty()) ) {
+                    for( Annotation cAn : cAnnotList ) {
+                      //OpenMP annotations are not added to the cloned device function.
+                      if( !(cAn instanceof OmpAnnotation) ) {
+                        new_proc.annotate(cAn.clone());
+                      }
+                    }
+                  }
+                  ///////////////////////////////////////////////////
+                  // Add routine directive for this new procedure. //
+                  ///////////////////////////////////////////////////
+                  ACCAnnotation rAnnot = new_proc.getAnnotation(ACCAnnotation.class, "routine");
+                  if( rAnnot == null ) {
+                    rAnnot = new ACCAnnotation("routine", "_directive");
+                    new_proc.annotate(rAnnot);
+                  }
+                  rAnnot.put("nohost", "_clause");
+
+                  //////////////////////////////////////////////////////////////////
+                  //If declaration statement exists for the original procedure,   //
+                  //create a new declaration statement for the new procedure too. //
+                  //////////////////////////////////////////////////////////////////
+                  FlatIterator Fiter = new FlatIterator(program);
+                  while (Fiter.hasNext())
+                  {
+                    TranslationUnit cTu = (TranslationUnit)Fiter.next();
+                    DFIterator<ProcedureDeclarator> iter = new DFIterator<ProcedureDeclarator>(cTu, ProcedureDeclarator.class);
+                    iter.pruneOn(ProcedureDeclarator.class);
+                    iter.pruneOn(Procedure.class);
+                    iter.pruneOn(Statement.class);
+                    for (;;)
+                    {
+                      ProcedureDeclarator procDeclr = null;
+
+                      try {
+                        procDeclr = (ProcedureDeclarator)iter.next();
+                      } catch (NoSuchElementException e) {
+                        break;
+                      }
+                      if( procDeclr.getID().equals(c_proc.getName()) ) {
+                        Traversable parent = procDeclr.getParent();
+                        if( parent instanceof VariableDeclaration ) {
+                          //Found function declaration.
+                          VariableDeclaration procDecl = (VariableDeclaration)parent;
+                          //Create a new function declaration.
+                          VariableDeclaration newProcDecl = 
+                            new VariableDeclaration(procDecl.getSpecifiers(), new_proc.getDeclarator().clone());
+                          //Insert the new function declaration.
+                          if( !AnalysisTools.isInHeaderFile(procDecl, cTu) ) {
+                            cTu.addDeclarationAfter(procDecl, newProcDecl);
+                          } else {
+                            Procedure firstProc = AnalysisTools.findFirstProcedure(cTu);
+                            if( firstProc == null ) {
+                              cTu.addDeclaration(newProcDecl);
+                            } else {
+                              cTu.addDeclarationBefore(firstProc, newProcDecl);
+                            }
+                          }
+                          ////////////////////////////////////////////////////////////////////////////////////
+                          //If the current procedure declaration has annotations, copy them to the new one. //
+                          ////////////////////////////////////////////////////////////////////////////////////
+                          cAnnotList = procDecl.getAnnotations();
+                          if( (cAnnotList != null) && (!cAnnotList.isEmpty()) ) {
+                            for( Annotation cAn : cAnnotList ) {
+                              newProcDecl.annotate(cAn.clone());
+                            }
+                          }
+                          rAnnot = newProcDecl.getAnnotation(ACCAnnotation.class, "routine");
+                          if( rAnnot == null ) {
+                            rAnnot = new ACCAnnotation("routine", "_directive");
+                            newProcDecl.annotate(rAnnot);
+                          }
+                          rAnnot.put("nohost", "_clause");
+
+                          ACCAnalysis.updateSymbolsInACCAnnotations(newProcDecl, null);
+                          break;
+                        }
+                      }
+                    }
+                  }
+                  /////////////////////////////////////////////////////////////////////////
+                  // Update the newly cloned procedure:                                  //
+                  //     1) Update symbols in the new procedure, including symbols       //
+                  //        in ACCAnnoations.                                            //
+                  /////////////////////////////////////////////////////////////////////////
+                  //[DEBUG] the new device function will be moved to the kernelTranslationUnit at the end of 
+                  //the ACC2OPENCLTranslator, and thus below checking will complain missing declation if
+                  //a device function accesses kernel-file-global-constant array.
+                  SymbolTools.linkSymbol(new_proc, 0);
+                  ACCAnalysis.updateSymbolsInACCAnnotations(new_proc, null);
+                }
+
+                ////////////////////////////////////////////////////////////////////////
+                // Check functions called in the current device function recursively. //
+                ////////////////////////////////////////////////////////////////////////
+                devProcCloning(body, trUnt, TrCnt, newCallerParamSymSet, devProcStack);
+              } else {
+                //cloned device procedure already exist; just change function calls.
+                Procedure new_proc = devProcContextMap.get(callContext);
+                String new_proc_name = new_proc.getSymbolName();
                 //////////////////////////////////////////////////////////
                 // Create a new function call for the cloned procedure. //
                 //////////////////////////////////////////////////////////
                 if( fCall != null ) {
                   new_fCall = new FunctionCall(new NameID(new_proc_name));
+                  List<Expression> argList = (List<Expression>)fCall.getArguments();
+                  if( argList != null ) {
+                    for( Expression exp : argList ) {
+                      //Instead of cloning, move the argument to the new function call.
+                      //new_fCall.addArgument(exp.clone());
+                      //fCall.removeChild(exp);
+                      //Expression.removeChild() is not allowed; instead use swapping.
+                      Expression dummyExp = new NameID("dummyArg");
+                      new_fCall.addArgument(dummyExp);
+                      dummyExp.swapWith(exp);
+                    }
+                  }
                   fCall.swapWith(new_fCall);
-                }
-              } else {
-                body = c_proc.getBody();
-                new_proc_name = c_proc.getSymbolName();
-                new_proc = c_proc;
-                new_fCall = fCall;
-              }
-              devProcContextMap.put(callContext, new_proc);
-              ///////////////////////////////////////////////
-              // Update function parameters and arguments. //
-              ///////////////////////////////////////////////
-              Set<Symbol> newCallerParamSymSet = new HashSet<Symbol>();
-              List<Expression> oldArgList = (List<Expression>)fCall.getArguments();
-              List<VariableDeclaration> extraParamList = new LinkedList<VariableDeclaration>();
-              List<Expression> extraArgList = new LinkedList<Expression>();
-              int oldParamListSize = oldParamList.size();
-              if( oldParamListSize == 1 ) {
-
-                Object obj = oldParamList.get(0);
-                String paramS = obj.toString();
-                // Remove any leading or trailing whitespace.
-                paramS = paramS.trim();
-                if( paramS.equals(Specifier.VOID.toString()) ) {
-                  oldParamListSize = 0;
-                }
-              }
-              if( oldParamListSize > 0 ) {
-                int i=0;
-                for( VariableDeclaration param : oldParamList ) {
-                  Symbol param_declarator = (Symbol)param.getDeclarator(0);
-                  List<Specifier> typeSpecs = new ArrayList<Specifier>();
-                  Symbol argSym = argSymList.get(i);
-                  boolean isScalar = true;
-                  if( SymbolTools.isArray(param_declarator) || SymbolTools.isPointer(param_declarator) ) {
-                    isScalar = false;
-                  }
-                  if( !isScalar && (argSym != null) ) {
-                    if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-                      typeSpecs.add(OpenCLSpecifier.OPENCL_GLOBAL);
-                    } else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-                      typeSpecs.add(OpenCLSpecifier.OPENCL_CONSTANT);
-                    } else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-                      typeSpecs.add(OpenCLSpecifier.OPENCL_LOCAL);
+                  if(!callContext.equals("")) {
+                    int i=0;
+                    for( Symbol argSym : argSymList ) {
+                      char symType = callContext.charAt(i);
+                      if( symType == '1' ) { //pitched malloc
+                        Identifier argPitchID = new Identifier(pitchedSymMap.get(argSym));
+                        new_fCall.addArgument(argPitchID);
+                      } else if( symType == '2' ) { //texture memory
+                        //FIXME: if offest exists, that should be passed too.
+                      } else if( symType == '3' ) { //constant memory
+                        //DEBUG: above assumes address passing of constant symbol is allowed.
+                        //Then, we don't need additional replacement.
+                      }
+                      i++;
                     }
-                  }
-                  typeSpecs.addAll(param.getSpecifiers());
-                  /*								if( typeSpecs.remove(Specifier.RESTRICT) ) {
-                                                                                param.getSpecifiers().remove(Specifier.RESTRICT);
-                                                                                param.getSpecifiers().add(OpenCLSpecifier.RESTRICT);
-                                                                                typeSpecs.add(OpenCLSpecifier.RESTRICT);
-                                                                                }*/
-                  VariableDeclaration cloned_decl = (VariableDeclaration)param.clone();
-                  if( !isScalar && (argSym != null) ) {
-                    if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-                      cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);;
-                    } else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-                      cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_CONSTANT);;
-                    } else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-                      cloned_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_LOCAL);;
-                    }
-                  }
-                  Identifier paramID = new Identifier(param_declarator);
-                  Symbol cloned_param_declr = (Symbol) cloned_decl.getDeclarator(0);
-                  if( cloneProcedure ) {
-                    newCallerParamSymSet.add(cloned_param_declr);
-                  } else {
-                    newCallerParamSymSet.add(param_declarator);
-                  }
-                  if( !callContext.equals("") ) {
-                    char symType = callContext.charAt(i);
-                    if( symType == '1' ) { //pitched malloc
-                      String pitchVarName = "pitch__" + cloned_param_declr.getSymbolName();
-                      VariableDeclarator pitch_declarator = new VariableDeclarator(new NameID(pitchVarName));
-                      VariableDeclaration pitch_decl = new VariableDeclaration(OpenACCSpecifier.SIZE_T, 
-                          pitch_declarator);
-                      Identifier paramPitchID = new Identifier(pitch_declarator);
-                      extraParamList.add(pitch_decl);
-                      Identifier argPitchID = new Identifier(pitchedSymMap.get(argSym));
-                      extraArgList.add(argPitchID);
-                      if( cloneProcedure ) {
-                        pitchedSymMap.put(cloned_param_declr, pitch_declarator);
-                      } else {
-                        pitchedSymMap.put(param_declarator, pitch_declarator);
-                      }
-                      /* 
-                       * If MallocPitch is used to allocate 2 dimensional array, gpu_a,
-                       * replace array access expression with pointer access expression with pitch
-                       * Ex: gpu__a[i][k] => *((float *)((char *)gpu__a + i * pitch__a) + k)
-                       */
-                      if( cloneProcedure ) {
-                        CUDATranslationTools.pitchedAccessConv(param_declarator, 
-                            new Identifier(cloned_param_declr), typeSpecs,
-                            paramPitchID, body);
-                      } else {
-                        CUDATranslationTools.pitchedAccessConv(param_declarator, 
-                            new Identifier(param_declarator), typeSpecs,
-                            paramPitchID, body);
-                      }
-                    } else if( symType == '2' ) { //texture memory
-                      Symbol textureSym = textureSymMap.get(argSym);
-                      if( cloneProcedure ) {
-                        textureSymMap.put(cloned_param_declr, textureSym);
-                      } else {
-                        textureSymMap.put(param_declarator, textureSym);
-                      }
-                      Expression offset = textureOffsetMap.get(argSym);
-                      CUDATranslationTools.textureConv(param_declarator, new Identifier(textureSym), body, offset);
-                    } else if( symType == '3' ) { //constant memory
-                      //Symbol constantSym = constantSymMap.get(argSym);
-                      if( cloneProcedure ) {
-                        constantSymMap.put(cloned_param_declr, cloned_param_declr);
-                      } else {
-                        constantSymMap.put(param_declarator, param_declarator);
-                      }
-                      //DEBUG: above assumes address passing of constant symbol is allowed.
-                      //Then, we don't need additional replacement.
-                    }
-                  }
-                  if( cloneProcedure ) {
-                    new_proc.addDeclaration(cloned_decl);
-                    //Instead of cloning, move the argument to the new function call.
-                    //new_fCall.addArgument(oldArgList.get(i).clone());
-                    Expression argExp = oldArgList.get(i);
-                    //fCall.removeChild(argExp);
-                    //Expression.removeChild() is not allowed; instead use swapping.
-                    Expression dummyExp = new NameID("dummyArg");
-                    new_fCall.addArgument(dummyExp);
-                    dummyExp.swapWith(argExp);
-                    Identifier cloned_ID = new Identifier(cloned_param_declr);
-                    TransformTools.replaceAll((Traversable) body, paramID, cloned_ID);
-                  }
-                  i++;
-                }
-                //Add extra parameters and arguments.
-                i=0;
-                for( VariableDeclaration extParam : extraParamList ) {
-                  new_proc.addDeclaration(extParam);
-                  new_fCall.addArgument(extraArgList.get(i));
-                  i++;
-                }
-              }
-              if( cloneProcedure ) {
-                //Replace consant array symbols with the compiler-generated global constant array symbol.
-                Set<Symbol> pAccessedSymbols = AnalysisTools.getAccessedVariables(body, true);
-                Set<Symbol> kernelGlobalSymbols = kernelsTranslationUnit.getSymbols();
-                for(Symbol pSym : pAccessedSymbols) {
-                  if( SymbolTools.isGlobal(pSym) ) {
-                    if( SymbolTools.isArray(pSym) && !SymbolTools.isPointer(pSym) 
-                        && pSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
-                      String symNameBase = null;
-                      if( pSym instanceof AccessSymbol) {
-                        symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)pSym);
-                      } else {
-                        symNameBase = pSym.getSymbolName();
-                      }
-                      String constVarName = "const__" + symNameBase;
-                      Symbol IRSym = pSym;
-                      if( pSym instanceof PseudoSymbol ) {
-                        IRSym = ((PseudoSymbol)pSym).getIRSymbol();
-                      }
-                      if( !SymbolTools.isGlobal(IRSym) ) {
-                        constVarName += "__" + c_proc.getSymbolName();
-                      }
-                      Symbol constSym = AnalysisTools.findsSymbol(kernelGlobalSymbols, constVarName);
-                      if( constSym == null ) {
-                        //constant symbol should have been created by either handleDataClause() or handleUpdate().
-                        Tools.exit("[ERROR in ACC2OPENCLTranslation.devProcCloning()] Can't find __constant variable (" + constVarName + 
-                            ") corresponding to the host variable, " + pSym.getSymbolName() + "; exit the program!\nEnclosing procedure: " + 
-                            c_proc.getSymbolName() + "\n");
-                      }
-                      Identifier constVar = new Identifier(constSym);
-                      // Replace the instance of shared variable with the new gpu_var.
-                      if( pSym instanceof AccessSymbol ) {
-                        TransformTools.replaceAccessExpressions(body, (AccessSymbol)pSym, constVar);
-                      } else {
-                        TransformTools.replaceAll(body, new Identifier(pSym), constVar);
-                      }
-                    }
-
-                  }
-                }
-              }
-
-              if( cloneProcedure ) {
-                ////////////////////////////
-                // Add the new procedure. //
-                ////////////////////////////
-                trUnt.addDeclaration(new_proc);
-                devProcStack.push(new_proc);
-                ////////////////////////////////////////////////////////////////////////
-                //If the current procedure has annotations, copy them to the new one. //
-                ////////////////////////////////////////////////////////////////////////
-                List<Annotation> cAnnotList = c_proc.getAnnotations();
-                if( (cAnnotList != null) && (!cAnnotList.isEmpty()) ) {
-                  for( Annotation cAn : cAnnotList ) {
-                    //OpenMP annotations are not added to the cloned device function.
-                    if( !(cAn instanceof OmpAnnotation) ) {
-                      new_proc.annotate(cAn.clone());
-                    }
-                  }
-                }
-                ///////////////////////////////////////////////////
-                // Add routine directive for this new procedure. //
-                ///////////////////////////////////////////////////
-                ACCAnnotation rAnnot = new_proc.getAnnotation(ACCAnnotation.class, "routine");
-                if( rAnnot == null ) {
-                  rAnnot = new ACCAnnotation("routine", "_directive");
-                  new_proc.annotate(rAnnot);
-                }
-                rAnnot.put("nohost", "_clause");
-
-                //////////////////////////////////////////////////////////////////
-                //If declaration statement exists for the original procedure,   //
-                //create a new declaration statement for the new procedure too. //
-                //////////////////////////////////////////////////////////////////
-                FlatIterator Fiter = new FlatIterator(program);
-                while (Fiter.hasNext())
-                {
-                  TranslationUnit cTu = (TranslationUnit)Fiter.next();
-                  DFIterator<ProcedureDeclarator> iter = new DFIterator<ProcedureDeclarator>(cTu, ProcedureDeclarator.class);
-                  iter.pruneOn(ProcedureDeclarator.class);
-                  iter.pruneOn(Procedure.class);
-                  iter.pruneOn(Statement.class);
-                  for (;;)
-                  {
-                    ProcedureDeclarator procDeclr = null;
-
-                    try {
-                      procDeclr = (ProcedureDeclarator)iter.next();
-                    } catch (NoSuchElementException e) {
-                      break;
-                    }
-                    if( procDeclr.getID().equals(c_proc.getName()) ) {
-                      Traversable parent = procDeclr.getParent();
-                      if( parent instanceof VariableDeclaration ) {
-                        //Found function declaration.
-                        VariableDeclaration procDecl = (VariableDeclaration)parent;
-                        //Create a new function declaration.
-                        VariableDeclaration newProcDecl = 
-                          new VariableDeclaration(procDecl.getSpecifiers(), new_proc.getDeclarator().clone());
-                        //Insert the new function declaration.
-                        if( !AnalysisTools.isInHeaderFile(procDecl, cTu) ) {
-                          cTu.addDeclarationAfter(procDecl, newProcDecl);
-                        } else {
-                          Procedure firstProc = AnalysisTools.findFirstProcedure(cTu);
-                          if( firstProc == null ) {
-                            cTu.addDeclaration(newProcDecl);
-                          } else {
-                            cTu.addDeclarationBefore(firstProc, newProcDecl);
-                          }
-                        }
-                        ////////////////////////////////////////////////////////////////////////////////////
-                        //If the current procedure declaration has annotations, copy them to the new one. //
-                        ////////////////////////////////////////////////////////////////////////////////////
-                        cAnnotList = procDecl.getAnnotations();
-                        if( (cAnnotList != null) && (!cAnnotList.isEmpty()) ) {
-                          for( Annotation cAn : cAnnotList ) {
-                            newProcDecl.annotate(cAn.clone());
-                          }
-                        }
-                        rAnnot = newProcDecl.getAnnotation(ACCAnnotation.class, "routine");
-                        if( rAnnot == null ) {
-                          rAnnot = new ACCAnnotation("routine", "_directive");
-                          newProcDecl.annotate(rAnnot);
-                        }
-                        rAnnot.put("nohost", "_clause");
-
-                        ACCAnalysis.updateSymbolsInACCAnnotations(newProcDecl, null);
-                        break;
-                      }
-                    }
-                  }
-                }
-                /////////////////////////////////////////////////////////////////////////
-                // Update the newly cloned procedure:                                  //
-                //     1) Update symbols in the new procedure, including symbols       //
-                //        in ACCAnnoations.                                            //
-                /////////////////////////////////////////////////////////////////////////
-                //[DEBUG] the new device function will be moved to the kernelTranslationUnit at the end of 
-                //the ACC2OPENCLTranslator, and thus below checking will complain missing declation if
-                //a device function accesses kernel-file-global-constant array.
-                SymbolTools.linkSymbol(new_proc, 0);
-                ACCAnalysis.updateSymbolsInACCAnnotations(new_proc, null);
-              }
-
-              ////////////////////////////////////////////////////////////////////////
-              // Check functions called in the current device function recursively. //
-              ////////////////////////////////////////////////////////////////////////
-              devProcCloning(body, trUnt, TrCnt, newCallerParamSymSet, devProcStack);
-            } else {
-              //cloned device procedure already exist; just change function calls.
-              Procedure new_proc = devProcContextMap.get(callContext);
-              String new_proc_name = new_proc.getSymbolName();
-              //////////////////////////////////////////////////////////
-              // Create a new function call for the cloned procedure. //
-              //////////////////////////////////////////////////////////
-              if( fCall != null ) {
-                new_fCall = new FunctionCall(new NameID(new_proc_name));
-                List<Expression> argList = (List<Expression>)fCall.getArguments();
-                if( argList != null ) {
-                  for( Expression exp : argList ) {
-                    //Instead of cloning, move the argument to the new function call.
-                    //new_fCall.addArgument(exp.clone());
-                    //fCall.removeChild(exp);
-                    //Expression.removeChild() is not allowed; instead use swapping.
-                    Expression dummyExp = new NameID("dummyArg");
-                    new_fCall.addArgument(dummyExp);
-                    dummyExp.swapWith(exp);
-                  }
-                }
-                fCall.swapWith(new_fCall);
-                if(!callContext.equals("")) {
-                  int i=0;
-                  for( Symbol argSym : argSymList ) {
-                    char symType = callContext.charAt(i);
-                    if( symType == '1' ) { //pitched malloc
-                      Identifier argPitchID = new Identifier(pitchedSymMap.get(argSym));
-                      new_fCall.addArgument(argPitchID);
-                    } else if( symType == '2' ) { //texture memory
-                      //FIXME: if offest exists, that should be passed too.
-                    } else if( symType == '3' ) { //constant memory
-                      //DEBUG: above assumes address passing of constant symbol is allowed.
-                      //Then, we don't need additional replacement.
-                    }
-                    i++;
                   }
                 }
               }
@@ -5813,329 +5811,473 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
           }
         }
       }
-    }
 
-    /**
-     * Apply stripmining to fit the iteration size of a worksharing loop into the specified gang/worker configuration.
-     *
-     * @param cAnnot
-     * @param cRegionKind
-     */
-    protected ForLoop worksharingLoopStripmining(Procedure cProc, ACCAnnotation cAnnot, String cRegionKind) {
-      PrintTools.println("[worksharingLoopStripmining() begins]", 2);
-      Statement region = (Statement)cAnnot.getAnnotatable();
-      ForLoop newLoop = null;
-      //////////////////////////////////////////////////////////////////////////////
-      // Original kernels loop type 1:                                            //
-      //     #pragma acc kernels loop gang(num_gangs), worker(num_workers)        //
-      //     for( k = LB; k <= UB; k++ ) { }                                      //
-      // Cyclic-unrolled loop:                                                    //
-      //     for( i = 0; i < (num_gangs * num_workers); i++ ) {                   //
-      //          int temp_i = num_gangs * num_workers;                           //
-      //          for( k = i+LB; k <= UB; k += temp_i ) { }                       //
-      //     }                                                                    //
-      //////////////////////////////////////////////////////////////////////////////
-      // Original kernels loop type 2:                                            //
-      //     #pragma acc kernels loop gang(num_gangs)                             //
-      //     for( k = LB; k <= UB; k++ ) { }                                      //
-      // Cyclic-unrolled loop:                                                    //
-      //     for( i = 0; i < num_gangs; i++ ) {                                   //
-      //          for( k = i+LB; k <= UB; k += num_gangs ) { }                    //
-      //     }                                                                    //
-      //////////////////////////////////////////////////////////////////////////////
-      // Original kernels loop type 3:                                            //
-      //     #pragma acc kernels loop worker(num_workers)                         //
-      //     for( k = LB; k <= UB; k++ ) { }                                      //
-      // Cyclic-unrolled loop:                                                    //
-      //     for( i = 0; i < num_workers; i++ ) {                                 //
-      //          for( k = i+LB; k <= UB; k += num_workers ) { }                  //
-      //     }                                                                    //
-      //////////////////////////////////////////////////////////////////////////////
-      // Original parallel region type 1:                                         //
-      //     #pragma acc parallel loop gang, worker, num_gang(num_gangs),         //
-      //     num_worker(num_workers)                                              //
-      //     for( k = LB; k <= UB; k++ ) { }                                      //
-      // Cyclic-unrolled loop:                                                    //
-      //     for( i = 0; i < (num_gangs * num_workers); i++ ) {                   //
-      //          int temp_i = num_gangs * num_workers;                           //
-      //          for( k = i+LB; k <= UB; k += temp_i ) { }                       //
-      //     }                                                                    //
-      //////////////////////////////////////////////////////////////////////////////
-      // Original parallel region type 2:                                         //
-      //////////////////////////////////////////////////////////////////////////////
-      // Due to ACCLoopDirectivePreprocessor.CheckWorkSharingLoopNestingOrder(),  //
-      // no nested gang loops/worker loops exist in the Parallel region.          //
-      //////////////////////////////////////////////////////////////////////////////
-      List<ACCAnnotation> loopAnnots = AnalysisTools.ipCollectPragmas(region, ACCAnnotation.class, "gang", null);
-      if( loopAnnots != null ) {
-        for( ACCAnnotation lAnnot : loopAnnots ) {
-          ForLoop ploop = (ForLoop)lAnnot.getAnnotatable();
-          ACCAnnotation iAnnot = ploop.getAnnotation(ACCAnnotation.class, "iterspace");
-          Expression iterspace = iAnnot.get("iterspace"); //each gang loop contains iterspace internal clause.
-          Expression nestLevel = iAnnot.get("gangdim");
-          Expression num_gangs = null;
-          Expression num_workers = null;
-          if( cRegionKind.equals("kernels") ) {
-            num_gangs = lAnnot.get("gang");
-            num_workers = lAnnot.get("worker");
-          } else {
-            num_gangs = cAnnot.get("num_gangs");
-            num_workers = cAnnot.get("num_workers");
-          }
-          if( num_workers == null ) {
-            num_workers = new IntegerLiteral(defaultNumWorkers);
-          }
-          if( num_gangs == null ) {
-            Tools.exit("[ERROR in ACC2GPUTranslator.worksharingLoopUnrolling()] number of gangs for the following worksharing" +
-                " loop is not specified; exit!\n" + "OpenACC annotation: " + cAnnot + "\nEnclosing Procedure: " +
-                cProc.getSymbolName() + "\n");
-          }
-          boolean containsWorkerClause = false;
-          if( ploop.containsAnnotation(ACCAnnotation.class, "worker") ) {
-            containsWorkerClause = true;
-          }
-          Expression tItrSize = null;
-          if( containsWorkerClause ) {
-            if( num_gangs instanceof Typecast ) {
-              Expression tExp = ((Typecast)num_gangs).getExpression();
-              if( tExp instanceof FunctionCall ) {
-                if( ((FunctionCall)tExp).getName().toString().equals("ceil") ) {
-                  tExp = ((FunctionCall)tExp).getArgument(0);
+      /**
+       * Apply stripmining to fit the iteration size of a worksharing loop into the specified gang/worker configuration.
+       *
+       * @param cAnnot
+       * @param cRegionKind
+       */
+      protected ForLoop worksharingLoopStripmining(Procedure cProc, ACCAnnotation cAnnot, String cRegionKind) {
+        PrintTools.println("[worksharingLoopStripmining() begins]", 2);
+        Statement region = (Statement)cAnnot.getAnnotatable();
+        ForLoop newLoop = null;
+        //////////////////////////////////////////////////////////////////////////////
+        // Original kernels loop type 1:                                            //
+        //     #pragma acc kernels loop gang(num_gangs), worker(num_workers)        //
+        //     for( k = LB; k <= UB; k++ ) { }                                      //
+        // Cyclic-unrolled loop:                                                    //
+        //     for( i = 0; i < (num_gangs * num_workers); i++ ) {                   //
+        //          int temp_i = num_gangs * num_workers;                           //
+        //          for( k = i+LB; k <= UB; k += temp_i ) { }                       //
+        //     }                                                                    //
+        //////////////////////////////////////////////////////////////////////////////
+        // Original kernels loop type 2:                                            //
+        //     #pragma acc kernels loop gang(num_gangs)                             //
+        //     for( k = LB; k <= UB; k++ ) { }                                      //
+        // Cyclic-unrolled loop:                                                    //
+        //     for( i = 0; i < num_gangs; i++ ) {                                   //
+        //          for( k = i+LB; k <= UB; k += num_gangs ) { }                    //
+        //     }                                                                    //
+        //////////////////////////////////////////////////////////////////////////////
+        // Original kernels loop type 3:                                            //
+        //     #pragma acc kernels loop worker(num_workers)                         //
+        //     for( k = LB; k <= UB; k++ ) { }                                      //
+        // Cyclic-unrolled loop:                                                    //
+        //     for( i = 0; i < num_workers; i++ ) {                                 //
+        //          for( k = i+LB; k <= UB; k += num_workers ) { }                  //
+        //     }                                                                    //
+        //////////////////////////////////////////////////////////////////////////////
+        // Original parallel region type 1:                                         //
+        //     #pragma acc parallel loop gang, worker, num_gang(num_gangs),         //
+        //     num_worker(num_workers)                                              //
+        //     for( k = LB; k <= UB; k++ ) { }                                      //
+        // Cyclic-unrolled loop:                                                    //
+        //     for( i = 0; i < (num_gangs * num_workers); i++ ) {                   //
+        //          int temp_i = num_gangs * num_workers;                           //
+        //          for( k = i+LB; k <= UB; k += temp_i ) { }                       //
+        //     }                                                                    //
+        //////////////////////////////////////////////////////////////////////////////
+        // Original parallel region type 2:                                         //
+        //////////////////////////////////////////////////////////////////////////////
+        // Due to ACCLoopDirectivePreprocessor.CheckWorkSharingLoopNestingOrder(),  //
+        // no nested gang loops/worker loops exist in the Parallel region.          //
+        //////////////////////////////////////////////////////////////////////////////
+        List<ACCAnnotation> loopAnnots = AnalysisTools.ipCollectPragmas(region, ACCAnnotation.class, "gang", null);
+        if( loopAnnots != null ) {
+          for( ACCAnnotation lAnnot : loopAnnots ) {
+            ForLoop ploop = (ForLoop)lAnnot.getAnnotatable();
+            ACCAnnotation iAnnot = ploop.getAnnotation(ACCAnnotation.class, "iterspace");
+            Expression iterspace = iAnnot.get("iterspace"); //each gang loop contains iterspace internal clause.
+            Expression nestLevel = iAnnot.get("gangdim");
+            Expression num_gangs = null;
+            Expression num_workers = null;
+            if( cRegionKind.equals("kernels") ) {
+              num_gangs = lAnnot.get("gang");
+              num_workers = lAnnot.get("worker");
+            } else {
+              num_gangs = cAnnot.get("num_gangs");
+              num_workers = cAnnot.get("num_workers");
+            }
+            if( num_workers == null ) {
+              num_workers = new IntegerLiteral(defaultNumWorkers);
+            }
+            if( num_gangs == null ) {
+              Tools.exit("[ERROR in ACC2GPUTranslator.worksharingLoopUnrolling()] number of gangs for the following worksharing" +
+                  " loop is not specified; exit!\n" + "OpenACC annotation: " + cAnnot + "\nEnclosing Procedure: " +
+                  cProc.getSymbolName() + "\n");
+            }
+            boolean containsWorkerClause = false;
+            if( ploop.containsAnnotation(ACCAnnotation.class, "worker") ) {
+              containsWorkerClause = true;
+            }
+            Expression tItrSize = null;
+            if( containsWorkerClause ) {
+              if( num_gangs instanceof Typecast ) {
+                Expression tExp = ((Typecast)num_gangs).getExpression();
+                if( tExp instanceof FunctionCall ) {
+                  if( ((FunctionCall)tExp).getName().toString().equals("ceil") ) {
+                    tExp = ((FunctionCall)tExp).getArgument(0);
+                  }
+                }
+                if( (tExp instanceof BinaryExpression) ) {
+                  BinaryExpression tBExp = ((BinaryExpression)tExp);
+                  if( tBExp.getOperator() == BinaryOperator.DIVIDE ) {
+                    Expression LHS = tBExp.getLHS();
+                    if( LHS instanceof Typecast ) {
+                      LHS = ((Typecast)LHS).getExpression();
+                    }
+                    Expression RHS = tBExp.getRHS();
+                    if( RHS instanceof Typecast ) {
+                      RHS = ((Typecast)RHS).getExpression();
+                    }
+                    if( RHS instanceof FloatLiteral ) {
+                      RHS = new IntegerLiteral((long)((FloatLiteral)RHS).getValue());
+                    }
+                    if( RHS.equals(num_workers) ) {
+                      tItrSize = LHS.clone();
+                    }
+                  }
                 }
               }
-              if( (tExp instanceof BinaryExpression) ) {
-                BinaryExpression tBExp = ((BinaryExpression)tExp);
-                if( tBExp.getOperator() == BinaryOperator.DIVIDE ) {
-                  Expression LHS = tBExp.getLHS();
-                  if( LHS instanceof Typecast ) {
-                    LHS = ((Typecast)LHS).getExpression();
-                  }
-                  Expression RHS = tBExp.getRHS();
-                  if( RHS instanceof Typecast ) {
-                    RHS = ((Typecast)RHS).getExpression();
-                  }
-                  if( RHS instanceof FloatLiteral ) {
-                    RHS = new IntegerLiteral((long)((FloatLiteral)RHS).getValue());
-                  }
-                  if( RHS.equals(num_workers) ) {
-                    tItrSize = LHS.clone();
-                  }
+              if( tItrSize == null ) {
+                tItrSize = Symbolic.simplify(Symbolic.multiply(num_gangs, num_workers));
+              }
+            } else {
+              tItrSize = num_gangs;
+            }
+            iterspace = Symbolic.simplify(iterspace);
+            tItrSize = Symbolic.simplify(tItrSize);
+            if( tItrSize.equals(iterspace) ) {
+              continue; //we don't need to unroll this loop.
+            } else if( (tItrSize instanceof IntegerLiteral) && (iterspace instanceof IntegerLiteral) ) {
+              if( ((IntegerLiteral)tItrSize).getValue() >= ((IntegerLiteral)iterspace).getValue() ) {
+                continue;
+              }
+            }
+            long suffix = 500;
+            if( nestLevel instanceof IntegerLiteral ) {
+              long level = ((IntegerLiteral)nestLevel).getValue();
+              suffix = 500 + level;
+              if( level == 1 ) {
+                if( containsWorkerClause ) {
+                  tItrSize = new BinaryExpression(new NameID("get_num_groups(0)"), BinaryOperator.MULTIPLY, num_workers.clone());
+                } else {
+                  tItrSize = new NameID("get_num_groups(0)");
+                }
+              } else if( level == 2 ) {
+                if( containsWorkerClause ) {
+                  tItrSize = new BinaryExpression(new NameID("get_num_groups(1)"), BinaryOperator.MULTIPLY, num_workers.clone());
+                } else {
+                  tItrSize = new NameID("get_num_groups(1)");
+                }
+              } else if( level == 3 ) {
+                if( containsWorkerClause ) {
+                  tItrSize = new BinaryExpression(new NameID("get_num_groups(2)"), BinaryOperator.MULTIPLY, num_workers.clone());
+                } else {
+                  tItrSize = new NameID("get_num_groups(2)");
                 }
               }
             }
-            if( tItrSize == null ) {
-              tItrSize = Symbolic.simplify(Symbolic.multiply(num_gangs, num_workers));
+            CompoundStatement targetRegion = null;
+            if( region instanceof CompoundStatement ) {
+              targetRegion = (CompoundStatement)region;
             }
-          } else {
-            tItrSize = num_gangs;
+            boolean targetLoopChanged = false;
+            if( ploop == region ) {
+              targetLoopChanged = true;
+            }
+            ForLoop wLoop = TransformTools.stripmining(ploop, tItrSize, suffix, targetRegion);
+            if( targetLoopChanged ) {
+              newLoop = wLoop;
+            }
           }
-          iterspace = Symbolic.simplify(iterspace);
-          tItrSize = Symbolic.simplify(tItrSize);
-          if( tItrSize.equals(iterspace) ) {
-            continue; //we don't need to unroll this loop.
-          } else if( (tItrSize instanceof IntegerLiteral) && (iterspace instanceof IntegerLiteral) ) {
-            if( ((IntegerLiteral)tItrSize).getValue() >= ((IntegerLiteral)iterspace).getValue() ) {
+        }
+        loopAnnots = AnalysisTools.ipCollectPragmas(region, ACCAnnotation.class, "worker", null);
+        if( loopAnnots != null ) {
+          for( ACCAnnotation lAnnot : loopAnnots ) {
+            ForLoop ploop = (ForLoop)lAnnot.getAnnotatable();
+            boolean containsGangClause = false;
+            if( ploop.containsAnnotation(ACCAnnotation.class, "gang") ) {
+              containsGangClause = true;
+            }
+            if( containsGangClause ) {
               continue;
             }
-          }
-          long suffix = 500;
-          if( nestLevel instanceof IntegerLiteral ) {
-            long level = ((IntegerLiteral)nestLevel).getValue();
-            suffix = 500 + level;
-            if( level == 1 ) {
-              if( containsWorkerClause ) {
-                tItrSize = new BinaryExpression(new NameID("get_num_groups(0)"), BinaryOperator.MULTIPLY, num_workers.clone());
-              } else {
-                tItrSize = new NameID("get_num_groups(0)");
-              }
-            } else if( level == 2 ) {
-              if( containsWorkerClause ) {
-                tItrSize = new BinaryExpression(new NameID("get_num_groups(1)"), BinaryOperator.MULTIPLY, num_workers.clone());
-              } else {
-                tItrSize = new NameID("get_num_groups(1)");
-              }
-            } else if( level == 3 ) {
-              if( containsWorkerClause ) {
-                tItrSize = new BinaryExpression(new NameID("get_num_groups(2)"), BinaryOperator.MULTIPLY, num_workers.clone());
-              } else {
-                tItrSize = new NameID("get_num_groups(2)");
-              }
+            ACCAnnotation iAnnot = ploop.getAnnotation(ACCAnnotation.class, "workerdim");
+            Expression nestLevel = iAnnot.get("workerdim");
+            Expression num_workers = null;
+            if( cRegionKind.equals("kernels") ) {
+              num_workers = lAnnot.get("worker");
+            } else {
+              num_workers = cAnnot.get("num_workers");
+            }
+            if( num_workers == null ) {
+              num_workers = new IntegerLiteral(defaultNumWorkers);
+            }
+            //Calculate iteration size of the pure worker loop.
+            Expression lb = LoopTools.getLowerBoundExpression(ploop);
+            Expression ub = LoopTools.getUpperBoundExpression(ploop);
+            Expression tItrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
+            num_workers = Symbolic.simplify(num_workers);
+            tItrSize = Symbolic.simplify(tItrSize);
+            if( tItrSize.equals(num_workers) ) {
+              continue; //we don't need to unroll this loop.
+            }
+            long suffix = 200;
+            if( nestLevel instanceof IntegerLiteral ) {
+              suffix = 200 + ((IntegerLiteral)nestLevel).getValue();
+            }
+            CompoundStatement targetRegion = null;
+            if( region instanceof CompoundStatement ) {
+              targetRegion = (CompoundStatement)region;
+            }
+            boolean targetLoopChanged = false;
+            if( ploop == region ) {
+              targetLoopChanged = true;
+            }
+            ForLoop wLoop = TransformTools.stripmining(ploop, num_workers, suffix, targetRegion);
+            if( targetLoopChanged ) {
+              newLoop = wLoop;
             }
           }
-          CompoundStatement targetRegion = null;
-          if( region instanceof CompoundStatement ) {
-            targetRegion = (CompoundStatement)region;
-          }
-          boolean targetLoopChanged = false;
-          if( ploop == region ) {
-            targetLoopChanged = true;
-          }
-          ForLoop wLoop = TransformTools.stripmining(ploop, tItrSize, suffix, targetRegion);
-          if( targetLoopChanged ) {
-            newLoop = wLoop;
-          }
         }
+        //DEBUG: do we still need this? No.
+        /*        if( firstMainStmt == region ) {
+        //////////////////////////////////////////////////////////////////////////////////////////
+        //Current region, which is pointed by firstMainStmt, will be moved into the if-statement//
+        //, which is generated by this transformation. Therefore, we have to set firstMainStmt  //
+        //to a new first statement in the main body.                                            //
+        //////////////////////////////////////////////////////////////////////////////////////////
+        firstMainStmt = IRTools.getFirstNonDeclarationStatement(main.getBody());
+        }*/
+        PrintTools.println("[worksharingLoopStripmining() ends]", 2);
+        return newLoop;
       }
-      loopAnnots = AnalysisTools.ipCollectPragmas(region, ACCAnnotation.class, "worker", null);
-      if( loopAnnots != null ) {
-        for( ACCAnnotation lAnnot : loopAnnots ) {
-          ForLoop ploop = (ForLoop)lAnnot.getAnnotatable();
-          boolean containsGangClause = false;
-          if( ploop.containsAnnotation(ACCAnnotation.class, "gang") ) {
-            containsGangClause = true;
-          }
-          if( containsGangClause ) {
-            continue;
-          }
-          ACCAnnotation iAnnot = ploop.getAnnotation(ACCAnnotation.class, "workerdim");
-          Expression nestLevel = iAnnot.get("workerdim");
-          Expression num_workers = null;
-          if( cRegionKind.equals("kernels") ) {
-            num_workers = lAnnot.get("worker");
-          } else {
-            num_workers = cAnnot.get("num_workers");
-          }
-          if( num_workers == null ) {
-            num_workers = new IntegerLiteral(defaultNumWorkers);
-          }
-          //Calculate iteration size of the pure worker loop.
-          Expression lb = LoopTools.getLowerBoundExpression(ploop);
-          Expression ub = LoopTools.getUpperBoundExpression(ploop);
-          Expression tItrSize = Symbolic.add(Symbolic.subtract(ub,lb),new IntegerLiteral(1));
-          num_workers = Symbolic.simplify(num_workers);
-          tItrSize = Symbolic.simplify(tItrSize);
-          if( tItrSize.equals(num_workers) ) {
-            continue; //we don't need to unroll this loop.
-          }
-          long suffix = 200;
-          if( nestLevel instanceof IntegerLiteral ) {
-            suffix = 200 + ((IntegerLiteral)nestLevel).getValue();
-          }
-          CompoundStatement targetRegion = null;
-          if( region instanceof CompoundStatement ) {
-            targetRegion = (CompoundStatement)region;
-          }
-          boolean targetLoopChanged = false;
-          if( ploop == region ) {
-            targetLoopChanged = true;
-          }
-          ForLoop wLoop = TransformTools.stripmining(ploop, num_workers, suffix, targetRegion);
-          if( targetLoopChanged ) {
-            newLoop = wLoop;
-          }
-        }
-      }
-      //DEBUG: do we still need this? No.
-      /*        if( firstMainStmt == region ) {
-      //////////////////////////////////////////////////////////////////////////////////////////
-      //Current region, which is pointed by firstMainStmt, will be moved into the if-statement//
-      //, which is generated by this transformation. Therefore, we have to set firstMainStmt  //
-      //to a new first statement in the main body.                                            //
-      //////////////////////////////////////////////////////////////////////////////////////////
-      firstMainStmt = IRTools.getFirstNonDeclarationStatement(main.getBody());
-      }*/
-      PrintTools.println("[worksharingLoopStripmining() ends]", 2);
-      return newLoop;
-    }
 
-    protected void handleAtomicAnnots(List<ACCAnnotation> atomicAnnots)
-    {
-      for(ACCAnnotation annot : atomicAnnots)
+      protected void handleAtomicAnnots(List<ACCAnnotation> atomicAnnots)
       {
-        Annotatable at = annot.getAnnotatable();
-
-        if(at instanceof ExpressionStatement)
+        for(ACCAnnotation annot : atomicAnnots)
         {
-          ExpressionStatement atomicStmt = (ExpressionStatement)at;
-          Expression atomicExpr = atomicStmt.getExpression();
+          Annotatable at = annot.getAnnotatable();
 
-          if(atomicExpr instanceof UnaryExpression)
+          if(at instanceof ExpressionStatement)
           {
-            UnaryExpression expr = (UnaryExpression)atomicExpr;
-            if((expr.getOperator() == UnaryOperator.POST_DECREMENT) ||
-                (expr.getOperator() == UnaryOperator.PRE_DECREMENT) ||
-                (expr.getOperator() == UnaryOperator.POST_INCREMENT) ||
-                (expr.getOperator() == UnaryOperator.PRE_INCREMENT))
+            ExpressionStatement atomicStmt = (ExpressionStatement)at;
+            Expression atomicExpr = atomicStmt.getExpression();
+
+            if(atomicExpr instanceof UnaryExpression)
             {
-              if(expr.getExpression() instanceof Identifier)
+              UnaryExpression expr = (UnaryExpression)atomicExpr;
+              if((expr.getOperator() == UnaryOperator.POST_DECREMENT) ||
+                  (expr.getOperator() == UnaryOperator.PRE_DECREMENT) ||
+                  (expr.getOperator() == UnaryOperator.POST_INCREMENT) ||
+                  (expr.getOperator() == UnaryOperator.PRE_INCREMENT))
               {
-                if(annot.containsKey("atomic_var"))
+                if(expr.getExpression() instanceof Identifier)
                 {
-                  Set<Identifier> atomicVar = annot.get("atomic_var");
-                  atomicVar.add((Identifier) expr.getExpression());
+                  if(annot.containsKey("atomic_var"))
+                  {
+                    Set<Identifier> atomicVar = annot.get("atomic_var");
+                    atomicVar.add((Identifier) expr.getExpression());
+                  }
+                  else
+                  {
+                    Set<Identifier> atomicVar = new HashSet<Identifier>();
+                    atomicVar.add((Identifier)expr.getExpression());
+                    annot.put("atomic_var", atomicVar);
+                  }
+                  int val = 0;
+                  UnaryOperator op = expr.getOperator();
+
+                  if(op == UnaryOperator.POST_DECREMENT)
+                    val = -1;
+                  else if(op == UnaryOperator.PRE_DECREMENT)
+                    val = -1;
+                  else if(op == UnaryOperator.POST_INCREMENT)
+                    val = 1;
+                  else if(op == UnaryOperator.PRE_INCREMENT)
+                    val = 1;
+
+                  FunctionCall atomicCall = new FunctionCall(new NameID("atomic_add"),
+                      new UnaryExpression(UnaryOperator.ADDRESS_OF, expr.getExpression().clone()),
+                      new IntegerLiteral(val));
+                  CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
+                  ExpressionStatement atomicCallStmt =  new ExpressionStatement(atomicCall);
+                  atomicCallStmt.annotate(annot.clone());
+                  //PrintTools.println(atomicCallStmt.toString(),0);
+                  parentStmt.addStatementAfter(atomicStmt, atomicCallStmt);
+                  parentStmt.removeStatement(atomicStmt);
                 }
                 else
                 {
-                  Set<Identifier> atomicVar = new HashSet<Identifier>();
-                  atomicVar.add((Identifier)expr.getExpression());
-                  annot.put("atomic_var", atomicVar);
+                  Tools.exit("Atomic operation " + atomicExpr + " is not supported.");
                 }
-                int val = 0;
-                UnaryOperator op = expr.getOperator();
-
-                if(op == UnaryOperator.POST_DECREMENT)
-                  val = -1;
-                else if(op == UnaryOperator.PRE_DECREMENT)
-                  val = -1;
-                else if(op == UnaryOperator.POST_INCREMENT)
-                  val = 1;
-                else if(op == UnaryOperator.PRE_INCREMENT)
-                  val = 1;
-
-                FunctionCall atomicCall = new FunctionCall(new NameID("atomic_add"),
-                    new UnaryExpression(UnaryOperator.ADDRESS_OF, expr.getExpression().clone()),
-                    new IntegerLiteral(val));
-                CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
-                ExpressionStatement atomicCallStmt =  new ExpressionStatement(atomicCall);
-                atomicCallStmt.annotate(annot.clone());
-                //PrintTools.println(atomicCallStmt.toString(),0);
-                parentStmt.addStatementAfter(atomicStmt, atomicCallStmt);
-                parentStmt.removeStatement(atomicStmt);
               }
               else
               {
                 Tools.exit("Atomic operation " + atomicExpr + " is not supported.");
               }
             }
-            else
-            {
-              Tools.exit("Atomic operation " + atomicExpr + " is not supported.");
-            }
-          }
-          // x = ...
-          // x binop= ...
-          else if(atomicExpr instanceof AssignmentExpression)
-          {
-            AssignmentExpression assignExpr = (AssignmentExpression)atomicExpr;
-            Identifier atomicVar = (Identifier)assignExpr.getLHS();
-
             // x = ...
-            if(assignExpr.getOperator() == AssignmentOperator.NORMAL)
+            // x binop= ...
+            else if(atomicExpr instanceof AssignmentExpression)
             {
-              // x = x binop expr
-              // x = expr binop x
-              if(IRTools.containsExpression(assignExpr.getRHS(), assignExpr.getLHS()))
+              AssignmentExpression assignExpr = (AssignmentExpression)atomicExpr;
+              Identifier atomicVar = (Identifier)assignExpr.getLHS();
+
+              // x = ...
+              if(assignExpr.getOperator() == AssignmentOperator.NORMAL)
               {
-                if(!(assignExpr.getRHS() instanceof BinaryExpression))
+                // x = x binop expr
+                // x = expr binop x
+                if(IRTools.containsExpression(assignExpr.getRHS(), assignExpr.getLHS()))
                 {
-                  Tools.exit("Invalid atomic operation: " + assignExpr);
-                }
+                  if(!(assignExpr.getRHS() instanceof BinaryExpression))
+                  {
+                    Tools.exit("Invalid atomic operation: " + assignExpr);
+                  }
 
-                BinaryExpression rhsExpr = (BinaryExpression)assignExpr.getRHS();
-                BinaryOperator atomicOp = rhsExpr.getOperator();
-                Expression valExpr = null;
+                  BinaryExpression rhsExpr = (BinaryExpression)assignExpr.getRHS();
+                  BinaryOperator atomicOp = rhsExpr.getOperator();
+                  Expression valExpr = null;
 
-                if(rhsExpr.getRHS().equals(atomicVar))
-                {
-                  valExpr = rhsExpr.getLHS();
+                  if(rhsExpr.getRHS().equals(atomicVar))
+                  {
+                    valExpr = rhsExpr.getLHS();
+                  }
+                  else if(rhsExpr.getLHS().equals(atomicVar))
+                  {
+                    valExpr = rhsExpr.getRHS();
+                  }
+                  else
+                  {
+                    Tools.exit("Invalid atomic operation: " + assignExpr);
+                  }
+
+                  if(annot.containsKey("atomic_var"))
+                  {
+                    Set<Identifier> atomicVarSet = annot.get("atomic_var");
+                    atomicVarSet.add(atomicVar);
+                  }
+                  else
+                  {
+                    Set<Identifier> atomicVarSet = new HashSet<Identifier>();
+                    atomicVarSet.add(atomicVar);
+                    annot.put("atomic_var", atomicVarSet);
+                  }
+
+                  NameID atomicFunc = null;
+
+                  if(atomicOp == BinaryOperator.ADD)
+                  {
+                    atomicFunc = new NameID("atomic_add");
+                  }
+                  else if(atomicOp == BinaryOperator.SUBTRACT)
+                  {
+                    // x = expr - x;
+                    if(valExpr.equals(rhsExpr.getLHS()))
+                    {
+                      atomicFunc = new NameID("atomicSubRHS");
+                      Tools.exit("Atomic RHS-subtracion operation is not supported\nAtomic annotation: " 
+                          + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
+                    }
+                    // x = x - expr
+                    else
+                    {
+                      //atomicFunc = new NameID("atomicAdd");
+                      //valExpr = new UnaryExpression(UnaryOperator.MINUS, valExpr.clone());
+                      atomicFunc = new NameID("atomic_sub");
+                    }
+                  }
+                  else if(atomicOp == BinaryOperator.BITWISE_AND)
+                  {
+                    atomicFunc = new NameID("atomic_and");
+                  }
+                  else if(atomicOp == BinaryOperator.BITWISE_INCLUSIVE_OR)
+                  {
+                    atomicFunc = new NameID("atomic_or");
+                  }
+                  else if(atomicOp == BinaryOperator.BITWISE_EXCLUSIVE_OR)
+                  {
+                    atomicFunc = new NameID("atomic_xor");
+                  }
+                  else if(atomicOp == BinaryOperator.MULTIPLY)
+                  {
+                    atomicFunc = new NameID("atomic_mul");
+                    Tools.exit("Atomic multiplication operation is not supported\nAtomic annotation: " 
+                        + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
+                  }
+                  else if(atomicOp == BinaryOperator.DIVIDE)
+                  {
+                    // x = expr / x;
+                    if(valExpr.equals(rhsExpr.getLHS()))
+                    {
+                      atomicFunc = new NameID("atomicDivRHS");
+                    }
+                    // x = x / expr
+                    else
+                    {
+                      atomicFunc = new NameID("atomic_div");
+                    }
+                    Tools.exit("Atomic division operation is not supported\nAtomic annotation: " 
+                        + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
+                  }
+
+                  FunctionCall atomicCall = new FunctionCall(atomicFunc,
+                      new UnaryExpression(UnaryOperator.ADDRESS_OF, atomicVar.clone()),
+                      valExpr.clone());
+                  CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
+                  ExpressionStatement atomicCallStmt =  new ExpressionStatement(atomicCall);
+                  atomicCallStmt.annotate(annot.clone());
+                  //PrintTools.println(atomicCallStmt.toString(),0);
+                  parentStmt.addStatementAfter(atomicStmt, atomicCallStmt);
+                  parentStmt.removeStatement(atomicStmt);
                 }
-                else if(rhsExpr.getLHS().equals(atomicVar))
-                {
-                  valExpr = rhsExpr.getRHS();
-                }
+                // x = expr
                 else
                 {
-                  Tools.exit("Invalid atomic operation: " + assignExpr);
+                  FunctionCall atomicCall = new FunctionCall(new NameID("atomic_xchg"),
+                      new UnaryExpression(UnaryOperator.ADDRESS_OF, atomicVar.clone()),
+                      assignExpr.getRHS().clone());
+                  CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
+                  ExpressionStatement atomicCallStmt =  new ExpressionStatement(atomicCall);
+                  atomicCallStmt.annotate(annot.clone());
+                  //PrintTools.println(atomicCallStmt.toString(),0);
+                  parentStmt.addStatementAfter(atomicStmt, atomicCallStmt);
+                  parentStmt.removeStatement(atomicStmt);
+
+                  if(annot.containsKey("atomic_var"))
+                  {
+                    Set<Identifier> atomicVarSet = annot.get("atomic_var");
+                    atomicVarSet.add(atomicVar);
+                  }
+                  else
+                  {
+                    Set<Identifier> atomicVarSet = new HashSet<Identifier>();
+                    atomicVarSet.add(atomicVar);
+                    annot.put("atomic_var", atomicVarSet);
+                  }
+                }
+              }
+              //x binop= expr
+              else
+              {
+                NameID atomicFunc = null;
+                Expression valExpr = assignExpr.getRHS();
+                if(assignExpr.getOperator() == AssignmentOperator.ADD)
+                {
+                  atomicFunc = new NameID("atomic_add");
+                }
+                else if(assignExpr.getOperator() == AssignmentOperator.SUBTRACT)
+                {
+                  //atomicFunc = new NameID("atomicAdd");
+                  //valExpr = new UnaryExpression(UnaryOperator.MINUS, valExpr.clone());
+                  atomicFunc = new NameID("atomic_sub");
+                }
+                else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_AND)
+                {
+                  atomicFunc = new NameID("atomic_and");
+                }
+                else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_INCLUSIVE_OR)
+                {
+                  atomicFunc = new NameID("atomic_or");
+                }
+                else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_EXCLUSIVE_OR)
+                {
+                  atomicFunc = new NameID("atomic_xor");
+                }
+                else if(assignExpr.getOperator() == AssignmentOperator.MULTIPLY)
+                {
+                  atomicFunc = new NameID("atomic_mul");
+                  Tools.exit("Atomic multiplication operation is not supported\nAtomic annotation: " 
+                      + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
+                }
+                else if(assignExpr.getOperator() == AssignmentOperator.DIVIDE)
+                {
+                  atomicFunc = new NameID("atomic_div");
+                  Tools.exit("Atomic division operation is not supported\nAtomic annotation: " 
+                      + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
                 }
 
                 if(annot.containsKey("atomic_var"))
@@ -6150,65 +6292,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                   annot.put("atomic_var", atomicVarSet);
                 }
 
-                NameID atomicFunc = null;
-
-                if(atomicOp == BinaryOperator.ADD)
-                {
-                  atomicFunc = new NameID("atomic_add");
-                }
-                else if(atomicOp == BinaryOperator.SUBTRACT)
-                {
-                  // x = expr - x;
-                  if(valExpr.equals(rhsExpr.getLHS()))
-                  {
-                    atomicFunc = new NameID("atomicSubRHS");
-                    Tools.exit("Atomic RHS-subtracion operation is not supported\nAtomic annotation: " 
-                        + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
-                  }
-                  // x = x - expr
-                  else
-                  {
-                    //atomicFunc = new NameID("atomicAdd");
-                    //valExpr = new UnaryExpression(UnaryOperator.MINUS, valExpr.clone());
-                    atomicFunc = new NameID("atomic_sub");
-                  }
-                }
-                else if(atomicOp == BinaryOperator.BITWISE_AND)
-                {
-                  atomicFunc = new NameID("atomic_and");
-                }
-                else if(atomicOp == BinaryOperator.BITWISE_INCLUSIVE_OR)
-                {
-                  atomicFunc = new NameID("atomic_or");
-                }
-                else if(atomicOp == BinaryOperator.BITWISE_EXCLUSIVE_OR)
-                {
-                  atomicFunc = new NameID("atomic_xor");
-                }
-                else if(atomicOp == BinaryOperator.MULTIPLY)
-                {
-                  atomicFunc = new NameID("atomic_mul");
-                  Tools.exit("Atomic multiplication operation is not supported\nAtomic annotation: " 
-                      + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
-                }
-                else if(atomicOp == BinaryOperator.DIVIDE)
-                {
-                  // x = expr / x;
-                  if(valExpr.equals(rhsExpr.getLHS()))
-                  {
-                    atomicFunc = new NameID("atomicDivRHS");
-                  }
-                  // x = x / expr
-                  else
-                  {
-                    atomicFunc = new NameID("atomic_div");
-                  }
-                  Tools.exit("Atomic division operation is not supported\nAtomic annotation: " 
-                      + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
-                }
-
                 FunctionCall atomicCall = new FunctionCall(atomicFunc,
-                    new UnaryExpression(UnaryOperator.ADDRESS_OF, atomicVar.clone()),
+                    new UnaryExpression(UnaryOperator.ADDRESS_OF, assignExpr.getLHS().clone()),
                     valExpr.clone());
                 CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
                 ExpressionStatement atomicCallStmt =  new ExpressionStatement(atomicCall);
@@ -6216,129 +6301,41 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
                 //PrintTools.println(atomicCallStmt.toString(),0);
                 parentStmt.addStatementAfter(atomicStmt, atomicCallStmt);
                 parentStmt.removeStatement(atomicStmt);
-              }
-              // x = expr
-              else
-              {
-                FunctionCall atomicCall = new FunctionCall(new NameID("atomic_xchg"),
-                    new UnaryExpression(UnaryOperator.ADDRESS_OF, atomicVar.clone()),
-                    assignExpr.getRHS().clone());
-                CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
-                ExpressionStatement atomicCallStmt =  new ExpressionStatement(atomicCall);
-                atomicCallStmt.annotate(annot.clone());
-                //PrintTools.println(atomicCallStmt.toString(),0);
-                parentStmt.addStatementAfter(atomicStmt, atomicCallStmt);
-                parentStmt.removeStatement(atomicStmt);
 
-                if(annot.containsKey("atomic_var"))
-                {
-                  Set<Identifier> atomicVarSet = annot.get("atomic_var");
-                  atomicVarSet.add(atomicVar);
-                }
-                else
-                {
-                  Set<Identifier> atomicVarSet = new HashSet<Identifier>();
-                  atomicVarSet.add(atomicVar);
-                  annot.put("atomic_var", atomicVarSet);
-                }
               }
+              //						PrintTools.println("assignment " + assignExpr, 0);
             }
-            //x binop= expr
-            else
-            {
-              NameID atomicFunc = null;
-              Expression valExpr = assignExpr.getRHS();
-              if(assignExpr.getOperator() == AssignmentOperator.ADD)
-              {
-                atomicFunc = new NameID("atomic_add");
-              }
-              else if(assignExpr.getOperator() == AssignmentOperator.SUBTRACT)
-              {
-                //atomicFunc = new NameID("atomicAdd");
-                //valExpr = new UnaryExpression(UnaryOperator.MINUS, valExpr.clone());
-                atomicFunc = new NameID("atomic_sub");
-              }
-              else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_AND)
-              {
-                atomicFunc = new NameID("atomic_and");
-              }
-              else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_INCLUSIVE_OR)
-              {
-                atomicFunc = new NameID("atomic_or");
-              }
-              else if(assignExpr.getOperator() == AssignmentOperator.BITWISE_EXCLUSIVE_OR)
-              {
-                atomicFunc = new NameID("atomic_xor");
-              }
-              else if(assignExpr.getOperator() == AssignmentOperator.MULTIPLY)
-              {
-                atomicFunc = new NameID("atomic_mul");
-                Tools.exit("Atomic multiplication operation is not supported\nAtomic annotation: " 
-                    + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
-              }
-              else if(assignExpr.getOperator() == AssignmentOperator.DIVIDE)
-              {
-                atomicFunc = new NameID("atomic_div");
-                Tools.exit("Atomic division operation is not supported\nAtomic annotation: " 
-                    + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
-              }
-
-              if(annot.containsKey("atomic_var"))
-              {
-                Set<Identifier> atomicVarSet = annot.get("atomic_var");
-                atomicVarSet.add(atomicVar);
-              }
-              else
-              {
-                Set<Identifier> atomicVarSet = new HashSet<Identifier>();
-                atomicVarSet.add(atomicVar);
-                annot.put("atomic_var", atomicVarSet);
-              }
-
-              FunctionCall atomicCall = new FunctionCall(atomicFunc,
-                  new UnaryExpression(UnaryOperator.ADDRESS_OF, assignExpr.getLHS().clone()),
-                  valExpr.clone());
-              CompoundStatement parentStmt = (CompoundStatement) atomicStmt.getParent();
-              ExpressionStatement atomicCallStmt =  new ExpressionStatement(atomicCall);
-              atomicCallStmt.annotate(annot.clone());
-              //PrintTools.println(atomicCallStmt.toString(),0);
-              parentStmt.addStatementAfter(atomicStmt, atomicCallStmt);
-              parentStmt.removeStatement(atomicStmt);
-
-            }
-            //						PrintTools.println("assignment " + assignExpr, 0);
+          }
+          else if(at instanceof CompoundStatement)
+          {
+            Tools.exit("Atomic operation is not supported\nAtomic annotation: " 
+                + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
+          }
+          else
+          {
+            Tools.exit("Atomic operation is not supported\nAtomic annotation: " 
+                + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
           }
         }
-        else if(at instanceof CompoundStatement)
-        {
-          Tools.exit("Atomic operation is not supported\nAtomic annotation: " 
-              + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
-        }
-        else
-        {
-          Tools.exit("Atomic operation is not supported\nAtomic annotation: " 
-              + annot + "\n" + AnalysisTools.getEnclosingAnnotationContext(annot));
+      }
+
+      protected void runtimeTransformationForConstMemory(Procedure cProc, List<FunctionCall> fCallList ) {
+        for( FunctionCall fCall : fCallList ) {
+          Statement fCallStmt = fCall.getStatement();
+          if(fCallStmt.containsAnnotation(ARCAnnotation.class, "constant")) {
+            if( !OpenACCRuntimeLibrary.isOpenARCAPI(fCall) && OpenACCRuntimeLibrary.isDeviceMallocAPI(fCall) ) {
+              String oldFName = fCall.getName().toString();
+              if( OpenACCRuntimeLibrary.isCopyInAPI(fCall) || oldFName.equals("acc_create") || oldFName.equals("acc_pcreate") 
+                  || oldFName.equals("acc_present_or_create")) {
+                //Add suffix of "_const" to the following runtime APIs.
+                //acc_copyin(), acc_pcopyin(), acc_present_or_copyin(), acc_create(), acc_pcreate(),
+                //or acc_present_or_create()
+                Expression newName = new NameID(oldFName + "_const");
+                fCall.setFunction(newName);
+              }
+            } 
+          }
         }
       }
-    }
 
-    protected void runtimeTransformationForConstMemory(Procedure cProc, List<FunctionCall> fCallList ) {
-      for( FunctionCall fCall : fCallList ) {
-        Statement fCallStmt = fCall.getStatement();
-        if(fCallStmt.containsAnnotation(ARCAnnotation.class, "constant")) {
-          if( !OpenACCRuntimeLibrary.isOpenARCAPI(fCall) && OpenACCRuntimeLibrary.isDeviceMallocAPI(fCall) ) {
-            String oldFName = fCall.getName().toString();
-            if( OpenACCRuntimeLibrary.isCopyInAPI(fCall) || oldFName.equals("acc_create") || oldFName.equals("acc_pcreate") 
-                || oldFName.equals("acc_present_or_create")) {
-              //Add suffix of "_const" to the following runtime APIs.
-              //acc_copyin(), acc_pcopyin(), acc_present_or_copyin(), acc_create(), acc_pcreate(),
-              //or acc_present_or_create()
-              Expression newName = new NameID(oldFName + "_const");
-              fCall.setFunction(newName);
-            }
-          } 
-        }
       }
-    }
-
-    }

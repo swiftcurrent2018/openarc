@@ -9,6 +9,8 @@
 #define USE_BLOCKING_STREAMS
 #define SHOW_ERROR_CODE
 
+//#define INIT_DEBUG
+
 //[DEBUG] commented out since they are no more static.
 //std::map<std::string, CUfunction> CudaDriver::kernelMap;
 //std::set<std::string> CudaDriver::kernelNameSet;
@@ -137,7 +139,9 @@ HI_error_t CudaDriver::init() {
 #else
     cuDeviceComputeCapability(&compute_capability_major, &compute_capability_minor, cuDevice);
 #endif
-    //fprintf(stderr, "Compute capability: %d.%d\n", compute_capability_major, compute_capability_minor);
+#ifdef INIT_DEBUG
+    fprintf(stderr, "[DEBUG] Compute capability: %d.%d\n", compute_capability_major, compute_capability_minor);
+#endif
 	if( compute_capability_major > 2 ) {
 		maxGridX = 2147483647; maxGridY = 65535; maxGridZ = 65535;
 		maxBlockX = 1024; maxBlockY = 1024; maxBlockZ = 64;
@@ -160,7 +164,6 @@ HI_error_t CudaDriver::init() {
 
     std::stringstream ss;
     ss << compute_capability_major;
-    //fprintf(stderr, "Version no. major %s\n", str.c_str());*/
 
     ss << compute_capability_minor;
     std::string version = ss.str();
@@ -197,6 +200,9 @@ HI_error_t CudaDriver::init() {
 			exit(1);
     	}
 	}
+#ifdef INIT_DEBUG
+    fprintf(stderr, "[DEBUG] A CUDA context is created or loaded.\n");
+#endif
 
 /*
     std::string ptx_source;
@@ -247,6 +253,9 @@ HI_error_t CudaDriver::init() {
         fprintf(stderr, "[ERROR in CudaDriver::init()] Module Load FAIL with error = %d (%s)\n", err, cuda_error_code(err));
 		exit(1);
     }
+#ifdef INIT_DEBUG
+    fprintf(stderr, "[DEBUG] CUDA Module is loaded.\n");
+#endif
     CUstream s0, s1;
     CUevent e0, e1;
 	// CU_STREAM_DEFAULT => create a blocking stream that synchronizes with 
@@ -288,6 +297,9 @@ HI_error_t CudaDriver::init() {
 #endif
     	queueMap[0+i*MAX_NUM_QUEUES_PER_THREAD] = s0;
     	queueMap[1+i*MAX_NUM_QUEUES_PER_THREAD] = s1;
+#ifdef INIT_DEBUG
+    	fprintf(stderr, "[DEBUG] CUDA Streams are created.\n");
+#endif
     	err = cuEventCreate(&e0, CU_EVENT_DEFAULT);
 #ifdef _OPENARC_PROFILE_
     	if (err != CUDA_SUCCESS) {
@@ -311,6 +323,9 @@ HI_error_t CudaDriver::init() {
 		postponedFreeTableMap[i] = new asyncfreetable_t();
 		memPoolMap[i] = new memPool_t();
 		tempMallocSizeMap[i] = new sizemap_t();
+#ifdef INIT_DEBUG
+    	fprintf(stderr, "[DEBUG] CUDA events are created.\n");
+#endif
 	}
 
 
