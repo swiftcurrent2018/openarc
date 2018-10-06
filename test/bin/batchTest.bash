@@ -23,10 +23,10 @@ while [ "$1" != "" ]; do
             ;;  
         all | -test-all)
             TEST_ALL=1
-            TEST_TARGETS=( "aspen" "impacc" "nvl-c" "openacc" "openmp4" "resilience" )
+            TEST_TARGETS=( "examples" "aspen" "impacc" "nvl-c" "openacc" "openmp4" "resilience" )
             echo "Test All"
             ;;  
-        aspen | impacc | nvl-c | openacc | openmp4 | resilience )
+        examples | aspen | impacc | nvl-c | openacc | openmp4 | resilience )
             if [ ! -n "$TEST_ALL" ]; then
                 TEST_TARGETS=( "${TEST_TARGETS[@]}" $PARAM )
             fi  
