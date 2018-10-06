@@ -84,8 +84,37 @@ public abstract class FPGASpecificTools {
     /* Default operator costs */
     HashMap<OperatorPair, Integer> operatorCostMap = new HashMap<OperatorPair, Integer>();
 
-    boolean STRATIX_V = true;
+    boolean STRATIX_V = false;
     boolean ARRIA_X = false;
+
+    String fpga_env = System.getenv("OPENARC_FPGA");
+    if (fpga_env == null)
+      Tools.exit("[Error in FPGASpecificTools.reductionTransformation] Environment variable OPENARC_FPGA not set. Options include:\n" + 
+          "  STRATIX_V\n  ARRIA_X");
+    else if (fpga_env.equals("STRATIX_V")) 
+      STRATIX_V = true;
+    else if (fpga_env.equals("ARRIA_X")) 
+      ARRIA_X = true;
+    else
+      Tools.exit("[Error in FPGASpecificTools.reductionTransformation] Environment variable OPENARC_FPGA='" +
+          fpga_env.toString() + "' not supported. Options include:\n  STRATIX_V\n  ARRIA_X");
+
+    if (ARRIA_X) {
+      operatorCostMap.put(new OperatorPair(ReductionOperator.ADD, Specifier.INT), 1);
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MULTIPLY, Specifier.INT), 1);
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MAX, Specifier.INT), 1);
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MIN, Specifier.INT), 1);
+
+      operatorCostMap.put(new OperatorPair(ReductionOperator.ADD, Specifier.FLOAT), 4); // change to 1 for accumulator
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MULTIPLY, Specifier.FLOAT), 4);
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MAX, Specifier.FLOAT), 1);
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MIN, Specifier.FLOAT), 1);
+
+      operatorCostMap.put(new OperatorPair(ReductionOperator.ADD, Specifier.DOUBLE), 12);
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MULTIPLY, Specifier.DOUBLE), 16);
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MAX, Specifier.DOUBLE), 1);
+      operatorCostMap.put(new OperatorPair(ReductionOperator.MIN, Specifier.DOUBLE), 1);
+    }
 
     if (STRATIX_V) {
       operatorCostMap.put(new OperatorPair(ReductionOperator.ADD, Specifier.INT), 2);
@@ -151,14 +180,6 @@ public abstract class FPGASpecificTools {
 
       red_region.swapWith(cStmt);
 
-      /* Create an identifier for the loop index variable */
-      Expression iter = LoopTools.getIndexVariable(forLoop);
-      Symbol forLoopSym = SymbolTools.getSymbolOf(iter);
-      List<Specifier> specs = new ArrayList<Specifier>();
-      specs.addAll(forLoopSym.getTypeSpecifiers());
-      String symNameBase = forLoopSym.getSymbolName();
-      Identifier forLoopIndex = TransformTools.getTempScalar(cStmt, specs, symNameBase, 0);
-
       /* Record loop unroll factor */
       int unroll_factor = 1;
 
@@ -183,38 +204,34 @@ public abstract class FPGASpecificTools {
       // Perform shift-register reduction for each variable in the reduction clause //
       ////////////////////////////////////////////////////////////////////////////////
       for (Symbol rSym : redOpMap.keySet()) {
-        SubArray sArray = redVarMap.get(rSym);
 
+        /* Determine needed register depth */
+        // DEBUG: reg_depth should have an option for user assignment
+        List<Specifier> rSym_specs = rSym.getTypeSpecifiers(); 
+        OperatorPair op_pair = new OperatorPair( redOpMap.get(rSym), rSym_specs.get(rSym_specs.size() - 1)); 
+        Object obj = operatorCostMap.get(op_pair);
+        if (obj == null)
+          Tools.exit("[ERROR in ReductionTransformation] Reduction operator \"" + redOpMap.get(rSym) + "\"  on type \"" 
+              + rSym_specs.get(rSym_specs.size() - 1) + "\" not supported for FPGA-specific reduction transformation");
+
+        int op_cost = (int) obj; 
+        if (op_cost < 2) continue;
+
+        int reg_depth = op_cost * unroll_factor;
 
         /* Set up kernel arguments/parameters */
-        symNameBase = rSym.getSymbolName();
-        specs = new ArrayList<Specifier>();
-        specs.addAll(rSym.getTypeSpecifiers());
-
+        String symNameBase = rSym.getSymbolName();
         String hostrName = "gpu__" + symNameBase;
         Symbol hostrSym = SymbolTools.getSymbolOfName(hostrName, cStmt);
         Identifier hostrVar = new Identifier(hostrSym);
 
-        /* Determine needed register depth */
-        // DEBUG: op_cost should be derived from the operator type, and unroll factor
-        //       should be user defined. reg_depth should have an option for user assignment
-
-        OperatorPair op_pair = new OperatorPair( redOpMap.get(rSym), specs.get(specs.size() - 1)); 
-        Object obj = operatorCostMap.get(op_pair);
-        if (obj == null)
-          Tools.exit("[ERROR in ReductionTransformation] Reduction operator \"" + redOpMap.get(rSym) + "\"  on type \"" 
-              + specs.get(specs.size() - 1) + "\" not supported for FPGA-specific reduction transformation");
-
-        int op_cost = (int) obj; 
-        int reg_depth = op_cost * unroll_factor;
-
         /* Create a new index variable for indexing the shift-register */
-        iter = LoopTools.getIndexVariable(forLoop);
+        Expression iter = LoopTools.getIndexVariable(forLoop);
         Symbol indexSym = SymbolTools.getSymbolOf(iter);
-        specs = new ArrayList<Specifier>();
-        specs.addAll(indexSym.getTypeSpecifiers());
+        List<Specifier> index_specs = new ArrayList<Specifier>();
+        index_specs.addAll(indexSym.getTypeSpecifiers());
         symNameBase = indexSym.getSymbolName();
-        Identifier srIndex = TransformTools.getTempScalar(forLoop, specs, "sr__" + symNameBase, 0);
+        Identifier srIndex = TransformTools.getTempScalar(forLoop, index_specs, "sr__" + symNameBase, 0);
 
         /* Define shift register array */
         List<Specifier> removeSpecs = new ArrayList<Specifier>();
@@ -483,32 +500,51 @@ public abstract class FPGASpecificTools {
           move_annot.put(tKey, tOldAnnot.get(tKey));
         } 
         // move all parallel clauses up
-        else if (tKey.equals("firstprivate") || tKey.equals("private") ||
-            tKey.equals("num_gangs") || tKey.equals("num_workers") ) {
+        else if (tKey.equals("parallel") ||
+            tKey.equals("firstprivate") || 
+            tKey.equals("private") ||
+            tKey.equals("num_gangs") || 
+            tKey.equals("num_workers") || 
+            tKey.equals("async")||
+            tKey.equals("wait") || 
+            tKey.equals("if")) {
           move_annot.put(tKey, tOldAnnot.get(tKey));
         } 
+        // move and keep reduction clauses
         else if (tKey.equals("reduction")) {
-          Map<ReductionOperator, Set<SubArray>> redMap = tOldAnnot.get(tKey);
-          move_annot.put("reduction", redMap);
-          keep_annot.put("reduction", redMap);
+          move_annot.put("reduction", tOldAnnot.get(tKey));
+          keep_annot.put("reduction", tOldAnnot.get(tKey));
         } 
-        else if (tKey.equals("internal")) {
-          //move_annot.put("internal", tOldAnnot.get(tKey));
-          //keep_annot.put("internal", tOldAnnot.get(tKey));
-          // move other clauses
-        } 
-        else if (tKey.equals("async") || tKey.equals("wait") || tKey.equals("if")) {
-          move_annot.put(tKey, tOldAnnot.get(tKey));
-        } 
-        else if (tKey.equals("loop") ) {
+        // keep loop clauses 
+        else if (tKey.equals("loop") || 
+            tKey.equals("gang") || 
+            tKey.equals("worker") ||
+            tKey.equals("internal")){
           keep_annot.put(tKey, tOldAnnot.get(tKey));
-          //keep_annot.put("seq", "_clause"); //this loop should be executed sequentially.
         }
+        // ignore unneeded clauses
+        else if (tKey.equals("pragma") || 
+            tKey.equals("collapse") ||
+            tKey.equals("iterspace") ||
+            tKey.equals("gangdim") ||
+            tKey.equals("workerdim") ||
+            tKey.equals("accreduction") ||
+            tKey.equals("accshared") ||
+            tKey.equals("accexplicitshared") ||
+            tKey.equals("accreadonly") ||
+            tKey.equals("accprivate")) {
+
+        }
+        else {
+          System.out.println("[Warning in FPGASpecificTools.collapseTransformation] Unhandled clause in ACC annotation:\n" + 
+              "  Annotation: " + tOldAnnot.toString() + "\n  Clause: " + tKey.toString());
+        }
+
       }
 
     }
 
-    keep_annot.put("gang", "_directive");
+    //keep_annot.put("gang", "_directive");
 
     accLoop.annotate(keep_annot);
     target_region.annotate(move_annot);

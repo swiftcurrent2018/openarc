@@ -46,4 +46,11 @@ if [ -f ./cetus_output/openarc_kernel.cu ]; then
         cp *.ptx ../ 
     fi  
 fi
+echo ""
+echo "====> To compile the translated output file:"
+echo "\$ make"
+echo ""
+echo "====> To run the compiled binary:"
+echo "\$ cd bin; matmul_ACC"
+echo ""
 

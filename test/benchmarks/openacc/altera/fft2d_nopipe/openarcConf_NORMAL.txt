@@ -323,7 +323,7 @@
 # Translation configuration #
 #############################
 #acc2gpu=1
-#targetArch=3
+targetArch=3
 #AccAnalysisOnly=1
 #SkipGPUTranslation=1
 showInternalAnnotations=0

@@ -9,7 +9,7 @@ function usage()
 	echo -e "\t[list of targets to test]"
 	echo ""
 	echo "List of targets:"
-	echo -e "\taspen impacc nvl-c openacc openmp4 resilience"
+	echo -e "\texamples aspen impacc nvl-c openacc openmp4 resilience"
 	echo ""
 }
 
@@ -41,7 +41,7 @@ while [ "$1" != "" ]; do
 done
 
 if [ ${#TEST_TARGETS[@]} -eq 0 ]; then
-    TEST_TARGETS=( "openacc" )
+    TEST_TARGETS=( "examples" )
 fi
 
 
@@ -69,11 +69,13 @@ fi
 translog="$openarc/test/bin/batchtranslation.log"
 compilelog="$openarc/test/bin/batchcompile.log"
 runlog="$openarc/test/bin/batchrun.log"
-templog="$openarc/temp.log"
+faillog="$openarc/test/bin/failsummary.log"
+templog="$openarc/test/bin/temp.log"
 
 date | tee $translog
 date | tee $compilelog
 date | tee $runlog
+date | tee $faillog
 
 for TARGET in ${TEST_TARGETS[@]}
 do
@@ -83,26 +85,31 @@ do
 		echo "==> Test benchmarks in the $TARGET directory"
 	else
 		echo "==> Test benchmarks in the $TARGET directory"
-		if [ -d "$openarc/test/benchmarks/$TARGET" ]; then
-			cd "$openarc/test/benchmarks/$TARGET"
+		if [ "$TARGET" = "examples" ]; then
+			targetDir="$openarc/test/examples/openarc"
+		else
+			targetDir="$openarc/test/benchmarks/$TARGET"
+		fi
+		if [ -d "$targetDir" ]; then
+			cd "$targetDir"
 			i=1
 			while [ $i -le 3 ]
 			do
-				cd "$openarc/test/benchmarks/$TARGET"
+				cd "$targetDir"
 				#benchmarks=( `find . -mindepth $i -maxdepth $i -type d | grep -v bin | grep -v cetus_output | grep -v cetus_input | grep -v Docs | grep -v Spec | grep -v data` )
 				searchCMD="find . -mindepth $i -maxdepth $i -type d"
 				benchmarks=( `${searchCMD} | grep -v bin | grep -v cetus_output | grep -v cetus_input | grep -v Docs | grep -v Spec | grep -v data` )
 				for example in ${benchmarks[@]}
 				do
-					if [ -f "$openarc/test/benchmarks/$TARGET/$example/Makefile" ]; then
-						echo $example | grep -e tuning -e task -e pipe -e altera > /dev/null
+					if [ -f "$targetDir/$example/Makefile" ]; then
+						echo $example | grep -e "_tuning" -e "_task" -e "_cash" > /dev/null
 						if [ $? -eq 0 ]; then
 							echo "" | tee -a $translog
 							echo "====> Skip ${example}!" | tee -a $translog
 							echo "" | tee -a $translog
 							continue
 						fi
-						cd $openarc/test/benchmarks/$TARGET/${example}	
+						cd ${targetDir}/${example}	
 						echo "" | tee -a $translog
 						echo "==> Target: ${example}" | tee -a $translog
 						echo "" | tee -a $translog
@@ -115,6 +122,23 @@ do
 						fi
 						./O2GBuild.script 2>&1 | tee $templog
 						cat $templog >> $translog
+						echo $example | grep -e "Undeclared symbol" -e "fatal error" -e ERROR -e Error > /dev/null
+						if [ $? -eq 0 ]; then
+							echo "Translation Failed!" | tee -a $translog
+							echo "" | tee -a $faillog
+							echo "==> Target: ${example} : failed during translation!" | tee -a $faillog
+							echo "" | tee -a $faillog
+							continue
+						else
+							echo "Translation Successful!" | tee -a $translog
+						fi
+						echo $example | grep -e altera -e "_aspen" > /dev/null
+						if [ $? -eq 0 ]; then
+							echo "" | tee -a $translog
+							echo "====> Skip compilation of ${example}!" | tee -a $translog
+							echo "" | tee -a $translog
+							continue
+						fi
 						makeCMD=""
 						runCMD=""
 						foundMakeCMD=0
@@ -153,6 +177,10 @@ do
 							cat $templog | grep -i error > /dev/null
 							if [ $? -eq 0 ]; then
 								echo "Compile Failed!" | tee -a $compilelog
+								echo "" | tee -a $faillog
+								echo "==> Target: ${example} : failed during compilation!" | tee -a $faillog
+								echo "" | tee -a $faillog
+								continue
 							else
 								echo "Compile Successful!" | tee -a $compilelog
 							fi
@@ -160,6 +188,10 @@ do
 							cat $templog >> $compilelog
 						else
 							echo "Compile Failed!" | tee -a $compilelog
+							echo "" | tee -a $faillog
+							echo "==> Target: ${example} : cannot find compile-command!" | tee -a $faillog
+							echo "" | tee -a $faillog
+							continue
 						fi
 
 						echo "" | tee -a $runlog
@@ -174,10 +206,19 @@ do
 							if [ $? -eq 0 ]; then
 								cat $templog | grep -i -e "not found" > /dev/null
 							else
-								cat $templog | grep -i -e error -e "not found" > /dev/null
+								echo $example | grep -e vecadd -e arrayreduction > /dev/null
+								if [ $? -eq 0 ]; then
+									cat $templog | grep -i -e "not found" > /dev/null
+								else
+									cat $templog | grep -i -e error -e "not found" > /dev/null
+								fi
 							fi
 							if [ $? -eq 0 ]; then
 								echo "Run Failed!" | tee -a $runlog
+								echo "" | tee -a $faillog
+								echo "==> Target: ${example} : failed during execution!" | tee -a $faillog
+								echo "" | tee -a $faillog
+								continue
 							else
 								echo "Run Successful!" | tee -a $runlog
 							fi
@@ -185,6 +226,10 @@ do
 							cat $templog >> $runlog
 						else
 							echo "Run Failed!" | tee -a $runlog
+							echo "" | tee -a $faillog
+							echo "==> Target: ${example} : cannot find run-command!" | tee -a $faillog
+							echo "" | tee -a $faillog
+							continue
 						fi
 					fi
 				done
