@@ -176,7 +176,11 @@ public class ACCAnnotation extends PragmaAnnotation
  * where clause is one of the following
  *     bind(name)
  *     nohost
- *     type(workshare type)     
+ *     gang
+ *     worker
+ *     vector
+ *     seq
+ *     device_type(device-type-list)
  * <p>     
  * #pragma acc set [clause[[,] clause]...]
  * <p>     

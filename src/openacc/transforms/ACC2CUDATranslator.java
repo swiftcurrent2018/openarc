@@ -6138,20 +6138,116 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		List<FunctionCall> funcList = IRTools.getFunctionCalls(at);
 		if( funcList != null ) {
 			for( FunctionCall fCall : funcList ) {
-				if( StandardLibrary.contains(fCall) ) {
-					continue;
-				}
+				FunctionCall refFCall = null;
+				IDExpression fCallName = (IDExpression)fCall.getName();
+				IDExpression refFCallName = null;
 				Procedure c_proc = AnalysisTools.findProcedure(fCall);
-				if( (c_proc == null) && (currTrUnt != trUnt) ) {
-					List<Procedure> procList = IRTools.getProcedureList(program);
-					for( Procedure tProc : procList ) {
-						if( tProc.getSymbolName().equals(fCall.getName().toString()) ) {
-							c_proc = tProc;
-							break;
-						}
+				VariableDeclaration c_procDecl = null;
+				Procedure ref_proc = null;
+				VariableDeclaration ref_procDecl = null;
+				ACCAnnotation bindAnnot = null;
+				if( c_proc != null ) {
+					bindAnnot = c_proc.getAnnotation(ACCAnnotation.class, "bind");
+				} 
+				if( bindAnnot == null ) {
+					c_procDecl = AnalysisTools.getProcedureDeclaration(trUnt, fCallName);
+					if( c_procDecl != null ) {
+						bindAnnot = c_procDecl.getAnnotation(ACCAnnotation.class, "bind");
 					}
 				}
-				if( (c_proc != null) ) {
+				if( bindAnnot != null ) {
+					Object bindArg = bindAnnot.get("bind");
+					IDExpression bindName = null;
+					if( bindArg instanceof IDExpression ) {
+						bindName = (IDExpression)bindArg;
+					} else if( bindArg instanceof String ) {
+						bindName = new NameID((String)bindArg);
+					}
+					//FIXME: for now, string bind name is treated in the same manner as identifier name.
+					if( !fCallName.equals(bindName) ) {
+						refFCall = fCall;
+						refFCallName = fCallName.clone();
+						ref_proc = c_proc;
+						ref_procDecl = c_procDecl;
+						Symbol bindSymbol = SymbolTools.getSymbolOfName(bindName.toString(), fCall);
+						//Update fCallName, c_proc, and c_procDecl for the new one.
+						if( bindSymbol != null ) {
+							fCallName = new Identifier(bindSymbol);
+							if( bindSymbol instanceof Procedure ) {
+								c_proc = (Procedure)bindSymbol;
+								c_procDecl = null;
+							} else if( bindSymbol instanceof ProcedureDeclarator ) {
+								c_proc = null;
+								c_procDecl = (VariableDeclaration) ((ProcedureDeclarator)bindSymbol).getParent();
+							}
+						} else {
+							fCallName = bindName.clone();
+							c_proc = null;
+							c_procDecl = null;
+						}
+						int numRefParams = 0;
+						int numNewParams = 0;
+						if( ref_proc != null ) {
+							numRefParams = ref_proc.getNumParameters();
+							if( numRefParams == 1 ) {
+
+								Object obj = ref_proc.getParameter(0);
+								String paramS = obj.toString();
+								// Remove any leading or trailing whitespace.
+								paramS = paramS.trim();
+								if( paramS.equals(Specifier.VOID.toString()) ) {
+									numRefParams = 0;
+								}
+							}
+						} else if( ref_procDecl != null ) {
+							numRefParams = ((ProcedureDeclarator)ref_procDecl.getDeclarator(0)).getParameters().size();
+						}
+						if( c_proc != null ) {
+							numNewParams = c_proc.getNumParameters();
+							if( numNewParams == 1 ) {
+
+								Object obj = c_proc.getParameter(0);
+								String paramS = obj.toString();
+								// Remove any leading or trailing whitespace.
+								paramS = paramS.trim();
+								if( paramS.equals(Specifier.VOID.toString()) ) {
+									numNewParams = 0;
+								}
+							}
+							if( numRefParams <= numNewParams ) {
+								Tools.exit("\n[ERROR in ACC2OPENCLTranslator.devProcCloning()] OpenACC routine binding error; "
+										+ "both the reference procedure and the new binding procedure should have the same number of parameters; exit!\n"
+										+ "\nFunction call site: " + fCall
+										+ "\nReferenc procedure definition: " + ref_proc
+										+ "\nNew binding procedure definition: " + c_proc
+										+ AnalysisTools.getEnclosingContext(fCall)); 
+							} else if( numRefParams > numNewParams ) {
+								List<VariableDeclaration> refParamList = 
+										(List<VariableDeclaration>)ref_proc.getParameters();
+								CompoundStatement c_body = c_proc.getBody();
+								for( int i=numNewParams; i<numRefParams; i++ ) {
+									VariableDeclaration refParamDecl = refParamList.get(i);
+									VariableDeclaration newParamDecl = refParamDecl.clone();
+									Expression refID = refParamDecl.getDeclaredIDs().get(0);
+									Expression newID = newParamDecl.getDeclaredIDs().get(0);
+									c_proc.addDeclaration(newParamDecl);
+									IRTools.replaceAll(c_body, refID, newID);
+								}
+							}
+						}
+						fCall = new FunctionCall(fCallName);
+						for(Expression argExp : refFCall.getArguments() ) {
+							Expression dummyExp = new NameID("dummyArg");
+							fCall.addArgument(dummyExp);
+							dummyExp.swapWith(argExp);
+						}
+						//Replace the function call with new one.
+						fCall.swapWith(refFCall);
+					}
+				}
+				if( StandardLibrary.contains(fCallName.toString()) ) {
+					continue;
+				} else if( (c_proc != null) ) {
 					FunctionCall new_fCall = null;
 					String callContext = "";
 					String offsetTails = ""; //used to differentiate offsets to texture variable argument. 
@@ -6244,7 +6340,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 												argSym.getSymbolName() + ") is passed to a device function (" + c_proc.getSymbolName() +
 												") in a complex argument expression (" + argExp + "); the current implemenation can not " +
 												"handle this. Either manually inline this device function, or do not cache the variable on " +
-										"the texture cache.");
+												"the texture cache.");
 									}
 								}
 							} else if( constantSymMap.containsKey(argSym)) {
@@ -6271,7 +6367,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 							}
 						}*/
 						List<VariableDeclaration> oldParamList = 
-							(List<VariableDeclaration>)c_proc.getParameters();
+								(List<VariableDeclaration>)c_proc.getParameters();
 						CompoundStatement body;
 						String new_proc_name;
 						Procedure new_proc;
@@ -6305,7 +6401,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 							// Create a new function call for the cloned procedure. //
 							//////////////////////////////////////////////////////////
 							if( fCall != null ) {
-								new_fCall = new FunctionCall(new NameID(new_proc_name));
+								//new_fCall = new FunctionCall(new NameID(new_proc_name));
+								new_fCall = new FunctionCall(new Identifier(new_proc));
 								fCall.swapWith(new_fCall);
 							}
 						} else {
@@ -6524,7 +6621,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 											VariableDeclaration procDecl = (VariableDeclaration)parent;
 											//Create a new function declaration.
 											VariableDeclaration newProcDecl = 
-												new VariableDeclaration(procDecl.getSpecifiers(), new_proc.getDeclarator().clone());
+													new VariableDeclaration(procDecl.getSpecifiers(), new_proc.getDeclarator().clone());
 											//Insert the new function declaration.
 											if( !AnalysisTools.isInHeaderFile(procDecl, cTu) ) {
 												cTu.addDeclarationAfter(procDecl, newProcDecl);
@@ -6613,6 +6710,132 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 								}
 							}
 						}
+					}
+				} else {
+					boolean procDeclExist = false;
+					Set<Symbol> kernelsTrSymbols = kernelsTranslationUnit.getSymbols();
+					for( Symbol tSymbol : kernelsTrSymbols ) {
+						if( tSymbol.getSymbolName().equals(fCallName.toString())) {
+							procDeclExist = true;
+							break;
+						}
+					}
+					if( procDeclExist ) {
+						continue;
+					}
+					VariableDeclaration n_procDecl = null;
+					ProcedureDeclarator n_procDeclr = null;
+					ProcedureDeclarator c_procDeclr = null;
+					List<Specifier> returnTypes = new LinkedList<Specifier>();
+					if( c_procDecl != null ) {
+						c_procDeclr = (ProcedureDeclarator)c_procDecl.getDeclarator(0);
+						returnTypes.addAll(c_procDecl.getSpecifiers());
+					} else if( ref_procDecl != null ) {
+						c_procDeclr = (ProcedureDeclarator)ref_procDecl.getDeclarator(0);
+						returnTypes.addAll(ref_procDecl.getSpecifiers());
+					} else if( ref_proc != null ) {
+						c_procDeclr = (ProcedureDeclarator) ref_proc.getDeclarator();
+						returnTypes.addAll(ref_proc.getReturnType());
+					}
+					if( c_procDeclr == null ) {
+						//FIXME: how to handle this case where no function declaration exists even though it is not a standard library API.
+						PrintTools.println("\n[WARNING in ACC2CUDATranslator.devProcCloning()] cannot find a function declaratio of the function, "
+								+ fCall.getName() + AnalysisTools.getEnclosingContext(fCall), 0); 
+						continue;
+					} else {
+						int numParams = 0;
+						if( ref_procDecl != null ) {
+							numParams = ((ProcedureDeclarator)ref_procDecl.getDeclarator(0)).getParameters().size();
+							//PrintTools.println("ref_procDecl: " + ref_procDecl, 0);
+						} else if( ref_proc != null ) {
+							numParams = ref_proc.getNumParameters();
+							//PrintTools.println("ref_proc: " + ref_proc, 0);
+						} else {
+							numParams = c_procDeclr.getParameters().size();
+							//PrintTools.println("c_procDeclr: " + c_procDeclr, 0);
+						}
+						//PrintTools.println("fCall: " + fCall, 0);
+						if( c_procDeclr.getParameters().size() != numParams ) {
+							Tools.exit("\n[ERROR in ACC2CUDATranslator.devProcCloning()] External library can be used in an OpenACC compute region "
+									+ "only if all global variables are explicitly passed as function arguments, but the function, "
+									+ fCall.getName() + " contains implicit accesses to global variables; exit!\n" + 
+									"External library function declaration: " + c_procDeclr
+									+ "\nFunction call site: " + fCall
+									+ AnalysisTools.getEnclosingContext(fCall)); 
+						}
+						List<Declaration> newParamList = new LinkedList<Declaration>();
+						List<Symbol> argSymList = new ArrayList<Symbol>(fCall.getArguments().size());
+						for( Expression argExp : fCall.getArguments() ) {
+							//Step1: find argument symbol which is a parameber symbol of the calling procedure.
+							Symbol argSym = SymbolTools.getSymbolOf(argExp);
+							if( argSym == null ) {
+								if( argExp instanceof BinaryExpression ) {
+									//find argSym which is a parameter symbol of the calling procedure.
+									Set<Symbol> sSet = SymbolTools.getAccessedSymbols(argExp);
+									sSet.retainAll(callerParamSymSet);
+									for( Symbol tSym : sSet ) {
+										if( argSym == null ) {
+											argSym = tSym;
+										} else {
+											if( SymbolTools.isPointer(tSym) || SymbolTools.isArray(tSym) ) {
+												argSym = tSym;
+												//FIXME: if multiple non-scalar parameter symbols exist, we can not
+												//know which is correct symbol, but not checked here.
+											}
+										}
+									}
+								}
+							}
+							if( argSym instanceof AccessSymbol ) {
+								argSym = null; 	//if argument is access expression, 
+								//it should be considered as normal type.
+							}
+							if( !callerParamSymSet.contains(argSym) ) {
+								argSym = null;
+							}
+							//Step2: find argument symbol type.
+							argSymList.add(argSym);
+						}
+						///////////////////////////////////////////////
+						// Update function parameters and arguments. //
+						///////////////////////////////////////////////
+						List<Declaration> oldParamList = c_procDeclr.getParameters(); 
+						List<Expression> oldArgList = (List<Expression>)fCall.getArguments();
+						int oldParamListSize = oldParamList.size();
+						if( oldParamListSize == 1 ) {
+
+							Object obj = oldParamList.get(0);
+							String paramS = obj.toString();
+							// Remove any leading or trailing whitespace.
+							paramS = paramS.trim();
+							if( paramS.equals(Specifier.VOID.toString()) ) {
+								oldParamListSize = 0;
+							}
+						}
+						if( oldParamListSize > 0 ) {
+							int i=0;
+							for( Declaration oparam : oldParamList ) {
+								VariableDeclaration param = (VariableDeclaration)oparam;
+								Symbol param_declarator = (Symbol)param.getDeclarator(0);
+								List<Specifier> typeSpecs = new ArrayList<Specifier>();
+								typeSpecs.addAll(param.getSpecifiers());
+								VariableDeclaration cloned_decl = (VariableDeclaration)param.clone();
+								newParamList.add(cloned_decl);
+								i++;
+							}
+						}
+						n_procDeclr = new ProcedureDeclarator(c_procDeclr.getSpecifiers(), new NameID(fCall.getName().toString()), newParamList);
+						n_procDecl = new VariableDeclaration(returnTypes, n_procDeclr);
+						FunctionCall nFCall = new FunctionCall(n_procDeclr.getID().clone());
+						for(Expression argExp : fCall.getArguments() ) {
+							Expression dummyExp = new NameID("dummyArg");
+							nFCall.addArgument(dummyExp);
+							dummyExp.swapWith(argExp);
+						}
+						//Replace the function call with new one.
+						nFCall.swapWith(fCall);
+						//Insert the procedure declaration to  the translation unit containing the output kernels.
+						kernelsTranslationUnit.addDeclaration(n_procDecl); 
 					}
 				}
 			}

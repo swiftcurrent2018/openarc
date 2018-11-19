@@ -53,7 +53,10 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 					isParallelRegion = true;
 				}
 				//Replace vector clause with worker clause if existing, since the current implementation does not support vector clause yet.
-				List<ACCAnnotation> vectorAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, "vector", null);
+				Set<String> searchKeys = new HashSet<String>();
+				searchKeys.add("loop");
+				searchKeys.add("vector");
+				List<ACCAnnotation> vectorAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, searchKeys, true, null);
 				if( vectorAnnots != null ) {
 					for( ACCAnnotation vAnnot : vectorAnnots ) {
 						vAnnot.remove("vector");
@@ -417,7 +420,12 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 	 */
 	private void WorksharingLoopsPreprocessor(String outerWorkshareClause, String innerWorkshareClause) {
 		// Find loops containing outerWorkshareClause clauses.
-		List<ACCAnnotation> outerLoopAnnotList = IRTools.collectPragmas(program, ACCAnnotation.class, outerWorkshareClause);
+		Set<String> searchKeys = new HashSet<String>();
+		searchKeys.add("loop");
+		searchKeys.add(outerWorkshareClause);
+		//[DEBUG] Routine directive can also have a workshareclause, but we need only loop directives with workshare clauses.
+		//List<ACCAnnotation> outerLoopAnnotList = IRTools.collectPragmas(program, ACCAnnotation.class, outerWorkshareClause);
+		List<ACCAnnotation> outerLoopAnnotList = AnalysisTools.collectPragmas(program, ACCAnnotation.class, searchKeys, true);
 		if( outerLoopAnnotList == null ) return;
 		//CAVEAT: Below algorithm assumes that outerLoopAnnotList returns outer worksharing loop first if worksharing loops are nested.
 		//(This is true in the current IRTools.collectPragmas() implementation.)
@@ -570,11 +578,19 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 			if( computeRegion.equals("kernels") && rAnnot.containsKey("seq") ) {
 				isSeqKernelLoop = true;
 			}
-			List<ACCAnnotation> gangAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "gang", null);
+			Set<String> searchKeys = new HashSet<String>();
+			searchKeys.add("loop");
+			searchKeys.add("gang");
+			//[DEBUG] Routine directive can also have a workshareclause, but we need only loop directives with workshare clauses.
+			//List<ACCAnnotation> gangAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "gang", null);
+			List<ACCAnnotation> gangAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, searchKeys, true, null);
 			if( gangAnnots != null ) {
 				for( ACCAnnotation gAnnot : gangAnnots ) {
 					Annotatable ttGAt = gAnnot.getAnnotatable();
 					if( !(ttGAt instanceof ForLoop) ) {
+						if( ttGAt.containsAnnotation(ACCAnnotation.class, "routine") ) {
+							continue;
+						}
 						Procedure pProc = IRTools.getParentProcedure(ttGAt);
 						Tools.exit("[ERROR] Gang clause is allowed only to a for-loop, but the following compute region uses the " +
 								"gang clause to non-loop structure.\n" +
@@ -702,7 +718,12 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 					}
 				}
 			}
-			List<ACCAnnotation> workerAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "worker", null);
+			searchKeys.clear();
+			searchKeys.add("loop");
+			searchKeys.add("worker");
+			//[DEBUG] Routine directive can also have a workshareclause, but we need only loop directives with workshare clauses.
+			//List<ACCAnnotation> workerAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "worker", null);
+			List<ACCAnnotation> workerAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, searchKeys, true, null);
 			if( workerAnnots != null ) {
 				for( ACCAnnotation wAnnot : workerAnnots ) {
 					ForLoop wloop = (ForLoop)wAnnot.getAnnotatable();
@@ -816,7 +837,12 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 					}
 				}
 			}
-			List<ACCAnnotation> vectorAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "vector", null);
+			searchKeys.clear();
+			searchKeys.add("loop");
+			searchKeys.add("vector");
+			//[DEBUG] Routine directive can also have a workshareclause, but we need only loop directives with workshare clauses.
+			//List<ACCAnnotation> vectorAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "vector", null);
+			List<ACCAnnotation> vectorAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, searchKeys, true, null);
 			if( vectorAnnots != null ) {
 				for( ACCAnnotation vAnnot : vectorAnnots ) {
 					ForLoop vloop = (ForLoop)vAnnot.getAnnotatable();
@@ -848,7 +874,12 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 					}
 				}
 			}
-			List<ACCAnnotation> seqAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "seq", null);
+			searchKeys.clear();
+			searchKeys.add("loop");
+			searchKeys.add("seq");
+			//[DEBUG] Routine directive can also have a workshareclause, but we need only loop directives with workshare clauses.
+			//List<ACCAnnotation> seqAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "seq", null);
+			List<ACCAnnotation> seqAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, searchKeys, true, null);
 			if( seqAnnots != null ) {
 				for( ACCAnnotation sAnnot : seqAnnots ) {
 					ForLoop sloop = (ForLoop)sAnnot.getAnnotatable();

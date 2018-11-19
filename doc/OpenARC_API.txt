@@ -167,9 +167,13 @@ finalize
 #pragma acc routine [clause[[,] clause]...]
 
 where clause is one of the following
+gang
+worker
+vector
+seq
 bind(name)
 nohost
-type(workshare type)     
+device_type(device-type)     
 
 #pragma acc set [clause[[,] clause]...]
 

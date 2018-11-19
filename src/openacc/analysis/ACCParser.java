@@ -240,6 +240,7 @@ public class ACCParser {
 	    		//DEBUG: below does not print parenthesis for SomeExpression.
 	    		//parsedExpr = new SomeExpression(expr, children);
 	    		//parsedExpr.setParens(true);
+	    		//System.err.println("ParserTools.strToExpression( " + expr + ")");
 
 	    		try {
 	    			parsedExpr = ParserTools.strToExpression(expr);
@@ -606,7 +607,11 @@ public class ACCParser {
 	 * where clause is one of the following
 	 *     bind(name)
 	 *     nohost
-	 *     type(workshare type)     
+	 *     gang
+	 *     worker
+	 *     vector
+	 *     seq     
+	 *     device_type(device-type-list)
 	 * <p>     
 	 * #pragma acc set [clause[[,] clause]...]
 	 * <p>     
@@ -1186,9 +1191,13 @@ public class ACCParser {
 			PrintTools.println("clause=" + clause, 3);
 			try {
 				switch (acc_clause.valueOf(clause)) {
-				case acc_type		:	parse_acc_worksharetype(token); break;
-				case acc_bind		:	parse_acc_stringargclause(token); break;
+				case acc_gang		: parse_acc_workshareconfclause(token); break;
+				case acc_worker		: parse_acc_workshareconfclause(token); break;
+				case acc_vector		: parse_acc_workshareconfclause(token); break;
+				case acc_seq		: parse_acc_noargclause(token); break;
+				case acc_bind		:	parse_acc_bindclause(token); break;
 				case acc_nohost		: parse_acc_noargclause(token); break;
+				case acc_device_type	:	parse_acc_confclause(token); break;
 				default : ACCParserError("NoSuchRoutineConstruct : " + clause);
 				}
 			} catch( Exception e) {
@@ -1388,9 +1397,9 @@ public class ACCParser {
 				case acc_private	:	parse_acc_dataclause(tok); break;
 				case acc_firstprivate	:	parse_acc_dataclause(tok); break;
 				case acc_collapse		: parse_acc_confclause(tok); break;
-				case acc_gang		: parse_acc_parallelconfclause(tok); break;
-				case acc_worker		: parse_acc_parallelconfclause(tok); break;
-				case acc_vector		: parse_acc_parallelconfclause(tok); break;
+				case acc_gang		: parse_acc_workshareconfclause(tok); break;
+				case acc_worker		: parse_acc_workshareconfclause(tok); break;
+				case acc_vector		: parse_acc_workshareconfclause(tok); break;
 				case acc_seq		: parse_acc_noargclause(tok); break;
 				case acc_independent		: parse_acc_noargclause(tok); break;
                 case acc_tile		: parse_expressionlist(tok); break;
@@ -2743,8 +2752,8 @@ public class ACCParser {
 	 * This method parses input string into an Expression using ExpressionParser.parse() method.
 	 * This does not consume closingTok.
 	 * 
-	 * @param closingTok
 	 * @param openingTok
+	 * @param closingTok
 	 * @param initMatchCNT
 	 * @return
 	 */
@@ -3013,11 +3022,11 @@ public class ACCParser {
 	}
 	
 	//Check gang, worker, and vector clauses in a parallel loop construct.
-	private static void parse_acc_parallelconfclause(String clause)
+	private static void parse_acc_workshareconfclause(String clause)
 	{
 		PrintTools.println("ACCParser is parsing ["+clause+"] clause", 3);
 		if( check("(") ) {
-			ACCParserError("No argument is allowed for the clause, " + clause + ", in the parallel loop construct.");
+			ACCParserError("No argument is allowed for the clause, " + clause + ", in the parallel loop or routine construct.");
 		} else {
 			addToMap(clause, "_clause");
 		}
@@ -3163,7 +3172,36 @@ public class ACCParser {
 		match("(");
 		String str = get_token();
 		match(")");
-		addToMap(clause, str);
+		if( str.charAt(0) == '"' ) {
+			StringLiteral p = new StringLiteral(str);
+			p.stripQuotes();
+			addToMap(clause, p.getValue());
+		} else {
+			addToMap(clause, str);
+		}
+	}
+
+	private static void parse_acc_bindclause(String clause)
+	{
+		PrintTools.println("ACCParser is parsing ["+ clause + "] clause", 3);
+		match("(");
+		String str = lookahead();
+		if( str.charAt(0) == '"' ) {
+			str =  get_token();
+			StringLiteral p = new StringLiteral(str);
+			p.stripQuotes();
+			addToMap(clause, p.getValue());
+		} else {
+			PrintTools.println("Input string for the bind argument: " + str, 3);
+			Expression exp = parse_expression("(", ")", 1);
+			if( exp == null ) {
+				ACCParserError("No valid argument is found for the clause, " + clause);
+			} else {
+				addToMap(clause, exp);
+			}
+
+		}
+		match(")");
 	}
 
 	private static void parse_acc_optionalstringargclause(String clause)
@@ -3234,7 +3272,13 @@ public class ACCParser {
 	private static void parse_commaSeparatedStringList(Collection<String> set)
 	{
 		for (;;) {
-			set.add(get_token());
+			String str = get_token();
+			if( str.charAt(0) == '"' ) {
+				StringLiteral p = new StringLiteral(str);
+				p.stripQuotes();
+				str = p.getValue();
+			}
+			set.add(str);
 			if ( check(")") )
 			{
 				break;
