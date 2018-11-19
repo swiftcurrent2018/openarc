@@ -36,6 +36,17 @@ double my_timer ()
     return time.tv_sec + time.tv_usec / 1000000.0;
 }
 
+// TEST_BIND == 0: do not use the bind clause.
+// TEST_BIND == 1: apply the bind clause for a fuction whose definition exists (global variables are implicitly accessed).
+// TEST_BIND == 2: apply the bind clause for a fuction whose declaration exists (global variables are implicitly accessed).
+// TEST_BIND == 3: apply the bind clause for a fuction whose declaration exists (global variables are explicitly passed as parameters).
+// TEST_BIND == 4: apply the bind clause for a fuction whose declaration/definition does not exist (global variables are implicitly accessed).
+
+// To bind an external library function, all global variables should be explicitly
+// passed as function parameters, but the reference procedure below has implicit
+// global variable accesses, and thus the "TEST_BIND == 2" case will not work.
+// TEST_BIND = 0, 1, and 3 will work correctly. (Case 1 works because the compiler can modify the definition of the user function.)
+
 #if TEST_BIND == 1
 float my_reduction( float *a, float *b, int i, int j) {
 	int m;
@@ -47,11 +58,22 @@ float my_reduction( float *a, float *b, int i, int j) {
 }
 #elif TEST_BIND == 2
 float my_reduction( float *a, float *b, int i, int j);
+#elif TEST_BIND == 3
+float my_reduction( float *a, float *b, int i, int j, int N, int P);
 #endif
 
-//To bind an external library function, all global variables should be explicitly
-//passed as function parameters, but the reference procedure below has implicit
-//global variable accesses, and thus the above "TEST_BIND == 2" case will not work.
+#if TEST_BIND == 3
+#pragma acc routine seq bind(my_reduction)
+float reduction( float *b, float *c, int i, int j, int N, int P) {
+	float sum = 0.0F;
+	int k;
+#pragma acc loop seq
+	for (k=0; k<P; k++) {
+		sum += b[i*P+k]*c[k*N+j] ;
+	}
+	return sum;
+}
+#else
 #if TEST_BIND != 0
 #pragma acc routine seq bind(my_reduction)
 #endif
@@ -64,6 +86,7 @@ float reduction( float *b, float *c, int i, int j) {
 	}
 	return sum;
 }
+#endif
 
 
 void
@@ -78,7 +101,11 @@ MatrixMultiplication_openacc(float * a, float * b, float * c)
     for (i=0; i<M; i++){
       for (j=0; j<N; j++)
         {
+#if TEST_BIND == 3
+	  		a[i*N+j] = reduction(b,c,i,j,N,P);
+#else
 	  		a[i*N+j] = reduction(b,c,i,j);
+#endif
         }
     }
 #ifdef _OPENACCM
