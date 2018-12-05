@@ -179,19 +179,10 @@ public class SlidingWindowTransformation extends TransformPass {
         Symbol iSym = AnalysisTools.subarrayToSymbol(input_subarray, false);
 
         if( input_subarray.getArrayDimension() <= 0 ) {
-          Tools.exit("[ERROR in SlidingWindowTransformation] incorrect input array argument for window clause "
-              + "of the following directive; exit!\n"
-              + "ARC annotation: " + tAnnot + AnalysisTools.getEnclosingContext(wAt));
-        }
-
-        // output array
-        SubArray output_subarray = (SubArray)windowarglist.get(1); 
-        Expression output_array = output_subarray.getArrayName();
-        Symbol oSym = AnalysisTools.subarrayToSymbol(output_subarray, false);
-
-        if( output_subarray.getArrayDimension() <= 0 ) {
-          Tools.exit("[ERROR in SlidingWindowTransformation] incorrect output array argument for window clause "
-              + "of the following directive; exit!\n"
+          Tools.exit("[ERROR in SlidingWindowTransformation] "
+              + "Input array dimensions and length must be provided, ex. "
+              + "\"window(input[0:N], output)\" "
+              + "in the following directive; exit!\n"
               + "ARC annotation: " + tAnnot + AnalysisTools.getEnclosingContext(wAt));
         }
 
@@ -199,18 +190,16 @@ public class SlidingWindowTransformation extends TransformPass {
         Expression iarray_LB = input_subarray.getStartIndices().get(0);
         Expression iarray_Length = input_subarray.getLengths().get(0);
         if( ( iarray_LB == null ) || ( iarray_Length == null ) ) {
-          Tools.exit("[ERROR in SlidingWindowTransformation] dimension information of the input array argument for window clause "
+          Tools.exit("[ERROR in SlidingWindowTransformation] dimension information "
+              + "of the input array argument for window clause "
               + "of the following directive is missing; exit!\n"
               + "ARC annotation: " + tAnnot + AnalysisTools.getEnclosingContext(wAt));
         }
-
-        Expression oarray_LB = output_subarray.getStartIndices().get(0);
-        Expression oarray_Length = output_subarray.getLengths().get(0);
-        if( ( oarray_LB == null ) || ( oarray_Length == null ) ) {
-          Tools.exit("[ERROR in SlidingWindowTransformation] dimension information of the output array argument for window clause "
-              + "of the following directive is missing; exit!\n"
-              + "ARC annotation: " + tAnnot + AnalysisTools.getEnclosingContext(wAt));
-        }
+        
+        // output array
+        SubArray output_subarray = (SubArray)windowarglist.get(1);
+        Expression output_array = output_subarray.getArrayName();
+        Symbol oSym = AnalysisTools.subarrayToSymbol(output_subarray, false);
 
         /* Record loop unroll factor */
         int unroll_factor = 1;
