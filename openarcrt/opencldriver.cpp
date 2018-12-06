@@ -164,12 +164,15 @@ HI_error_t OpenCLDriver::init() {
 #endif
     fp = fopen(filename, "r");
     if (!fp) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::init()] Failed to read the kernel file %s.\n", filename);
-		exit(1);
-    }
-    source_str = (char*)malloc(MAX_SOURCE_SIZE);
-    source_size = fread( source_str, 1, MAX_SOURCE_SIZE, fp);
-    fclose( fp );
+    	if(dev != acc_device_altera) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] Failed to read the kernel file %s.\n", filename);
+			exit(1);
+		}
+    } else {
+    	source_str = (char*)malloc(MAX_SOURCE_SIZE);
+    	source_size = fread( source_str, 1, MAX_SOURCE_SIZE, fp);
+    	fclose( fp );
+	}
 
     cl_int err;
 #ifdef _OPENMP

@@ -127,7 +127,7 @@ CETUS_OUTPUT = cetus_output
 # Cooley: ALCF NVIDIA GPU cluster                                      #
 # Oswald: Heterogeneous mini cluster with NVIDIA Tesla P100 and        #
 #         Nallatech 510T FPGA                                          #
-#         (To use FPGAs, AOCLSDKROOT should be properly selected.)     #
+#         (To use FPGAs, INTELFPGAOCLSDKROOT should be properly set.)  #
 ########################################################################
 TARGET_SYSTEM = LCUDA
 
@@ -259,7 +259,7 @@ GBACKEND_FLAGS = -O3
 #GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 # Altera OpenCL 16.1
 GBACKEND_INCLUDES = -I/opt/altera/16.1/standard/hld/host/include
-GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ -lOpenCL
+GBACKEND_LIBS = -L/opt/altera/16.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
@@ -305,7 +305,7 @@ endif
 #########################
 ifeq ($(TARGET_SYSTEM),Oswald)
 
-OPENARC_ARCH = 0
+OPENARC_ARCH = 3
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
 CC = gcc
@@ -318,7 +318,7 @@ ifeq ($(OPENARC_ARCH), 0)
 BACKENDCXX = nvcc
 CC_FLAGS_PREFIX = -Xcompiler
 GBACKEND_FLAGS = -arch sm_60 -O3
-GBACKEND_INCLUDES = -I/opt/cuda/8.0/cuda/include
+GBACKEND_INCLUDES = -I/usr/local/cuda/include
 GBACKEND_LIBS = -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
@@ -331,15 +331,15 @@ BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
 # Altera OpenCL 16.0
-#AOCLSDKROOT = /opt/altera/16.0/hld
+#INTELFPGAOCLSDKROOT = /opt/altera/16.0/hld
 # Altera OpenCL 17.1
-AOCLSDKROOT = /opt/altera/17.1/hld
-GBACKEND_INCLUDES = -I$(AOCLSDKROOT)/host/include
-GBACKEND_LIBS = -L$(AOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(AOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+#INTELFPGAOCLSDKROOT = /opt/altera/17.1/hld
+GBACKEND_INCLUDES = -I$(INTELFPGAOCLSDKROOT)/host/include
+GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L$(AOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(AOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
@@ -481,6 +481,9 @@ ifeq ($(TARGET_SYSTEM),MacBookPro)
 OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+#CC = gcc
+#CXX = g++
+#CPP = $(CC) -E -std=c99
 #CC = gcc-apple-4.2
 #CXX = g++-apple-4.2
 #CPP = $(CC) -E -std=c99
@@ -491,6 +494,7 @@ CXX = mpicxx
 CPP = gcc -E -std=c99
 GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
 GPROFILEMACROS = -D_OPENARC_PROFILE_=1
+#BACKENDCXX = g++
 #BACKENDCXX = g++-apple-4.2
 BACKENDCXX = mpicxx
 #BACKENDCXX = mpicxx -cxx=g++

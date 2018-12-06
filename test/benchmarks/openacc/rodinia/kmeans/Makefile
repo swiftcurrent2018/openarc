@@ -67,7 +67,7 @@ DEFSET_ACC = -DVERIFICATION=$(VERIFICATION) -D_NCLUSTERS=$(_NCLUSTERS) -D_NATTRI
 OMP ?= 0
 MODE ?= normal
 #AOCL_BOARD ?= p385_hpc_d5
-AOCL_BOARD ?= p510t_sch_ax115 
+AOCL_BOARD ?= p510t_sch_ax115
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
 #AOCL_FLAGS ?= -v -g -c -report
