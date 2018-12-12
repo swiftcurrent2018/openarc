@@ -18,7 +18,7 @@ std::map<CUdeviceptr,int> CudaDriver::pinnedHostMemCounter;
 std::vector<const void *> CudaDriver::hostMemToUnpin;
 
 const char * cuda_error_code(CUresult err) {
-	std::string str = "";
+	static std::string str = "";
 #ifdef SHOW_ERROR_CODE
 	/* Error Codes */
 	switch ( err ) {
@@ -91,7 +91,7 @@ const char * cuda_error_code(CUresult err) {
 CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::CudaDriver(%d, %d)\n", devType, devNum);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::CudaDriver(%s, %d)\n", HI_get_device_type_string(devType), devNum);
 	}
 #endif
     dev = devType;
@@ -103,7 +103,7 @@ CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::set<std::string>ke
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::CudaDriver(%d, %d)\n", devType, devNum);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::CudaDriver(%s, %d)\n", HI_get_device_type_string(devType), devNum);
 	}
 #endif
 }

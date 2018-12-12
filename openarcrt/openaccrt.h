@@ -1278,6 +1278,7 @@ extern HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const vo
 //Misc. functions //
 ////////////////////
 extern double HI_get_localtime();
+extern const char* HI_get_device_type_string( acc_device_t devtype );
 
 
 ////////////////////////////////////////////

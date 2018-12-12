@@ -335,17 +335,19 @@ GBACKEND_FLAGS = -O3
 # Altera OpenCL 17.1
 #INTELFPGAOCLSDKROOT = /opt/altera/17.1/hld
 GBACKEND_INCLUDES = -I$(INTELFPGAOCLSDKROOT)/host/include
-GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+#GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+#GFRONTEND_LIBS = -L$(OPENARCLIB) -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lOpenCL
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
-GBACKEND_INCLUDES = -I/opt/cuda/8.0/cuda/include
+GBACKEND_INCLUDES = -I/usr/local/cuda/include
 GBACKEND_LIBS = -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3

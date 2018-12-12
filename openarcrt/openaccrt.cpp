@@ -2016,3 +2016,21 @@ void HI_set_async(int asyncId) {
 	tconf->totalKernelSyncTime += (HI_get_localtime() - ltime);
 #endif
 }
+
+const char* HI_get_device_type_string( acc_device_t devtype ) {
+	static std::string str = "";
+	switch ( devtype ) {
+		case acc_device_none: { str = "acc_device_none"; break; }
+		case acc_device_default: { str = "acc_device_default"; break; }
+		case acc_device_host: { str = "acc_device_host"; break; }
+		case acc_device_not_host: { str = "acc_device_not_host"; break; }
+		case acc_device_nvidia: { str = "acc_device_nvidia"; break; }
+		case acc_device_radeon: { str = "acc_device_radeon"; break; }
+		case acc_device_gpu: { str = "acc_device_gpu"; break; }
+		case acc_device_xeonphi: { str = "acc_device_xeonphi"; break; }
+		case acc_device_current: { str = "acc_device_current"; break; }
+		case acc_device_altera: { str = "acc_device_altera"; break; }
+		default: { str = "UNKNOWN TYPE"; break; }
+	}
+	return str.c_str();	
+}

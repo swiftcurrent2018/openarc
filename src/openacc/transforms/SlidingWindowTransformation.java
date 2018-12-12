@@ -195,7 +195,7 @@ public class SlidingWindowTransformation extends TransformPass {
               + "of the following directive is missing; exit!\n"
               + "ARC annotation: " + tAnnot + AnalysisTools.getEnclosingContext(wAt));
         }
-        
+
         // output array
         SubArray output_subarray = (SubArray)windowarglist.get(1);
         Expression output_array = output_subarray.getArrayName();
@@ -205,7 +205,6 @@ public class SlidingWindowTransformation extends TransformPass {
         int unroll_factor = 1;
 
         List<PragmaAnnotation> pragmaList = fLoop.getAnnotations(PragmaAnnotation.class);
-        fLoop.removeAnnotations(PragmaAnnotation.class);
 
         for (PragmaAnnotation pragmaAnnot : pragmaList) {
           String keySet[] = pragmaAnnot.toString().split(" ");
@@ -223,21 +222,19 @@ public class SlidingWindowTransformation extends TransformPass {
             }
             index++;
           }
-
-          // replace non-unroll pragmas
-          if (!unroll_bool)
-            fLoop.annotate(pragmaAnnot);
-
         }
 
         if (input_array.equals(output_array) && unroll_factor > 1) {
           Tools.exit("[ERROR in SlidingWindowTransformation] Loop unrolling not supported when input array and output array are the same. Please remove unrolling clause or change array.");
         }
         
-        // verify that the unroll factor divides either the input size (1D)  or the column size (2D)
-        // DEBUG: Unfinished
-        //  if ( (unroll_factor % input_size) != 0) 
-        //    Tools.Exit("[ERROR in SlidingWindoTransformation] Unroll factor must be a factor of the iteration space 
+        // Verify that the unroll factor divides either the input size (1D)  or the column size (2D)
+        long input_size = ((IntegerLiteral) Symbolic.simplify(iarray_Length)).getValue();
+        if ( (input_size % unroll_factor) != 0) 
+          Tools.exit("[ERROR in SlidingWindoTransformation] " + 
+              "Unroll factor must be a factor of the iteration space:" + 
+              "\n  input_size: " + input_size + 
+              "\n  unroll_factor: " + unroll_factor); 
 
         /* Create a compound statement that will enclose the transformed statements. */
         CompoundStatement cStmt = new CompoundStatement();
