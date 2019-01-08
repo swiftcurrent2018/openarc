@@ -51,6 +51,6 @@ echo "====> To compile the translated output file:"
 echo "\$ make"
 echo ""
 echo "====> To run the compiled binary:"
-echo "\$ cd bin; matmul_CUDA"
+echo "\$ matmul_CUDA"
 echo ""
 

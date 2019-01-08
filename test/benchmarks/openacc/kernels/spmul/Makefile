@@ -34,8 +34,10 @@ DEFSET_LLVM = -DENABLE_OPENACC=0 -Warc,-macro=SPMUL_INPUTDIR='"$(SPMUL_INPUTDIR)
 #         //hardware configuration file.                 #
 #      -profile //instrument the OpenCL kernel pipeline  #
 #                //with performance counters.            #
+#               //Use --profile for AOC V16.x or older.  #
 #      -report  //display estimated resource usage on    #
 #                //the screen.                           #
+#               //Use --report for AOC V16.x or older.   #
 #    (default: -march=emulator)                          #
 # AOCL_BOARD: set a target Altera FPGA board             #
 #    - "-board=$(AOCL_BOARD)" will be added to the AOC   #
@@ -43,11 +45,19 @@ DEFSET_LLVM = -DENABLE_OPENACC=0 -Warc,-macro=SPMUL_INPUTDIR='"$(SPMUL_INPUTDIR)
 #    - Examples                                          #
 #    p385_hpc_d5 //for Stratix V                         #
 #    p510t_sch_ax115 //for Arria 10 (Nallatech 510T)     #
+#    - For AOC V16.X or older, the following should be   #   
+#    enabled too.                                        #   
+#    BOARD_OPTION = "--board $(AOCL_BOARD)"              #   
+# PRECMD: optional commands to be executed before the    #   
+#    main compilation                                    #   
+# POSTCMD: optional commands to be executed after the    #   
+#    main compilation                                    #
 ##########################################################
 OMP ?= 0
 MODE ?= normal
 #AOCL_BOARD ?= p385_hpc_d5
 AOCL_BOARD ?= p510t_sch_ax115
+#BOARD_OPTION = "--board $(AOCL_BOARD)"
 #AOCL_FLAGS ?= -march=emulator
 #AOCL_FLAGS ?= -march=emulator -c
 #AOCL_FLAGS ?= -v -g -c -report

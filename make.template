@@ -2,14 +2,17 @@
 # Template Makefile that can be used for compiling   #
 # both the input C program and the OpenARC-generated #
 # output C++ program.                                #
-######################################################
+#################################################################
+# This file requires macros in the $(openarc)/make.header file  #
+#################################################################
 
 ##########################################################
 # Available Make targets                                 #
 ##########################################################
 # CPU: compile C program using a given C compiler        #
 # CPU2: compile C/C++ program using a given C++ compiler #
-# TCPU: compile OpenARC-generated C++ program            #
+# TCPU: compile OpenARC-generated C++ program in the     #
+#       ./cetus_output directory                         #
 # ACC: compile OpenARC-generated CUDA/OpenCL program     #
 # COMPILE_HOST: compile the host part of                 #
 #               OpenARC-generated CUDA/OpenCL program    #              
@@ -17,7 +20,7 @@
 #                 OpenARC-generated CUDA/OpenCL program  #                
 # LLVM: compile nvl-C program                            #
 ##########################################################
-.PHONY: ACC CPU CPU2 TCPU LLVM all COMPILE_HOST COMPILE_KERNEL makedirectories help
+.PHONY: ACC CPU CPU2 TCPU LLVM all COMPILE_HOST COMPILE_KERNEL makedirectories help COPY_CXXSRCS
 ACC: $(BENCHMARK)_ACC
 CPU: $(BENCHMARK)_CPU
 CPU2: $(BENCHMARK)_CPU2
@@ -28,7 +31,7 @@ help:
 	@echo "==> Available make targets:"
 	@echo "CPU: compile a C program using a given C compiler"
 	@echo "CPU2: compile a C/C++ program using a given C++ compiler"
-	@echo "TCPU: compile an OpenARC-generated C++ program"
+	@echo "TCPU: compile an OpenARC-generated C++ program in the ./cetus_output directory"
 	@echo "ACC: compile an OpenARC-generated CUDA/OpenCL program"
 	@echo "COMPILE_HOST: compile the host part of an OpenARC-generated CUDA/OpenCL program"
 	@echo "COMPILE_KERNEL: compile the kernel part of an OpenARC-generated CUDA/OpenCL program"
@@ -55,9 +58,11 @@ help:
 #         //hardware design project without creating a   #
 #         //hardware configuration file.                 #
 #      -profile //instrument the OpenCL kernel pipeline  #
-#                //with performance counters.            #
+#               //with performance counters.             #
+#               //Use --profile for AOC V16.x or older.  # 
 #      -report  //display estimated resource usage on    #
-#                //the screen.                           #
+#               //the screen.                            #
+#               //Use --report for AOC V16.x or older.   # 
 #    (default: -march=emulator)                          #
 # AOCL_BOARD: set a target Altera FPGA board             #
 #    - "-board=$(AOCL_BOARD)" will be added to the AOC   #
@@ -65,6 +70,11 @@ help:
 #    - Examples                                          #
 #    p385_hpc_d5 //for Stratix V                         #
 #    p510t_sch_ax115 //for Arria 10 (Nallatech 510T)     #
+#    - For AOC V16.X or older, the following should be   #
+#    enabled too.                                        #
+#    BOARD_OPTION = "--board $(AOCL_BOARD)"              #
+# PRECMD: optional commands to be executed before the    #
+#    main compilation                                    #
 # POSTCMD: optional commands to be executed after the    #
 #    main compilation                                    #
 ##########################################################
@@ -87,9 +97,17 @@ endif
 ########################################
 # Set the input C source files (CSRCS) #
 ########################################
-#CSRCS = matmul.c
-CXXSRCS1 = $(CSRCS:.c=.cpp)
-CXXSRCS = $(notdir $(CXXSRCS1))
+# - OCXXSRCS refers to output C++ files#
+# translated from CSRCS by OpenARC.    #
+########################################
+#CSRCS = main.c
+OCXXSRCS1 = $(CSRCS:.c=.cpp)
+OCXXSRCS = $(notdir $(OCXXSRCS1))
+#
+############################################
+# Set the input C++ source files (CXXSRCS) #
+############################################
+#CXXSRCS = main.cpp
 
 #########################################
 # Set macros used for the input program #
@@ -104,17 +122,27 @@ DEFSET_ACC += -DOMP=$(OMP)
 # - CFLAGS1 and CLIBS1 to compile the input C program   #
 #   - To use relative paths, assume that the directory  #
 #   containing the Makefile is the current directory.   #
+# - CFLAGS1_LLVM and CLIBS1_LLVM to compile the input   #
+#   nvl-C program                                       #
+#   - To use relative paths, assume that the directory  #
+#   containing the Makefile is the current directory.   #
 # - CFLAGS2 and CLIBS2 to compile the OpenARC-generated #
-#   output C++ program                                  # 
+#   output host program (C++)                           # 
+#   - To use relative paths, assume that cetus_output   #
+#   is the current directory.                           #
+# - CFLAGS3 and CLIBS3 to compile the OpenARC-generated #
+#   output kernel program (CUDA or OpenCL               # 
 #   - To use relative paths, assume that cetus_output   #
 #   is the current directory.                           #
 #########################################################
 #CFLAGS1 =  
 #CFLAGS1_LLVM =  
 #CFLAGS2 =  
+#CFLAGS3 =  
 #CLIBS1 = 
 #CLIBS1_LLVM = 
 #CLIBS2 = 
+#CLIBS3 = 
 
 ################################################
 # TARGET is where the output binary is stored. #
@@ -154,11 +182,11 @@ EMUL_MODE = $(shell export AOCL_FLAGS="$(AOCL_FLAGS)"; echo $$AOCL_FLAGS | grep 
 ifneq ($(EMUL_MODE),)
     #KERNEL_BINARY ?= "openarc_kernel_EmulatorDeviceEmulatedDevice.aocx"
     KERNEL_BINARY = "openarc_kernel.aocx"
-	BOARD_OPTION = -board=$(AOCL_BOARD)
+	BOARD_OPTION ?= "-board=$(AOCL_BOARD)"
 else
     #KERNEL_BINARY ?= "openarc_kernel_p385_hpc_d5PCIe385n.aocx"
     KERNEL_BINARY = "openarc_kernel.aocx"
-	BOARD_OPTION = -board=$(AOCL_BOARD)
+	BOARD_OPTION ?= "-board=$(AOCL_BOARD)"
 endif
 endif
 
@@ -200,34 +228,45 @@ CLIBS1_LLVM += -L$(OPENARCLIB)
 CLIBS2 += $(CLIBS2_BASE) -l$(ACCRTLIB) -lomphelper
 
 $(BENCHMARK)_CPU: $(CSRCS) makedirectories
+	$(PRECMD)
 	$(CC) $(DEFSET_CPU) $(CFLAGS1) -o $(BENCHMARK_CPU) $(CSRCS) $(CLIBS1)
 	$(POSTCMD)
 
-$(BENCHMARK)_CPU2: $(CSRCS) makedirectories
-	$(CXX) $(DEFSET_CPU) $(CFLAGS1) -o $(BENCHMARK_CPU2) $(CSRCS) $(CLIBS1)
+$(BENCHMARK)_CPU2: $(CXXSRCS) makedirectories
+	$(COPY_CXXSRCS)
+	$(PRECMD)
+	$(CXX) $(DEFSET_CPU) $(CFLAGS1) -o $(BENCHMARK_CPU2) $(CXXSRCS) $(CLIBS1)
 	$(POSTCMD)
 
-$(BENCHMARK)_TCPU: $($(CETUS_OUTPUT)/$(CSRCS)) makedirectories
-	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_CPU) $(CFLAGS1) -I ../ -o ../$(BENCHMARK_TCPU) $(CSRCS) $(CLIBS1); cd ../
+$(BENCHMARK)_TCPU: $($(CETUS_OUTPUT)/$(OCXXSRCS)) $(CXXSRCS) makedirectories
+	$(COPY_CXXSRCS)
+	$(PRECMD)
+	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_CPU) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_TCPU) $(OCXXSRCS) $(CXXSRCS) $(CLIBS2); cd ../
 	$(POSTCMD)
 
 $(BENCHMARK)_LLVM: $(CSRCS) makedirectories
+	$(PRECMD)
 	$(OPENARCLIB)/../bin/openarc-cc $(DEFSET_LLVM) $(CFLAGS1_LLVM) -o $(BENCHMARK_LLVM) $(CSRCS) $(CLIBS1_LLVM)
 	$(POSTCMD)
 
 $(BENCHMARK)_ACC: COMPILE_HOST COMPILE_KERNEL
 	$(POSTCMD)
 
-COMPILE_HOST: $($(CETUS_OUTPUT)/$(CXXSRCS)) makedirectories
-	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); if [ -f "$(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX)" ]; then cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); fi; cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
+COMPILE_HOST: $($(CETUS_OUTPUT)/$(OCXXSRCS)) $(CXXSRCS) makedirectories
+	$(COPY_CXXSRCS)
+	$(PRECMD)
+	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(OCXXSRCS) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); if [ -f "$(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX)" ]; then cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); fi; cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
 	cd $(CETUS_OUTPUT); grep resilience $(KERNEL_FILE) > /dev/null && cp $(OPENARCLIB)/$(RESILIENCE_FILE) $(OPENARCLIB)/resilience.h ../$(TARGET); cd ../
 
 COMPILE_KERNEL: $($(CETUS_OUTPUT)/$(KERNLE_FILE)) makedirectories
 	if [ "$(OPENARC_ARCH)" = "3" ]; then cd $(CETUS_OUTPUT); aoc $(AOCL_FLAGS) $(BOARD_OPTION) openarc_kernel.cl; if [ -f "openarc_kernel.aocx" ]; then cp openarc_kernel.aocx ../$(TARGET)/$(KERNEL_BINARY); fi; cd ../; echo ""; echo "====> Initialize AOCL Environment!"; echo "$$ . $$alteraroot/init_opencl.sh"; echo ""; fi
 	if [ "$(OPENARC_ARCH)" != "3" ] && [ -f $(TARGET)/binBuilder_$(OPENARCLIB_SUFFIX) ]; then cd $(TARGET); ./binBuilder_$(OPENARCLIB_SUFFIX); cd ../; fi
 
+COPY_CXXSRCS = $(foreach var,$(CXXSRCS),cp $(var) $(CETUS_OUTPUT);)	
+
 makedirectories:
 	mkdir -p $(TARGET)
+	mkdir -p $(CETUS_OUTPUT)
 
 clean:
 	rm -f *.o *.bc *~ confFile.txt Makefile*.local TuningOptions.txt;
