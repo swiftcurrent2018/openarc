@@ -631,13 +631,16 @@ public abstract class FPGASpecificTools {
       isSingleWorkItem = 0;
 
     /* Get target architecture */
-    int targetArch;
+    int targetArch = 0;
     String value = null;
     value = Driver.getOptionValue("targetArch");
     if( value != null ) {
       targetArch = Integer.valueOf(value).intValue();
     } else {
-      targetArch = Integer.valueOf(System.getenv("OPENARC_ARCH") ).intValue();
+    	value = System.getenv("OPENARC_ARCH");
+    	if( value != null ) {
+    		targetArch = Integer.valueOf(value).intValue();
+    	}
     }
 
     if (isSingleWorkItem == 1 && targetArch == 3)

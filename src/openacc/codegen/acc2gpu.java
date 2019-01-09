@@ -114,11 +114,23 @@ public class acc2gpu extends CodeGenPass
 		String value = null;
 		value = Driver.getOptionValue("targetArch");
 		if( value != null ) {
-			OPENARC_ARCH = Integer.valueOf(value).intValue();
+			try {
+				OPENARC_ARCH = Integer.valueOf(value).intValue();
+			} catch (Exception e) {
+				System.err.println("ERROR: OpenARC commandline option targetArch should be set to an integer value! (current value = " + value + ")");
+				System.exit(1);
+			}
 		} else {
 			if( env.containsKey("OPENARC_ARCH") ) {
 				value = env.get("OPENARC_ARCH");
-				OPENARC_ARCH = Integer.valueOf(value).intValue();
+				if( value != null ) {
+					try {
+						OPENARC_ARCH = Integer.valueOf(value).intValue();
+					} catch (Exception e) {
+						System.err.println("ERROR: Environment variable OPENARC_ARCH should be set to an integer value! (current value = " + value + ")");
+						System.exit(1);
+					}
+				}
 			}
 		}
 		value = Driver.getOptionValue("defaultNumAsyncQueues");

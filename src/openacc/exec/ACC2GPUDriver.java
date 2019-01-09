@@ -594,11 +594,21 @@ public class ACC2GPUDriver extends Driver
 		value = getOptionValue("targetArch");
 		int targetArch = 0;
 		if( value != null ) {
-			targetArch = Integer.valueOf(value).intValue();
+			try {
+				targetArch = Integer.valueOf(value).intValue();
+			} catch (Exception e) {
+				System.err.println("ERROR: OpenARC commandline option targetArch should be set to an integer value! (current value = " + value + ")");
+				System.exit(1);
+			}
 		} else {
 			if( env.containsKey("OPENARC_ARCH") ) {
 				value = env.get("OPENARC_ARCH");
-				targetArch = Integer.valueOf(value).intValue();
+				try {
+					targetArch = Integer.valueOf(value).intValue();
+				} catch (Exception e) {
+					System.err.println("ERROR: Environment variable OPENARC_ARCH should be set to an integer value! (current value = " + value + ")");
+					System.exit(1);
+				}
 			}
 		}
         if(targetArch != 0)
