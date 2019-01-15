@@ -87,6 +87,12 @@
 #Name of the entry function, from which all device-related codes will be executed. (Default is main.)
 #
 ########################################
+#Option: SetOutputKernelFileNameBase
+########################################
+#SetOutputKernelFileNameBase=filename
+#Base name of the output kernel file, from which target-specific output kernel file name is derived. (Default is openarc_kernel.)
+#
+########################################
 #Option: SkipGPUTranslation
 ########################################
 #SkipGPUTranslation=N
@@ -812,6 +818,7 @@
 #showInternalAnnotations=1
 #skipKernelLoopBoundChecking
 #SetAccEntryFunction=filename
+#SetOutputKernelFileNameBase=filename
 addIncludePath=__openarcrt__
 #macro=_N_=__inputSize__
 defaultNumWorkers=64

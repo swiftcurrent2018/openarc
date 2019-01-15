@@ -88,7 +88,7 @@ const char * cuda_error_code(CUresult err) {
 ///////////////////////////
 // Device Initialization //
 ///////////////////////////
-CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices) {
+CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices, const char *baseFileName) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::CudaDriver(%s, %d)\n", HI_get_device_type_string(devType), devNum);
@@ -97,6 +97,7 @@ CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::set<std::string>ke
     dev = devType;
     device_num = devNum;
 	num_devices = numDevices;
+	fileNameBase = std::string(baseFileName);
 
     for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
         kernelNameSet.insert(*it);
@@ -168,11 +169,11 @@ HI_error_t CudaDriver::init() {
     ss << compute_capability_minor;
     std::string version = ss.str();
 
-    std::string ptxName = std::string("openarc_kernel_") + version + std::string(".ptx");
+    std::string ptxName = fileNameBase + std::string("_") + version + std::string(".ptx");
 
     //compile a PTX if it does not already exist
     if( access( ptxName.c_str(), F_OK ) == -1 ) {
-        std::string command = std::string("nvcc $OPENARC_JITOPTION -arch=sm_") + version + std::string(" openarc_kernel.cu -ptx -o ") + ptxName;
+        std::string command = std::string("nvcc $OPENARC_JITOPTION -arch=sm_") + version + std::string(" ") + fileNameBase + std::string(".cu -ptx -o ") + ptxName;
         //fprintf(stderr, "Version no. %s\n", version.c_str());
         system(command.c_str());
     }

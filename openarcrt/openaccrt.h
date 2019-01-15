@@ -130,6 +130,9 @@ public:
     int maxNumThreadsPerBlock;
 	int max1DTexRefWidth4LM;
 
+	//Output kernel file name base. (Default value: "openarc_kernel")
+	std::string fileNameBase;
+
     //Host-device address mapping table, augmented with stream id
     //addresstable_t masterAddressTable;
 	addresstablemap_t masterAddressTableMap;
@@ -1176,7 +1179,7 @@ public:
 //////////////////////////
 // Moved from openacc.h //
 //////////////////////////
-extern void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[]);
+extern void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[], const char *fileNameBase = "openarc_kernel");
 
 ////////////////////////
 // Runtime init/reset //

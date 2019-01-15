@@ -83,7 +83,7 @@ public:
     CUcontext cuContext;
     CUmodule cuModule;
 
-    CudaDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices);
+    CudaDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices, const char *baseFileName);
     HI_error_t init();
     HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
@@ -179,7 +179,7 @@ public:
     cl_command_queue clQueue;
     cl_program clProgram;
 
-    OpenCLDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices);
+    OpenCLDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices, const char * baseFileName);
     HI_error_t init();
     HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
@@ -277,6 +277,7 @@ public:
 #endif
     static std::set<std::string> HI_kernelnames;
     std::set<std::string> kernelnames;
+	std::string baseFileName;
 	//[CAUTION] Device instances (Accelerator_t objects) in devMap is shared 
 	//by multiple host threads.
     static devmap_t devMap;
@@ -293,6 +294,7 @@ public:
 		prepin_host_memory = 1;
 		asyncID_offset = 0;
 		threadID = 0;
+		baseFileName = "openarc_kernel";
 #ifdef _OPENARC_PROFILE_
         H2DMemTrCnt = 0;
         H2HMemTrCnt = 0;

@@ -371,6 +371,10 @@ public class ACC2GPUDriver extends Driver
 		options.add(options.UTILITY, "SetAccEntryFunction", "filename",
 				"Name of the entry function, from which all device-related codes will be executed. " +
 				"(Default is main.)");
+
+		options.add(options.UTILITY, "SetOutputKernelFileNameBase", "filename",
+				"Base name of the output kernel file, from which target-specific output kernel file name is derived. " +
+				"(Default is openarc_kernel.)");
 		
 		options.add(options.UTILITY, "printConfigurations",
 				"Generate output codes to print applied configurations/optimizations at the program exit");

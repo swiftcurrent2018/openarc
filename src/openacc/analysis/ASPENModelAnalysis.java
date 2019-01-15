@@ -893,7 +893,8 @@ public class ASPENModelAnalysis extends AnalysisPass {
 												}
 												boolean rscExist = false;
 												for( ASPENResource tRSC : intracommSet ) {
-													if( tRSC.getID().equals(dID) ) {
+													Expression rscID = tRSC.getID();
+													if( (rscID != null) && rscID.equals(dID) ) {
 														rscExist = true;
 														break;
 													}

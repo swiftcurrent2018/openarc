@@ -105,7 +105,7 @@ cl_mem_flags convert2CLMemFlags(HI_MallocKind_t flags) {
 ///////////////////////////
 // Device Initialization //
 ///////////////////////////
-OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices) {
+OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices, const char * baseFileName) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::OpenCLDriver(%s, %d)\n", HI_get_device_type_string(devType), devNum);
@@ -114,6 +114,7 @@ OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::set<std::strin
     dev = devType;
     device_num = devNum;
 	num_devices = numDevices;
+	fileNameBase = std::string(baseFileName);
 
     for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
         kernelNameSet.insert(*it);
@@ -129,7 +130,8 @@ HI_error_t OpenCLDriver::init() {
     FILE *fp;
     char *source_str;
     size_t source_size;
-    char filename[] = "openarc_kernel.cl";
+	std::string outFile = fileNameBase + std::string(".cl");
+    const char *filename = outFile.c_str();
 	char kernel_keyword[] = "__kernel";
     char *platformName;
 #ifdef _OPENARC_PROFILE_
@@ -280,10 +282,10 @@ HI_error_t OpenCLDriver::init() {
 	cBufferN = deblank(cBuffer); //Remove spaces.
     std::string binaryName;
     if(dev == acc_device_altera) {
-    	//binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".aocx");
-    	binaryName = std::string("openarc_kernel") + std::string(".aocx");
+    	//binaryName = fileNameBase + std::string("_") + cBufferN + std::string(".aocx");
+    	binaryName = fileNameBase + std::string(".aocx");
 	} else {
-    	binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".ptx");
+    	binaryName = fileNameBase + std::string("_") + cBufferN + std::string(".ptx");
 	}
 
     //Build the program from source if the binary file is not found

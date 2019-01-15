@@ -496,14 +496,14 @@ void HostConf::HI_init(int devNum) {
             		Accelerator *dev;
             		if(genOCL) {
 #if defined(OPENARC_ARCH) && OPENARC_ARCH > 0
-                		dev = new OpenCLDriver_t(acc_device_type_var, i, kernelnames, this, numDevices);
+                		dev = new OpenCLDriver_t(acc_device_type_var, i, kernelnames, this, numDevices, baseFileName.c_str());
 #else
 						fprintf(stderr, "[OPENARCRT-ERROR]To generate OpenCL program, the environment variable OPENARC_ARCH should be a positive integer.\n");
 						exit(1);
 #endif
             		} else {
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
-                		dev = new CudaDriver_t(acc_device_type_var, i, kernelnames, this, numDevices);
+                		dev = new CudaDriver_t(acc_device_type_var, i, kernelnames, this, numDevices, baseFileName.c_str());
 #endif
             		}
             		//printf("Dev created %d\n", i);

@@ -493,7 +493,7 @@ void acc_async_wait_all() {
 }
 
 
-void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[] ) {
+void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[], const char *fileNameBase ) {
 #ifdef _OPENARC_PROFILE_
     if( HI_hostinit_done == 0 ) {
 		int openarcrt_verbosity;
@@ -511,6 +511,7 @@ void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[] ) {
 	}
 #endif
     HostConf_t * tconf = getInitHostConf();
+	tconf->baseFileName = fileNameBase;
     //Set device type.
     if( (devtype == acc_device_default) || (devtype == acc_device_not_host) ) {
 		tconf->setDefaultDevice();

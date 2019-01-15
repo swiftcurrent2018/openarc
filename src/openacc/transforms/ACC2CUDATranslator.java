@@ -73,7 +73,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 	protected Map<Procedure, Map<String, Procedure>> devProcMap;
 	
 	protected String mainEntryFunc = null;
-	protected TranslationUnit kernelsTranslationUnit = new TranslationUnit("openarc_kernel.cu");
+	protected TranslationUnit kernelsTranslationUnit = null;
     protected AnnotationDeclaration accHeaderDecl = null;
 	/**
 	 * @param prog
@@ -82,6 +82,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		super(prog);
 		pass_name = "[ACC2CUDATranslator]";
 		targetModel = 0; //0 for CUDA
+		kernelsTranslationUnit = new TranslationUnit(kernelFileNameBase+".cu");
 
 		//Add kernel translation unit to the program
         program.addTranslationUnit(kernelsTranslationUnit);
@@ -851,6 +852,10 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			OpenACCHeaderEndMap.put(tu, lastCudaDecl);
 		}
 		if( !found_main && !found_acc_init_call ) {
+			PrintTools.println("\n[WARNING in ACC2CUDATranslator.CUDAInitializer()] neither acc_init() call nor main() procedure is found; " +
+					"the translator does not know where GPU device should be initialized. If there is no explicit acc_init() call, " +
+					"acc_init() call will be implicitly called by an internal OpenARC runtime routine encountered first during execution.\n" +
+					"To specify where to put the acc_init(), use \"SetAccEntryFunction\" option to set the device-entry function.\n", 0);
 		}
 		
 		if( opt_LoopCollapse ) {

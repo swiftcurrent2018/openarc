@@ -79,7 +79,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 
   protected String mainEntryFunc = null;
 
-  protected TranslationUnit kernelsTranslationUnit = new TranslationUnit("openarc_kernel.cl");
+  protected TranslationUnit kernelsTranslationUnit = null;
   protected AnnotationDeclaration accHeaderDecl = null;
 
   /**
@@ -89,6 +89,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     super(prog);
     pass_name = "[ACC2OPENCLTranslator]";
     targetModel = 1; //1 for OpenCL
+    kernelsTranslationUnit = new TranslationUnit(kernelFileNameBase+".cl");
 
     //Add kernel translation unit to the program
     program.addTranslationUnit(kernelsTranslationUnit);

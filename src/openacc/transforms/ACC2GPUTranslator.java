@@ -69,6 +69,7 @@ public abstract class ACC2GPUTranslator {
 	protected int localRedVarConf = 1;
 	protected int SkipGPUTranslation = 0;
 	protected String tuningParamFile = null;
+	protected String kernelFileNameBase = "openarc_kernel";
 
     protected int targetArch = 0;
     protected int targetModel = 0; //0 for CUDA, 1 for OpenCL
@@ -439,6 +440,7 @@ public abstract class ACC2GPUTranslator {
 			FunctionCall initCall = (FunctionCall)((ExpressionStatement)taccInitStmt).getExpression();
 			initCall.addArgument(new IntegerLiteral(accKernelsList.size()));
 			initCall.addArgument(kernel_str.clone());
+			initCall.addArgument(new StringLiteral(kernelFileNameBase));
 		}
 
 		handleUpdateDirectives(updateAnnots);
@@ -724,6 +726,11 @@ public abstract class ACC2GPUTranslator {
 		value = Driver.getOptionValue("skipKernelLoopBoundChecking");
 		if( value != null ) {
 			opt_skipKernelLoopBoundChecking = true;
+		}
+
+		value = Driver.getOptionValue("SetOutputKernelFileNameBase");
+		if( value != null ) {
+			kernelFileNameBase = value;
 		}
 		
 		OpenACCHeaderEndMap = new HashMap<TranslationUnit, Declaration>();

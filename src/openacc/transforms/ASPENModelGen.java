@@ -1822,6 +1822,7 @@ public class ASPENModelGen extends TransformPass {
 		String blockName = "block_" + proc.getSymbolName();
 		ASPENCompoundStatement aspenCStmt = new ASPENCompoundStatement();
 		ASPENAnnotData aspenAnnotData1 = new ASPENAnnotData();
+		List<Traversable> IRsToRemove = new LinkedList<Traversable>();
 		for( Traversable child : inputBody.getChildren() ) {
 			aspenAnnotData1.resetASPENAnnotData();
 			Annotatable at = (Annotatable)child;
@@ -1870,7 +1871,8 @@ public class ASPENModelGen extends TransformPass {
 									if( IRtr != null ) {
 										Traversable IRtrP = IRtr.getParent();
 										if( IRtrP != null ) {
-											IRtrP.removeChild(IRtr);
+											//IRtrP.removeChild(IRtr);
+											IRsToRemove.add(IRtr);
 										}
 									}
 									aspenModel.addASPENDeclaration(paramDecl);
@@ -1905,7 +1907,8 @@ public class ASPENModelGen extends TransformPass {
 									if( IRtr != null ) {
 										Traversable IRtrP = IRtr.getParent();
 										if( IRtrP != null ) {
-											IRtrP.removeChild(IRtr);
+											//IRtrP.removeChild(IRtr);
+											IRsToRemove.add(IRtr);
 										}
 									}
 									aspenModel.addASPENDeclaration(dataDecl);
@@ -2318,6 +2321,16 @@ public class ASPENModelGen extends TransformPass {
 			if( aspenAnnotData1.aspenModelRegion ) {
 				if( aspenAnnotData1.modelRegionType == 0 ) { //aspen modelregion directive found.
 					inASPENModelRegion = false;
+				}
+			}
+		}
+		if( !IRsToRemove.isEmpty() ) {
+			for( Traversable removeTR : IRsToRemove ) {
+				Traversable removeTRP = removeTR.getParent();
+				if( removeTRP != null ) {
+					//System.out.println("IR to be remove:");
+					//System.out.println(removeTR + "\nEnclosing context:\n" + AnalysisTools.getEnclosingContext(removeTR));
+					removeTRP.removeChild(removeTR);
 				}
 			}
 		}

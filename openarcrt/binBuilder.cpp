@@ -32,7 +32,13 @@ char * deblank(char *str) {
 	return out; 
 }   
 
-int main (){
+int main (int argc, char * argv[]){
+	std::string fileNameBase;
+	if( argc == 2 ) {
+		fileNameBase = argv[1];
+	} else {
+		fileNameBase = "openarc_kernel";
+	}
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
 	//Generate ptx files for .cu, only if nvcc is found on the system
 	if (system("which nvcc")==0){
@@ -62,10 +68,10 @@ int main (){
 			ss << major;
 			ss << minor;
 			std::string version = ss.str();
-			std::string ptxName = std::string("openarc_kernel_") + version + std::string(".ptx");
+			std::string ptxName = fileNameBase + std::string("_") + version + std::string(".ptx");
 			fprintf(stderr, "[INFO] Create %s for device %d\n", ptxName.c_str(), i);
 			fprintf(stderr, "[INFO] Max # of threads per thread block for device %d: %d\n", i, max_threads_per_block);
-			std::string command = std::string("nvcc $OPENARC_JITOPTION -arch=sm_") + version + std::string(" openarc_kernel.cu -ptx -o ") + ptxName;
+			std::string command = std::string("nvcc $OPENARC_JITOPTION -arch=sm_") + version + std::string(" ") + fileNameBase + std::string(".cu -ptx -o ") + ptxName;
 			system(command.c_str());
 		}
 	} else {
@@ -108,7 +114,8 @@ int main (){
 		FILE *fp;
 		char *source_str;
 		size_t source_size;
-		char filename[] = "openarc_kernel.cl";
+		std::string outFile = fileNameBase + std::string(".cl");
+		const char *filename = outFile.c_str();
 		fp = fopen(filename, "r");
 		if (!fp) {
 			fprintf(stderr, "[INFO: in OpenCL binary creation] Failed to read the kernel file %s, so skipping binary generation for OpenCL devices %d\n", filename, i);
@@ -139,7 +146,7 @@ int main (){
 		clGetDeviceInfo(clDevice, CL_DEVICE_NAME, sizeof(cBuffer), &cBuffer, NULL);
 		cBufferN = deblank(cBuffer);
 		
-		std::string binaryName = std::string("openarc_kernel_") + cBufferN + std::string(".ptx");
+		std::string binaryName = fileNameBase + std::string("_") + cBufferN + std::string(".ptx");
 		
 		fprintf(stderr, "[INFO] Create %s for device %d\n", binaryName.c_str(), i);
 		fprintf(stderr, "[INFO] Max # of work-items in a work-group for device %d: %lu\n", i, max_work_group_size);
