@@ -1,6 +1,7 @@
 package openacc.transforms;
 
 import cetus.hir.*;
+import cetus.exec.Driver;
 import openacc.hir.OpenCLSpecifier;
 import cetus.transforms.TransformPass;
 
@@ -21,12 +22,17 @@ import java.util.Set;
 public class OpenCLArrayFlattener extends TransformPass
 {
 	private boolean addRestrictQualifier = false;
+	private String kernelFileNameBase = "openarc_kernel";
     /**
      * @param program
      */
     public OpenCLArrayFlattener(Program program, boolean addRestrictQual)
     {
         super(program);
+		String value = Driver.getOptionValue("SetOutputKernelFileNameBase");
+		if( value != null ) {
+			kernelFileNameBase = value;
+		}
         addRestrictQualifier = addRestrictQual;
     }
 
@@ -44,7 +50,7 @@ public class OpenCLArrayFlattener extends TransformPass
         for(Traversable t : program.getChildren())
         {
             if(t instanceof TranslationUnit &&
-                    ((TranslationUnit) t).getOutputFilename().compareTo("openarc_kernel.cl") == 0)
+                    ((TranslationUnit) t).getOutputFilename().compareTo(kernelFileNameBase + ".cl") == 0)
             {
                 kernelsTranslationUnit = (TranslationUnit)t;
                 break;

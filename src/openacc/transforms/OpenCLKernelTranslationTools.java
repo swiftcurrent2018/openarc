@@ -1,6 +1,7 @@
 package openacc.transforms;
 
 import cetus.hir.*;
+import cetus.exec.Driver;
 import cetus.transforms.TransformPass;
 import openacc.hir.OpenCLSpecifier;
 import openacc.hir.OpenCLStdLibrary;
@@ -19,12 +20,17 @@ import java.util.Set;
  */
 public class OpenCLKernelTranslationTools extends TransformPass
 {
+	private String kernelFileNameBase = "openarc_kernel";
     /**
      * @param program
      */
     public OpenCLKernelTranslationTools(Program program)
     {
         super(program);
+		String value = Driver.getOptionValue("SetOutputKernelFileNameBase");
+		if( value != null ) {
+			kernelFileNameBase = value;
+		}
     }
 
     @Override
@@ -41,7 +47,7 @@ public class OpenCLKernelTranslationTools extends TransformPass
         for(Traversable t : program.getChildren())
         {
             if(t instanceof TranslationUnit &&
-                    ((TranslationUnit) t).getOutputFilename().compareTo("openarc_kernel.cl") == 0)
+                    ((TranslationUnit) t).getOutputFilename().compareTo(kernelFileNameBase + ".cl") == 0)
             {
                 kernelsTranslationUnit = (TranslationUnit)t;
                 break;

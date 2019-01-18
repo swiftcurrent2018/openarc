@@ -361,10 +361,15 @@ public abstract class TransformTools {
 	}
 	
 	static public void removeUnusedDeviceFunctionDeclarations(Program prog) {
+		String kernelFileNameBase = "openarc_kernel";
+		String value = Driver.getOptionValue("SetOutputKernelFileNameBase");
+		if( value != null ) {
+			kernelFileNameBase = value;
+		}
 		List<TranslationUnit> trUnts = new ArrayList<TranslationUnit>();
 		for( Traversable tt : prog.getChildren() ) {
 			TranslationUnit tUnt = (TranslationUnit)tt;
-			if( !tUnt.getInputFilename().equals("openarc_kernel.cl") ) {
+			if( !tUnt.getInputFilename().equals(kernelFileNameBase + ".cl") ) {
 				trUnts.add(tUnt);
 			}
 		}

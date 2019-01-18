@@ -1583,7 +1583,7 @@ public abstract class ACC2GPUTranslator {
 		if( symTable == null ) {
 			PrintTools.println("[ERROR in ACC2GPUTranslator.copyUserSpecifierDeclarations()] " +
 					"user has to manually include necessary header file or declaration to " +
-					"the generated openarc_kernel.cu/cl file.\n", 0);
+					"the generated" + kernelFileNameBase + ".cu/cl file.\n", 0);
 			return;
 		}
 		if( lastUserDeclMap.containsKey(tUnit) ) {
@@ -1638,7 +1638,7 @@ public abstract class ACC2GPUTranslator {
 									} else {
 										PrintTools.println("[ERROR in ACC2GPUTranslator.copyUserSpecifierDeclarations()] " +
 												"can not find definition of derived type(" + tExp + ") used in an OpenACC kernel; user has to manually " +
-												"include necessary header file or declaration to the generated openarc_kernel.cu/cl file.\n", 0);
+												"include necessary header file or declaration to the generated " + kernelFileNameBase + ".cu/cl file.\n", 0);
 									}
 								}
 							}
