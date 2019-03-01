@@ -518,12 +518,12 @@ public abstract class FPGASpecificTools {
         // keep loop clauses 
         else if (tKey.equals("loop") || 
             tKey.equals("gang") || 
-            tKey.equals("worker") ||
-            tKey.equals("internal")){
+            tKey.equals("worker")) {
           keep_annot.put(tKey, tOldAnnot.get(tKey));
         }
         // ignore unneeded clauses
         else if (tKey.equals("pragma") || 
+            tKey.equals("internal") || 
             tKey.equals("collapse") ||
             tKey.equals("iterspace") ||
             tKey.equals("gangdim") ||

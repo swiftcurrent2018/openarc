@@ -20,7 +20,8 @@ public class Specifier implements Printable {
             "public", "restrict", "transient", "final", "abstract", "native",
             "threadsafe", "synchronized", "strictfp", "boolean", "byte",
             "_Bool", "_Complex", "_Imaginary", "__thread",
-            "__nvl__", "__nvl_wp__"};
+            "__nvl__", "__nvl_wp__",
+            "int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t"};
 
     public static final Specifier CHAR = new Specifier(0);
     public static final Specifier WCHAR_T = new Specifier(1);
@@ -96,6 +97,19 @@ public class Specifier implements Printable {
      * [Added by Joel E. Denny]
      */
     public static final Specifier NVL_WP = new Specifier(42);
+    
+    /**
+     * Fixed-width integer types in C99
+     * [Added by Seyong Lee]
+     */
+    public static final Specifier INT8_T = new Specifier(43);
+    public static final Specifier UINT8_T = new Specifier(44);
+    public static final Specifier INT16_T = new Specifier(45);
+    public static final Specifier UINT16_T = new Specifier(46);
+    public static final Specifier INT32_T = new Specifier(47);
+    public static final Specifier UINT32_T = new Specifier(48);
+    public static final Specifier INT64_T = new Specifier(49);
+    public static final Specifier UINT64_T = new Specifier(50);
 
     /** Predefined integer value of each specifiers. */
     protected int value;

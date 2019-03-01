@@ -32,11 +32,14 @@ const char * opencl_error_code(cl_int err) {
 		case CL_MISALIGNED_SUB_BUFFER_OFFSET: { str = "CL_MISALIGNED_SUB_BUFFER_OFFSET"; break; }
 		case CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST: { str = "CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST"; break; }
 #if defined(OPENARC_ARCH) && OPENARC_ARCH != 3
+//Temporarily disabled due to issues on Newark.
+/*
 		case CL_COMPILE_PROGRAM_FAILURE: { str = "CL_COMPILE_PROGRAM_FAILURE"; break; }
 		case CL_LINKER_NOT_AVAILABLE: { str = "CL_LINKER_NOT_AVAILABLE"; break; }
 		case CL_LINK_PROGRAM_FAILURE: { str = "CL_LINK_PROGRAM_FAILURE"; break; }
 		case CL_DEVICE_PARTITION_FAILED: { str = "CL_DEVICE_PARTITION_FAILED"; break; }
 		case CL_KERNEL_ARG_INFO_NOT_AVAILABLE: { str = "CL_KERNEL_ARG_INFO_NOT_AVAILABLE"; break; }
+*/
 #endif
 		case CL_INVALID_VALUE: { str = "CL_INVALID_VALUE"; break; }
 		case CL_INVALID_DEVICE_TYPE: { str = "CL_INVALID_DEVICE_TYPE"; break; }
@@ -73,11 +76,14 @@ const char * opencl_error_code(cl_int err) {
 		case CL_INVALID_MIP_LEVEL: { str = "CL_INVALID_MIP_LEVEL"; break; }
 		case CL_INVALID_GLOBAL_WORK_SIZE: { str = "CL_INVALID_GLOBAL_WORK_SIZE"; break; }
 #if defined(OPENARC_ARCH) && OPENARC_ARCH != 3
+//Temporarily disabled due to issues on Newark.
+/*
 		case CL_INVALID_PROPERTY: { str = "CL_INVALID_PROPERTY"; break; }
 		case CL_INVALID_IMAGE_DESCRIPTOR: { str = "CL_INVALID_IMAGE_DESCRIPTOR"; break; }
 		case CL_INVALID_COMPILER_OPTIONS: { str = "CL_INVALID_COMPILER_OPTIONS"; break; }
 		case CL_INVALID_LINKER_OPTIONS: { str = "CL_INVALID_LINKER_OPTIONS"; break; }
 		case CL_INVALID_DEVICE_PARTITION_COUNT: { str = "CL_INVALID_DEVICE_PARTITION_COUNT"; break; }
+*/
 #endif
 		default: { str = "UNKNOWN ERROR"; break; }
 	}

@@ -43,6 +43,8 @@ RESLIB = $(TARGET)/libresilience.a
 
 OMPHELPLIB = $(TARGET)/libomphelper.a
 
+MCLEXTLIB = $(TARGET)/libmclext.a
+
 PRINT_LOG ?= 0
 OMP ?= 0
 DEFSET ?= -DPRINT_LOG=$(PRINT_LOG) -DOMP=$(OMP)
@@ -62,6 +64,9 @@ res: resilience.o
 omphelp: omp_helper.o
 	$(AR) $(ARFLAGS) $(OMPHELPLIB) omp_helper.o
 
+mcl: mcl_accext.o
+	$(AR) $(ARFLAGS) $(MCLEXTLIB) mcl_accext.o
+
 openacc.o: openacc.cpp openacc.h openaccrt.h
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o openacc.o openacc.cpp -c
 
@@ -79,6 +84,9 @@ resilience.o: resilience.cpp
 
 omp_helper.o: omp_helper.cpp
 	$(CXX) $(DEFSET) -o omp_helper.o omp_helper.cpp -c
+
+mcl_accext.o: mcl_accext.cpp
+	$(CXX) $(DEFSET) $(COMMONCINCLUDE) -I${mclinstallroot}/include -o mcl_accext.o mcl_accext.cpp -c
 	
 binUtil: binBuilder.cpp
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o ./binBuilder_$(OPENARCLIB_SUFFIX) binBuilder.cpp $(CLIBS)

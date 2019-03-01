@@ -19,6 +19,11 @@ public class KernelFunctionCall extends FunctionCall
 {
   private static Method class_print_method;
   private LinkedList<Traversable> configuration;
+  private LinkedList<Integer> argTraits;
+  private LinkedList<Expression> argSizes;
+  //configuration list contains configuration values used for this kernel function call.
+  //if targetArch < 4: {Grid dimensions, threadblock dimensions, shared memory size, async ID, wait ID list}
+  //if targetArch == 4: {Grid dimensions, threadblock dimensions, task handle, source code pointer, async ID, wait ID list}
   private Procedure linkedProcedure;
 
   static
@@ -43,6 +48,8 @@ public class KernelFunctionCall extends FunctionCall
   {
     super(function);
     configuration = new LinkedList<Traversable>();
+    argTraits = new LinkedList<Integer>();
+    argSizes = new LinkedList<Expression>();
     object_print_method = class_print_method;
     
   }
@@ -57,6 +64,8 @@ public class KernelFunctionCall extends FunctionCall
   {
     super(function, args);
     configuration = new LinkedList<Traversable>();
+    argTraits = new LinkedList<Integer>();
+    argSizes = new LinkedList<Expression>();
     object_print_method = class_print_method;
   }
 
@@ -71,6 +80,8 @@ public class KernelFunctionCall extends FunctionCall
   {
     super(function, args);
     configuration = new LinkedList<Traversable>();
+    argTraits = new LinkedList<Integer>();
+    argSizes = new LinkedList<Expression>();
     object_print_method = class_print_method;
     setConfArguments(confargs);
   }
@@ -100,8 +111,11 @@ public class KernelFunctionCall extends FunctionCall
 		  forcedSyncCall = Integer.valueOf(value).intValue();
 	  }
 
+	  List conflist = call.getConfArguments();
+
 	  if (call.needs_parens)
 		  p.print("(");
+
 
     //call.getName().print(p);
     //p.print("<<<");
@@ -110,13 +124,29 @@ public class KernelFunctionCall extends FunctionCall
     //p.print(">>>");
     //p.print("(");
     Map<String, String> env = System.getenv();
-    p.print("HI_register_kernel_numargs(");
+    if( targetArch == 4 ) {
+    	p.print("mcl_task_set_kernel(");
+		p.print(conflist.get(0)); //add MCL handle
+		p.print(",");
+		p.print(conflist.get(3)); //add src_code pointer
+		p.print(",");
+
+    } else {
+    	p.print("HI_register_kernel_numargs(");
+    }
 	p.print("\"" + call.getName() + "\",");
 	p.println(call.getNumArguments() + ");");
 	for(int i = 0; i < call.getNumArguments(); i++)
 	{
-    	p.print("HI_register_kernel_arg(");
-		p.print("\"" + call.getName() + "\",");
+		if( targetArch == 4 ) {
+			p.print("mcl_task_set_arg(");
+			p.print(conflist.get(0)); //add MCL handle
+			p.print(",");
+
+		} else {
+			p.print("HI_register_kernel_arg(");
+			p.print("\"" + call.getName() + "\",");
+		}
 		p.print(i + ",");
 
 		VariableDeclaration paramDecl = (VariableDeclaration)call.linkedProcedure.getParameter(i);
@@ -140,87 +170,147 @@ public class KernelFunctionCall extends FunctionCall
 			isPointer = true;
 		}
 
-		//Special case for OpenCL
-		//If use OpenCL, the use of texture memory is not allowed
-		if(targetArch != 0)
-        {
-            if( isPointer ) {
-                p.print("sizeof(void*),");
-            } else {
-                p.print(new SizeofExpression(specifierList));
-                p.print(",");
-            }
-        }
-        else
-        {
-		    p.print("sizeof(void*),");
-        }
-		if(call.getArgument(i) instanceof Typecast)
-		{
-			p.print(new UnaryExpression(UnaryOperator.ADDRESS_OF, ((Typecast)call.getArgument(i)).getExpression().clone()));
-		}
-		else
-		{
-			boolean isConstSymbol = false;
-			Expression tArg = call.getArgument(i);
-			if( tArg instanceof Identifier ) {
-				Symbol tSym = ((Identifier)tArg).getSymbol();
-				if( tSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
-					isConstSymbol = true;
+		if( targetArch == 4 ) {
+			Expression argExp = null;
+			Expression argTrait = null;
+			List<Specifier> voidPointer = new ArrayList<Specifier>(2);
+			voidPointer.add(Specifier.VOID);
+			voidPointer.add(PointerSpecifier.UNQUALIFIED);
+			if( isPointer ) {
+				argExp = new Typecast(voidPointer, call.getArgument(i).clone());
+				p.print(argExp);
+				p.print(",");
+				p.print(call.getArgSize(i));
+				p.print(",");
+				if( call.getArgTrait(i).intValue() == 0 ) {
+					argTrait = new BinaryExpression(new NameID("MCL_ARG_INPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_BUFFER"));
+				} else if( call.getArgTrait(i).intValue() == 1 ) {
+					argTrait = new BinaryExpression(new NameID("MCL_ARG_OUTPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_BUFFER"));
+				} else {
+					argTrait = new BinaryExpression(new NameID("MCL_ARG_INPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_OUTPUT"));
+					argTrait = new BinaryExpression(argTrait, BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_BUFFER"));
+				}
+				p.print(argTrait);
+			} else {
+				argExp = new Typecast(voidPointer, new UnaryExpression(UnaryOperator.ADDRESS_OF, call.getArgument(i).clone()));
+				p.print(argExp);
+				p.print(",");
+				p.print(new SizeofExpression(specifierList));
+				p.print(",");
+				if( call.getArgTrait(i).intValue() == 0 ) {
+					argTrait = new BinaryExpression(new NameID("MCL_ARG_INPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_SCALAR"));
+				} else if( call.getArgTrait(i).intValue() == 1 ) {
+					argTrait = new BinaryExpression(new NameID("MCL_ARG_OUTPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_SCALAR"));
+				} else {
+					argTrait = new BinaryExpression(new NameID("MCL_ARG_INPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_OUTPUT"));
+					argTrait = new BinaryExpression(argTrait, BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_SCALAR"));
+				}
+				p.print(argTrait);
+			}
+		} else {
+			//Special case for OpenCL
+			//If use OpenCL, the use of texture memory is not allowed
+			if(targetArch != 0)
+			{
+				if( isPointer ) {
+					p.print("sizeof(void*),");
+				} else {
+					p.print(new SizeofExpression(specifierList));
+					p.print(",");
 				}
 			}
-			if( isConstSymbol ) {
-				List<Specifier> types = new ArrayList<Specifier>(2);
-				types.add(Specifier.VOID);
-				types.add(PointerSpecifier.UNQUALIFIED);
-				p.print(new Typecast(types, new UnaryExpression(UnaryOperator.ADDRESS_OF, call.getArgument(i).clone())));
-			} else {
-				p.print(new UnaryExpression(UnaryOperator.ADDRESS_OF, call.getArgument(i).clone()));
+			else
+			{
+				p.print("sizeof(void*),");
 			}
-		}
-		if( isPointer ) {
-		    p.print(",1");
-		} else {
-		    p.print(",0");
+			if(call.getArgument(i) instanceof Typecast)
+			{
+				p.print(new UnaryExpression(UnaryOperator.ADDRESS_OF, ((Typecast)call.getArgument(i)).getExpression().clone()));
+			}
+			else
+			{
+				boolean isConstSymbol = false;
+				Expression tArg = call.getArgument(i);
+				if( tArg instanceof Identifier ) {
+					Symbol tSym = ((Identifier)tArg).getSymbol();
+					if( tSym.getTypeSpecifiers().contains(Specifier.CONST) ) {
+						isConstSymbol = true;
+					}
+				}
+				if( isConstSymbol ) {
+					List<Specifier> types = new ArrayList<Specifier>(2);
+					types.add(Specifier.VOID);
+					types.add(PointerSpecifier.UNQUALIFIED);
+					p.print(new Typecast(types, new UnaryExpression(UnaryOperator.ADDRESS_OF, call.getArgument(i).clone())));
+				} else {
+					p.print(new UnaryExpression(UnaryOperator.ADDRESS_OF, call.getArgument(i).clone()));
+				}
+			}
+			if( isPointer ) {
+				p.print(",1");
+			} else {
+				p.print(",0");
+			}
 		}
 		p.println(");");
 	}
     //p.print(")");
 
-	List conflist = call.getConfArguments();
-    p.print("HI_kernel_call(");
-	p.print("\"" + call.getName() + "\",");
-	p.print(conflist.get(0));
-	p.print(",");
-	p.print(conflist.get(1));
-	//argument for shared memory size
-	//p.print(",");
-	//p.print(conflist.get(2));
-	if(conflist.get(3) != null)
-    {
-        p.print(",");
-        p.print(conflist.get(3));
-    } else {
-        p.print(",");
-        p.print("DEFAULT_QUEUE");
-	}
-	if( conflist.size() > 4 ) {
-		IntegerLiteral num_waits = (IntegerLiteral)conflist.get(4);
-		long num_waits_value = num_waits.getValue();
-		if( num_waits_value > 0 ) {
-			p.print(",");
-			p.print(num_waits.toString());
-			p.print(",");
-			p.print("openarc_waits");
-		}
-	}
-	p.println(");");
-	if(conflist.get(3) == null)
-	{
-		if( forcedSyncCall == 0) {
-			p.print("HI_synchronize(0)");
+	if( targetArch == 4 ) {
+		p.print("mcl_exec(");
+		p.print(conflist.get(0)); //add MCL handle
+		p.print(",");
+		p.print(conflist.get(1)); //add global dimensions
+		p.print(",");
+		p.print(conflist.get(2)); //add MCL flags
+		p.println(");");
+		if(conflist.get(4) == null)
+		{
+			p.print("mcl_wait(");
+			p.print(conflist.get(0)); //add MCL handle
+			p.print(")");
 		} else {
-			p.print("HI_synchronize(1)");
+			p.print("mcl_acc_set_handle(");
+			p.print(conflist.get(4)); //add asyncID
+			p.print(",");
+			p.print(conflist.get(0)); //add MCL handle
+			p.print(")");
+		}
+	} else {
+		p.print("HI_kernel_call(");
+		p.print("\"" + call.getName() + "\",");
+		p.print(conflist.get(0));
+		p.print(",");
+		p.print(conflist.get(1));
+		//argument for shared memory size
+		//p.print(",");
+		//p.print(conflist.get(2));
+		if(conflist.get(3) != null)
+		{
+			p.print(",");
+			p.print(conflist.get(3));
+		} else {
+			p.print(",");
+			p.print("DEFAULT_QUEUE");
+		}
+		if( conflist.size() > 4 ) {
+			IntegerLiteral num_waits = (IntegerLiteral)conflist.get(4);
+			long num_waits_value = num_waits.getValue();
+			if( num_waits_value > 0 ) {
+				p.print(",");
+				p.print(num_waits.toString());
+				p.print(",");
+				p.print("openarc_waits");
+			}
+		}
+		p.println(");");
+		if(conflist.get(3) == null)
+		{
+			if( forcedSyncCall == 0) {
+				p.print("HI_synchronize(0)");
+			} else {
+				p.print("HI_synchronize(1)");
+			}
 		}
 	}
     if (call.needs_parens)
@@ -280,6 +370,26 @@ public class KernelFunctionCall extends FunctionCall
       }
       configuration.add(expr);
 	}
+  }
+
+  public Integer getArgTrait(int n)
+  {
+    return (Integer)argTraits.get(n);
+  }
+
+  public void addArgTrait(Integer atrait)
+  {
+    argTraits.add(atrait);
+  }
+
+  public Expression getArgSize(int n)
+  {
+    return (Expression)argSizes.get(n);
+  }
+
+  public void addArgSize(Expression aSize)
+  {
+    argSizes.add(aSize);
   }
 
 /**

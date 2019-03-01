@@ -671,6 +671,7 @@
 #        =1 for general OpenCL 
 #        =2 for Xeon Phi with OpenCL 
 #        =3 for Altera with OpenCL 
+#        =4 for MCL with OpenCL 
 #If not set, the target is decided by OPENARC_ARCH env variable.
 #
 ########################################

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <algorithm>
 
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
 #include <cuda.h>
@@ -85,28 +86,115 @@ int main (int argc, char * argv[]){
 	cl_context clContext;
 	cl_command_queue clQueue;
 	cl_program clProgram;
-	int isMic=0;
+	char *platformName;
 	cl_uint numDevices;
-	cl_platform_id platform;
-	clGetPlatformIDs(1, &platform, NULL);
+	cl_uint num_platforms = 0;
 	cl_int err;
-	err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
-	//Check for MIC if GPU is not found
+    err = clGetPlatformIDs(0, NULL, &num_platforms);
+    if (err != CL_SUCCESS) {
+        fprintf(stderr, "[ERROR] Failed to get the number of platforms available on this device\n");
+        exit(1);
+    }    
+    if ( num_platforms <= 0 ) {
+        fprintf(stderr, "[ERROR] Failed to find any available platform on this device\n");
+        exit(1);
+    }    
+    fprintf(stderr, "[INFO] Number of available platforms on this device: %d\n", num_platforms);
+    cl_platform_id* platforms = new cl_platform_id[num_platforms];
+    err = clGetPlatformIDs(num_platforms, platforms, NULL);
+    if (err != CL_SUCCESS) {
+        fprintf(stderr, "[ERROR] Failed to get the list of platforms IDs available on this device\n");
+        exit(1);
+    }
+
+    if( num_platforms == 1) {
+        size_t sz;
+        clPlatform = platforms[0];
+        err = clGetPlatformInfo(clPlatform, CL_PLATFORM_NAME, 0, NULL, &sz);
+        if (err != CL_SUCCESS) {
+            fprintf(stderr, "[ERROR] Failed to get the platform name size\n");
+            exit(1);
+        }
+        char* namestr = new char[sz];
+        err = clGetPlatformInfo(clPlatform, CL_PLATFORM_NAME, sz, namestr, NULL);
+        if (err != CL_SUCCESS) {
+            fprintf(stderr, "[ERROR] Failed to get the platform name\n");
+            exit(1);
+        }
+        platformName = namestr;
+        fprintf(stderr, "[INFO] Platform: %s\n", platformName);
+    } else {
+        bool foundPlatform = false;
+        for( unsigned i=0; i<num_platforms; i++ ) {
+            size_t sz;
+            clPlatform = platforms[i];
+            err = clGetPlatformInfo(clPlatform, CL_PLATFORM_NAME, 0, NULL, &sz);
+            if (err != CL_SUCCESS) {
+                fprintf(stderr, "[ERROR] Failed to get the platform name size\n");
+                exit(1);
+            }
+            char* namestr = new char[sz];
+            err = clGetPlatformInfo(clPlatform, CL_PLATFORM_NAME, sz, namestr, NULL);
+            if (err != CL_SUCCESS) {
+                fprintf(stderr, "[ERROR] Failed to get the platform name\n");
+                exit(1);
+            }
+            platformName = namestr;
+        	fprintf(stderr, "[INFO] Platform[%d]: %s\n",i, platformName);
+            std::string name = namestr;
+            std::transform(name.begin(), name.end(), name.begin(), tolower);
+            std::string search;
+#if OPENARC_ARCH == 3
+            search = "fpga";
+#elif OPENARC_ARCH == 2
+            search = "intel";
+#else
+            search = "nvidia";
+#endif
+            if( name.find(search) != std::string::npos ) {
+                foundPlatform = true;
+                break;
+            } else if( search.compare("nvidia") ) {
+                search = "advanced";
+                if( name.find(search) != std::string::npos ) {
+                    foundPlatform = true;
+                    break;
+                }
+            }
+            delete [] namestr;
+        }
+        if( !foundPlatform ) {
+            clPlatform = platforms[0];
+        }
+    }
+
+#if OPENARC_ARCH == 3
+	err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
+#elif OPENARC_ARCH == 2
+	err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ACCELERATOR, 0, NULL, &numDevices);
+#else
+	err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+#endif
+
 	if (err != CL_SUCCESS) {
-		err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ACCELERATOR, 0, NULL, &numDevices);
-		isMic = 1;
-	}
-	if (err != CL_SUCCESS) {
-		fprintf(stderr, "[ERROR in clGetDeviceIDs()] Failed to get device IDs  for type \n");
+#if OPENARC_ARCH == 3
+		fprintf(stderr, "[ERROR in clGetDeviceIDs()] Failed to get device IDs  for type acc_device_altera. \n");
+#elif OPENARC_ARCH == 2
+		fprintf(stderr, "[ERROR in clGetDeviceIDs()] Failed to get device IDs  for type acc_device_xeonphi. \n");
+#else
+		fprintf(stderr, "[ERROR in clGetDeviceIDs()] Failed to get device IDs  for type acc_device_gpu. \n");
+#endif
 	}
 	
 	
 	cl_device_id devices[numDevices];
-	clGetPlatformIDs(1, &clPlatform, NULL);
-	if(isMic)
-		clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ACCELERATOR, numDevices, devices, NULL);
-	else
-		clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+#if OPENARC_ARCH == 3
+	err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ALL, numDevices, devices, NULL);
+#elif OPENARC_ARCH == 2
+	err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ACCELERATOR, numDevices, devices, NULL);
+#else
+	err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+#endif
 	
 	for(int i=0; i< numDevices; i++) {
 		clDevice = devices[i];

@@ -18,6 +18,9 @@
 #        =0 for CUDA
 #        =1 for general OpenCL 
 #        =2 for Xeon Phi with OpenCL
+#        =3 for Altera with OpenCL 
+#        =4 for MCL with OpenCL 
+#If not set, the target is decided by OPENARC_ARCH env variable.
 #Option: AccAnalysisOnly
 #AccAnalysisOnly=N
 #Conduct OpenACC analysis only and exit if option value > 0
@@ -275,6 +278,9 @@
 #Option: SetAccEntryFunction
 #SetAccEntryFunction=filename
 #Name of the entry function, from which all device-related codes will be executed. (Default is main.)
+#Option: SetOutputKernelFileNameBase
+#SetOutputKernelFileNameBase=filename
+#Base name of the output kernel file, from which target-specific output kernel file name is derived. (Default is openarc_kernel.)
 #Option: addIncludePath
 #addIncludePath=DIR
 #Add the directory DIR to the list of directories to be searched for header files; to add multiple directories, use this option multiple times. (Current directory is included by default.)

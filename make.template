@@ -225,7 +225,7 @@ endif
 # Libraries
 CLIBS1 += $(CLIBS1_BASE) -L$(OPENARCLIB) 
 CLIBS1_LLVM += -L$(OPENARCLIB) 
-CLIBS2 += $(CLIBS2_BASE) -l$(ACCRTLIB) -lomphelper
+CLIBS2_BASE += -l$(ACCRTLIB) -lomphelper
 
 $(BENCHMARK)_CPU: $(CSRCS) makedirectories
 	$(PRECMD)
@@ -241,7 +241,7 @@ $(BENCHMARK)_CPU2: $(CXXSRCS) makedirectories
 $(BENCHMARK)_TCPU: $($(CETUS_OUTPUT)/$(OCXXSRCS)) $(CXXSRCS) makedirectories
 	$(COPY_CXXSRCS)
 	$(PRECMD)
-	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_CPU) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_TCPU) $(OCXXSRCS) $(CXXSRCS) $(CLIBS2); cd ../
+	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_CPU) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_TCPU) $(OCXXSRCS) $(CXXSRCS) $(COMMONCLIBS) $(CLIBS2); if [ -f "./$(KERNEL_FILE)" ]; then  cp $(KERNEL_FILE) ../$(TARGET); fi; cd ../
 	$(POSTCMD)
 
 $(BENCHMARK)_LLVM: $(CSRCS) makedirectories
@@ -255,7 +255,7 @@ $(BENCHMARK)_ACC: COMPILE_HOST COMPILE_KERNEL
 COMPILE_HOST: $($(CETUS_OUTPUT)/$(OCXXSRCS)) $(CXXSRCS) makedirectories
 	$(COPY_CXXSRCS)
 	$(PRECMD)
-	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(OCXXSRCS) $(CXXSRCS) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); if [ -f "$(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX)" ]; then cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); fi; cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
+	cd $(CETUS_OUTPUT); $(CXX) $(DEFSET_ACC) $(CFLAGS2) -I ../ -o ../$(BENCHMARK_OPENACC) $(OCXXSRCS) $(CXXSRCS) $(CLIBS2_BASE) $(CLIBS2); cp $(KERNEL_FILE) ../$(TARGET); if [ -f "$(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX)" ]; then cp $(OPENARCLIB)/binBuilder_$(OPENARCLIB_SUFFIX) ../$(TARGET); fi; cp $(OPENARCLIB)/Timer ../$(TARGET); cd ../
 	cd $(CETUS_OUTPUT); grep resilience $(KERNEL_FILE) > /dev/null && cp $(OPENARCLIB)/$(RESILIENCE_FILE) $(OPENARCLIB)/resilience.h ../$(TARGET); cd ../
 
 COMPILE_KERNEL: $($(CETUS_OUTPUT)/$(KERNLE_FILE)) makedirectories

@@ -126,6 +126,16 @@ public class OpenACCLibrary {
         add("acc_is_present");
         add("acc_memcpy_to_device");
         add("acc_memcpy_from_device");
+    	//OpenACC V2.5
+        add("acc_memcpy_device");
+        add("acc_memcpy_device_async");
+    	//OpenACC V2.6
+        add("acc_attach");
+        add("acc_attach_async");
+        add("acc_dettach");
+        add("acc_dettach_async");
+        add("acc_dettach_finalize");
+        add("acc_dettach_finalize_async");
     	//Experimental APIs for unified memory
         add("acc_copyin_unified");
         add("acc_pcopyin_unified");

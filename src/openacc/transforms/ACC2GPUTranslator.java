@@ -72,6 +72,7 @@ public abstract class ACC2GPUTranslator {
 	protected String kernelFileNameBase = "openarc_kernel";
 
     protected int targetArch = 0;
+    protected String acc_device_type = "acc_device_default"; //contains ACC_DEVICE_TYPE environment value (default: acc_device_default);
     protected int targetModel = 0; //0 for CUDA, 1 for OpenCL
 
 	protected enum MemTrType {NoCopy, CopyIn, CopyOut, CopyInOut}
@@ -218,7 +219,9 @@ public abstract class ACC2GPUTranslator {
 				}
 			}
 		}
-		handleDeclareDirectives(declareAnnots);
+		if( targetArch != 4 ) {
+			handleDeclareDirectives(declareAnnots);
+		}
 
 		if( opt_GenDistOpenACC ) {
 			for(Traversable tChild : program.getChildren() ) {
@@ -368,8 +371,10 @@ public abstract class ACC2GPUTranslator {
 						kernelsRegionAnnots.add(annot);
 					}
 				}
-				handleEnterExitData(cProc, enterExitDataAnnots, IRSymbolOnly);
-				handleDataRegions(cProc, dataRegionAnnots);
+				if( targetArch != 4 ) {
+					handleEnterExitData(cProc, enterExitDataAnnots, IRSymbolOnly);
+					handleDataRegions(cProc, dataRegionAnnots);
+				}
 				convComputeRegionsToGPUKernels(cProc, parallelRegionAnnots, kernelsRegionAnnots);
 				//Postprocessing for pipe clauses.
 				List<ACCAnnotation>  pipeAnnots = IRTools.collectPragmas(program, ACCAnnotation.class, "pipe");
@@ -419,34 +424,69 @@ public abstract class ACC2GPUTranslator {
 				}
 			}
 		}
-		VariableDeclarator kernel_declarator = new VariableDeclarator(new NameID("kernel_str"), new ArraySpecifier(new IntegerLiteral(accKernelsList.size())));
-		Identifier kernel_str = new Identifier(kernel_declarator);
-		Declaration kernel_decl = new VariableDeclaration(OpenACCSpecifier.STRING, kernel_declarator);
-		DeclarationStatement kernel_stmt = new DeclarationStatement(kernel_decl);
-		for( int i=0; i<main_List.size(); i++ ) {
-			Procedure tmain = main_List.get(i);
-			Statement taccInitStmt = accInitStmt_List.get(i);
-			TransformTools.addStatementBefore(tmain.getBody(), taccInitStmt, kernel_stmt.clone());
-			for(int j = accKernelsList.size()-1; j >= 0; j--)
-			{
-				AssignmentExpression assignmentExpression = new AssignmentExpression(
-						new ArrayAccess(new NameID("kernel_str"), new IntegerLiteral(j)),
-						AssignmentOperator.NORMAL,
-						new StringLiteral(accKernelsList.get(j))
-						);
-				TransformTools.addStatementBefore(tmain.getBody(), taccInitStmt, new ExpressionStatement(assignmentExpression));
+		if( targetArch == 4 ) {
+			for( int i=0; i<main_List.size(); i++ ) {
+				Procedure tmain = main_List.get(i);
+				Statement taccInitStmt = accInitStmt_List.get(i);
+				Procedure pProc = taccInitStmt.getProcedure();
+				TranslationUnit pTrUnit = null;
+				IDExpression srcStringPtrID = null;
+				if( pProc != null ) {
+					pTrUnit = (TranslationUnit) pProc.getParent();
+					if( pTrUnit != null ) {
+						Declaration srcPtrDecl = SymbolTools.findSymbol(pTrUnit, "src_code");
+						if( (srcPtrDecl != null) && (srcPtrDecl instanceof VariableDeclaration) ) {
+							Declarator vDeclr = ((VariableDeclaration)srcPtrDecl).getDeclarator(0);
+							srcStringPtrID = vDeclr.getID();
+						}
+					}
+				}
+				if( srcStringPtrID != null ) {
+					FunctionCall srcLoadCall = new FunctionCall(new NameID("mcl_load"));
+					srcLoadCall.addArgument(new StringLiteral(kernelFileNameBase + ".cl"));
+					srcLoadCall.addArgument(new UnaryExpression(UnaryOperator.ADDRESS_OF, srcStringPtrID.clone()));
+					TransformTools.addStatementAfter(tmain.getBody(), taccInitStmt, new ExpressionStatement(srcLoadCall));
+				} else {
+					Tools.exit("[ERROR in ACC2GPUTranslator.start()] cannot find the symbol of the src_code variable; exit!\n" +
+							"Enclosing file: " + pTrUnit.getInputFilename() + "\n");
+				}
 			}
+		} else {
+			VariableDeclarator kernel_declarator = new VariableDeclarator(new NameID("kernel_str"), new ArraySpecifier(new IntegerLiteral(accKernelsList.size())));
+			Identifier kernel_str = new Identifier(kernel_declarator);
+			Declaration kernel_decl = new VariableDeclaration(OpenACCSpecifier.STRING, kernel_declarator);
+			DeclarationStatement kernel_stmt = new DeclarationStatement(kernel_decl);
+			for( int i=0; i<main_List.size(); i++ ) {
+				Procedure tmain = main_List.get(i);
+				Statement taccInitStmt = accInitStmt_List.get(i);
+				TransformTools.addStatementBefore(tmain.getBody(), taccInitStmt, kernel_stmt.clone());
+				for(int j = accKernelsList.size()-1; j >= 0; j--)
+				{
+					AssignmentExpression assignmentExpression = new AssignmentExpression(
+							new ArrayAccess(new NameID("kernel_str"), new IntegerLiteral(j)),
+							AssignmentOperator.NORMAL,
+							new StringLiteral(accKernelsList.get(j))
+							);
+					TransformTools.addStatementBefore(tmain.getBody(), taccInitStmt, new ExpressionStatement(assignmentExpression));
+				}
 
-			FunctionCall initCall = (FunctionCall)((ExpressionStatement)taccInitStmt).getExpression();
-			initCall.addArgument(new IntegerLiteral(accKernelsList.size()));
-			initCall.addArgument(kernel_str.clone());
-			initCall.addArgument(new StringLiteral(kernelFileNameBase));
+				FunctionCall initCall = (FunctionCall)((ExpressionStatement)taccInitStmt).getExpression();
+				initCall.addArgument(new IntegerLiteral(accKernelsList.size()));
+				initCall.addArgument(kernel_str.clone());
+				initCall.addArgument(new StringLiteral(kernelFileNameBase));
+			}
 		}
 
-		handleUpdateDirectives(updateAnnots);
-		handleHostDataDirectives(hostDataAnnots);
+		if( targetArch != 4 ) {
+			handleUpdateDirectives(updateAnnots);
+			handleHostDataDirectives(hostDataAnnots);
+		}
 		handleWaitDirectives(waitAnnots);
+		if( targetArch == 4 ) {
+			MCLRuntimeTransformation();
+		}
 	}
+
 	protected void GPUInitializer() {
 		/////////////////////////////////////////////////////////////////
 		// Read command-line options and set corresponding parameters. //
@@ -716,6 +756,12 @@ public abstract class ACC2GPUTranslator {
 		
 		if( targetArch == 3 ) {
 			enablePipeTransformation = true;
+		}
+
+		value = System.getenv("ACC_DEVICE_TYPE");
+		if( value != null)
+		{
+			acc_device_type = value;
 		}
 
 		value = Driver.getOptionValue("assumeNoAliasingAmongKernelArgs");
@@ -1068,6 +1114,99 @@ public abstract class ACC2GPUTranslator {
 		//Transform OpenACC runtime library APIs to allocate data on constant memory.
 		runtimeTransformationForConstMemory(cProc, fCallList);
 		//Transform OpenACC runtime library APIs to allocate data on texture memory.
+	}
+
+	/**
+	 * Modify OpenACC runtime API calls to work with MCL.
+	 */
+	protected void MCLRuntimeTransformation() {
+		List<FunctionCall> fCallList = IRTools.getFunctionCalls(program);
+		for( FunctionCall fCall : fCallList ) {
+			if( OpenACCLibrary.contains(fCall) ) {
+				String fCallName = fCall.getName().toString();
+				if( fCallName.equals("acc_init") || fCallName.equals("acc_shutdown") ) {
+					Tools.exit("[ERROR in ACC2GPUTranslator.MCLRuntimeTransformation()] found acc_init() or acc_shutdown() API calls, "
+							+ "which should have been replaced by mcl_init() or mcl_finit() calls; exit!" 
+							+ AnalysisTools.getEnclosingContext(fCall));
+				} else if( fCallName.equals("acc_wait_all") || fCallName.equals("acc_wait_all_async") 
+						|| fCallName.equals("acc_async_wait_all")) {
+					FunctionCall mclCall = new FunctionCall(new NameID("mcl_wait_all"));
+					mclCall.swapWith(fCall);
+				} else if( fCallName.equals("acc_wait") || fCallName.equals("acc_wait_async") 
+						|| fCallName.equals("acc_async_wait")) {
+					FunctionCall mclCall = new FunctionCall(new NameID("mcl_acc_wait"));
+					Expression arg = fCall.getArgument(0).clone();
+					mclCall.addArgument(arg);
+					mclCall.swapWith(fCall);
+				} else if( fCallName.equals("acc_async_test") ) {
+					FunctionCall mclCall = new FunctionCall(new NameID("mcl_acc_test"));
+					Expression arg = fCall.getArgument(0).clone();
+					mclCall.addArgument(arg);
+					mclCall.swapWith(fCall);
+				} else if( fCallName.equals("acc_async_test_all") ) {
+					FunctionCall mclCall = new FunctionCall(new NameID("mcl_acc_test_all"));
+					mclCall.swapWith(fCall);
+				} else if( fCallName.equals("acc_on_device") ) {
+					FunctionCall mclCall = new FunctionCall(new NameID("mcl_on_device"));
+					Expression arg = fCall.getArgument(0).clone();
+					mclCall.addArgument(arg);
+					mclCall.swapWith(fCall);
+				} else if( fCallName.equals("acc_malloc") ) {
+					FunctionCall mclCall = new FunctionCall(new NameID("malloc"));
+					Expression arg = fCall.getArgument(0).clone();
+					mclCall.addArgument(arg);
+					mclCall.swapWith(fCall);
+				} else if( fCallName.equals("acc_free") ) {
+					FunctionCall mclCall = new FunctionCall(new NameID("free"));
+					mclCall.swapWith(fCall);
+				} else if( fCallName.equals("acc_deviceptr") || fCallName.equals("acc_hostptr") ) {
+					Expression arg = fCall.getArgument(0).clone();
+					arg.swapWith(fCall);
+/*				} else if( fCallName.equals("acc_get_num_devices") || fCallName.equals("acc_set_device_num")
+						|| fCallName.equals("acc_get_device_type") || fCallName.equals("acc_set_device_type") 
+						|| fCallName.equals("acc_copyin") || fCallName.equals("acc_copyin_async")
+						|| fCallName.equals("acc_pcopyin") || fCallName.equals("acc_present_or_copyin")
+						|| fCallName.equals("acc_create") || fCallName.equals("acc_create_async")
+						|| fCallName.equals("acc_pcreate") || fCallName.equals("acc_present_or_create")
+						|| fCallName.equals("acc_copyout") || fCallName.equals("acc_copyout_async")
+						|| fCallName.equals("acc_delete") || fCallName.equals("acc_delete_async")
+						|| fCallName.equals("acc_update_device") || fCallName.equals("acc_update_device_async")
+						|| fCallName.equals("acc_update_self") || fCallName.equals("acc_update_self_async")
+						|| fCallName.equals("acc_memcpy_to_device") || fCallName.equals("acc_memcpy_from_device")
+						|| fCallName.equals("acc_memcpy_device") || fCallName.equals("acc_memcpy_device_async")
+						|| fCallName.equals("acc_map_data") || fCallName.equals("acc_unmap_data")) {*/
+				} else {
+					Traversable child = fCall.getParent();
+					Traversable parent = null;
+					while( !(child instanceof Statement) && (child != null) ) {
+						child = child.getParent();
+					}
+					if( child != null ) {
+						parent = child.getParent();
+					}
+					if( (parent != null) && (child != null) ) {
+						TransformTools.removeChild(parent, child);
+					}
+				}
+			} else {
+				String fCallName = fCall.getName().toString();
+				if( fCallName.equals("acc_copyin_unified") || fCallName.equals("acc_pcopyin_unified") 
+						|| fCallName.equals("acc_present_or_copyin_unified") || fCallName.equals("acc_create_unified")
+						|| fCallName.equals("acc_pcreate_unified") || fCallName.equals("acc_present_or_create_unified")
+						|| fCallName.equals("acc_copyout_unified")) {
+					FunctionCall mclCall = new FunctionCall(new NameID("malloc"));
+					Expression arg = fCall.getArgument(1).clone();
+					mclCall.addArgument(arg);
+					mclCall.swapWith(fCall);
+				} else if( fCallName.equals("acc_delete_unified") ) {
+					FunctionCall mclCall = new FunctionCall(new NameID("free"));
+					Expression arg = fCall.getArgument(0).clone();
+					mclCall.addArgument(arg);
+					mclCall.swapWith(fCall);
+				}
+				
+			}
+		}
 	}
 	
 	protected void ImpaccRuntimeTransformation(Procedure cProc, List<FunctionCall> fCallList, List<FunctionCall> allFuncCalls) {
@@ -1430,7 +1569,9 @@ public abstract class ACC2GPUTranslator {
 			List<Statement> outStmts = new LinkedList<Statement>();
 			inStmts.add((Statement)at);
 			outStmts.add((Statement)at);
-			handleDataClauses(kAnnot, inStmts, outStmts, regionT, IRSymbolOnly);
+			if( targetArch != 4 ) {
+				handleDataClauses(kAnnot, inStmts, outStmts, regionT, IRSymbolOnly);
+			}
 			extractComputeRegion(cProc, kAnnot, "kernels", GPUKernelName, IRSymbolOnly);
 		}
 		numComputeRegions += kernelCnt;

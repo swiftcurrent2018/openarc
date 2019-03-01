@@ -589,7 +589,7 @@ identifier:capacity(exp)[:traits(trait-list)]	//ASPENData
 #pragma aspen control probability(aspen_param_ifprob)
         if(...) { ... }
 
-#pragma aspen control probability(0.4, 0.4, 0.2) 
+#pragma aspen control probability(0.4, 0.4) 
 		if(...) { ... }
 		else if(...) { ...}
 		else { ... }

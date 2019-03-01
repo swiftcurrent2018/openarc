@@ -38,7 +38,8 @@ public abstract class OpenCLTranslationTools {
 	 */
 	protected static VariableDeclarator scalarSharedConv(Symbol sharedSym, String symNameBase, List<Specifier> typeSpecs,
 			Symbol gpuSym, Statement region, Procedure new_proc, FunctionCall call_to_new_proc, boolean useRegister, 
-			boolean useSharedMemory, boolean ROData, boolean isSingleTask, List<Statement> preList, List<Statement> postList) {
+			boolean useSharedMemory, boolean ROData, boolean isSingleTask, List<Statement> preList, List<Statement> postList,
+			int targetArch) {
 		// Create a parameter Declaration for the kernel function
 		// Change the scalar variable to a pointer type 
 		typeSpecs.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
@@ -51,7 +52,11 @@ public abstract class OpenCLTranslationTools {
 		typeSpecs.remove(0);
 
 		// Insert argument to the kernel function call
-		call_to_new_proc.addArgument(new Identifier(gpuSym));
+		if( targetArch == 4 ) {
+			call_to_new_proc.addArgument(new UnaryExpression(UnaryOperator.ADDRESS_OF, new Identifier(gpuSym)));
+		} else {
+			call_to_new_proc.addArgument(new Identifier(gpuSym));
+		}
 
 		CompoundStatement targetStmt = null;
 		if( region instanceof CompoundStatement ) {
@@ -4545,7 +4550,7 @@ public abstract class OpenCLTranslationTools {
 	                                                  Map<TranslationUnit, Declaration> OpenACCHeaderEndMap, boolean IRSymbolOnly,
 	                                                  boolean opt_addSafetyCheckingCode, boolean opt_UnrollOnReduction, int maxBlockSize,
 	                                                  Expression totalnumgangs, boolean kernelVerification, boolean memtrVerification, FloatLiteral EPSILON,
-	                                                  int SIMDWidth, FloatLiteral minCheckValue, int localRedVarConf) {
+	                                                  int SIMDWidth, FloatLiteral minCheckValue, int localRedVarConf, int targetArch) {
 	        PrintTools.println("[OpenCL singleTaskReductionTransformation() begins] current procedure: " + cProc.getSymbolName() +
 	                "\ncompute region type: " + cRegionKind + "\n", 2);
 	        
@@ -5014,7 +5019,7 @@ public abstract class OpenCLTranslationTools {
 	                        }
                         	VariableDeclarator pointerV_declarator = scalarSharedConv(redSym, localGRedSymName, typeSpecs,
                         				(VariableDeclarator)gpu_gred_decl.getDeclarator(0), region, new_proc, call_to_new_proc, 
-                        				true, false, registerRO, true, preList, postList);
+                        				true, false, registerRO, true, preList, postList, targetArch);
 	                        lgred_var = new Identifier(pointerV_declarator);
 	                        //PrintTools.println("[reductionTransformation] gang reduction point 3", 2);
 	                    } else { //non-scalar variables

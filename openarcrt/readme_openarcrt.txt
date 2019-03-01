@@ -1,7 +1,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC Runtime V0.12 (Oct. 05, 2018)
+OpenARC Runtime V0.13 (March 01, 2019)
 
 OpenARC Runtime implements APIs used by the output program translated
 by OpenARC.
@@ -49,6 +49,8 @@ FEATURES/UPDATES
 * Updates
 
 * Bug fixes and improvements
+	- Fixed bugs in the OpenCL backend to correctly handle multiple platforms.
+
 	- Modified opencldriver so that the same kernel binary name (openarc_kernel.aocx) is used when targeting FPGAs, regardless of actual target FPGAs.
 
 

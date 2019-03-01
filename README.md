@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.12 (Oct. 05, 2018)
+OpenARC V0.13 (March 01, 2019)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -190,6 +190,8 @@ pre-compiled by the built-in binBuilder tool (binBuilder_cuda or binBuilder_open
 FEATURES/UPDATES
 -------------------------------------------------------------------------------
 * New features
+	- Add a basic OpenACC-to-MCL translation pass as an experimental feature.
+
 	- Add several FPGA-specific optimizations (e.g., collapse optimization, reduction optimization, and sliding-window optimization): see ./README_FPGA_example.txt file to learn an example configuration procedure to use the OpenACC-to-FPGA translation framework.
 
 	- Add new flags: expand-user-source and inlineFunctionTransformation
@@ -202,6 +204,8 @@ FEATURES/UPDATES
     - Update CUDA runtime to allow intermixing of both OpenACC and CUDA. (See example in [openarc-path]/test/examples/openarc/matmul_openacc_cuda)
 
 * Bug fixes and improvements
+	- Fixed bugs in the OpenCL backend to correctly handle multiple platforms.
+
 	- Fixed bugs in privatization and reduction transformation passes.
 
 	- Fixes various bugs related to multi-threading and synchronizations.

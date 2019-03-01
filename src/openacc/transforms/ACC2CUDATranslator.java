@@ -5291,7 +5291,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				Symbol constSym = AnalysisTools.findsSymbol(symSet, constVarName);
 				if( constSym == null ) {
 					//constant symbol should have been created by either handleDataClause() or handleUpdate().
-					Tools.exit("[ERROR in ACC2CUDATranslation.extractComputeRegion()] Can't find __constant__ variable (" + constVarName + 
+					Tools.exit("[ERROR in ACC2CUDATranslator.extractComputeRegion()] Can't find __constant__ variable (" + constVarName + 
 							") corresponding to the host variable, " + hostVar + "; exit the program!\nEnclosing procedure: " + 
 							cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
 				}
@@ -5345,7 +5345,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			gpuSym = AnalysisTools.findsSymbol(symSet, gpuVarName);
 			gpuVar = new Identifier(gpuSym);
 			if( gpuSym == null ) {
-				Tools.exit("[ERROR in ACC2CUDATranslation.extractComputeRegion()] Can't find device variable corresponding" +
+				Tools.exit("[ERROR in ACC2CUDATranslator.extractComputeRegion()] Can't find device variable corresponding" +
 						" to the host variable, " + hostVar + "; exit the program!\nEnclosing procedure: " + 
 						cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
 			}
@@ -5391,7 +5391,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					Symbol textureSym = AnalysisTools.findsSymbol(symSet, textureVarName);
 					if( textureSym == null ) {
 						//texture reference symbol should have been created by either handleDataClause() or handleUpdate().
-						Tools.exit("[ERROR in ACC2CUDATranslation.extractComputeRegion()] Can't find texture reference " +
+						Tools.exit("[ERROR in ACC2CUDATranslator.extractComputeRegion()] Can't find texture reference " +
 								"variable corresponding to the host variable, " + hostVar + 
 								"; exit the program!\nEnclosing procedure: " + 
 								cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
@@ -5404,7 +5404,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					Symbol pitchSym = AnalysisTools.findsSymbol(symSet, pitchVarName);
 					if( pitchSym == null ) {
 						//pitch symbol should have been created by either handleDataClause() or handleUpdate().
-						Tools.exit("[ERROR in ACC2CUDATranslation.extractComputeRegion()] Can't find texture reference " +
+						Tools.exit("[ERROR in ACC2CUDATranslator.extractComputeRegion()] Can't find texture reference " +
 								"variable corresponding to the host variable, " + hostVar + 
 								"; exit the program!\nEnclosing procedure: " + 
 								cProc.getSymbolName() + "\nACCAnnotation: " + cAnnot.toString() +"\n");
@@ -6553,7 +6553,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 										Symbol constSym = AnalysisTools.findsSymbol(kernelGlobalSymbols, constVarName);
 										if( constSym == null ) {
 											//constant symbol should have been created by either handleDataClause() or handleUpdate().
-											Tools.exit("[ERROR in ACC2CUDATranslation.devProcCloning()] Can't find __constant variable (" + constVarName + 
+											Tools.exit("[ERROR in ACC2CUDATranslator.devProcCloning()] Can't find __constant variable (" + constVarName + 
 													") corresponding to the host variable, " + pSym.getSymbolName() + "; exit the program!\nEnclosing procedure: " + 
 													c_proc.getSymbolName() + "\n");
 										}
@@ -6744,7 +6744,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					}
 					if( c_procDeclr == null ) {
 						//FIXME: how to handle this case where no function declaration exists even though it is not a standard library API.
-						PrintTools.println("\n[WARNING in ACC2CUDATranslator.devProcCloning()] cannot find a function declaratio of the function, "
+						PrintTools.println("\n[WARNING in ACC2CUDATranslator.devProcCloning()] cannot find a function declaration of the function, "
 								+ fCall.getName() + AnalysisTools.getEnclosingContext(fCall), 0); 
 						continue;
 					} else {

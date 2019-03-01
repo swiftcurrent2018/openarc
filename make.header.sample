@@ -1,5 +1,5 @@
 ####################################################################
-# - Modify the following environment variables according to user's #
+# - Modify the following makefile macros according to user's       #
 # environment.                                                     #
 # (Example settings can be found in the "Set the target system"    #
 #  section below.)                                                 # 
@@ -7,6 +7,7 @@
 #       - Set OPENARC_ARCH to 0 if targeting CUDA GPUs             #
 #                         1 if targeting OpenCL devices            #
 #                         2 if targeting OpenCL for Xeon Phi       #
+#                         3 if targeting OpenCL for Intel FPGAs    #
 #   - Modify target-specific compilation configuration.            #
 #       GOMP_FLAGS : compiler flag to enable OpenMP                #
 #       GOMP_LIBS  : library to add for OpenMP                     #
@@ -229,7 +230,7 @@ endif
 #########################
 ifeq ($(TARGET_SYSTEM),Newark)
 
-OPENARC_ARCH = 0
+OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
 CC = gcc
@@ -259,25 +260,29 @@ GBACKEND_FLAGS = -O3
 #GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 # Altera OpenCL 16.1
 GBACKEND_INCLUDES = -I/opt/altera/16.1/standard/hld/host/include
-GBACKEND_LIBS = -L/opt/altera/16.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ -lOpenCL
+#GBACKEND_LIBS = -L/opt/altera/16.1/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
 # Altera OpenCL 15.0
 #GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
 # Altera OpenCL 16.1
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ -lOpenCL
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
-GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
-GBACKEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -lOpenCL
+#GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
+GBACKEND_INCLUDES = -I/opt/altera/16.1/standard/hld/host/include
+#GBACKEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -lOpenCL
+GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -L$(OPENARCLIB) -lOpenCL
+#GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -L$(OPENARCLIB) -lOpenCL
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GFRONTEND_DEBUG = -g
 endif
 endif
@@ -305,7 +310,7 @@ endif
 #########################
 ifeq ($(TARGET_SYSTEM),Oswald)
 
-OPENARC_ARCH = 3
+OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
 CC = gcc
@@ -319,11 +324,11 @@ BACKENDCXX = nvcc
 CC_FLAGS_PREFIX = -Xcompiler
 GBACKEND_FLAGS = -arch sm_60 -O3
 GBACKEND_INCLUDES = -I/usr/local/cuda/include
-GBACKEND_LIBS = -lcuda -lOpenCL
+GBACKEND_LIBS = -L/usr/local/cuda/lib64 -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -lcuda
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/usr/local/cuda/lib64 -lcuda
 GFRONTEND_DEBUG = -g
 else
 ifeq ($(OPENARC_ARCH), 3)
@@ -335,8 +340,8 @@ GBACKEND_FLAGS = -O3
 # Altera OpenCL 17.1
 #INTELFPGAOCLSDKROOT = /opt/altera/17.1/hld
 GBACKEND_INCLUDES = -I$(INTELFPGAOCLSDKROOT)/host/include
-#GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
-GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lOpenCL
+#GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lOpenCL -lalteracl
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
@@ -348,11 +353,11 @@ BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3
 GBACKEND_INCLUDES = -I/usr/local/cuda/include
-GBACKEND_LIBS = -lOpenCL
+GBACKEND_LIBS = -L/usr/local/cuda/lib64 -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -lOpenCL
+GFRONTEND_LIBS = -L$(OPENARCLIB) -L/usr/local/cuda/lib64 -lOpenCL
 GFRONTEND_DEBUG = -g
 endif
 endif
