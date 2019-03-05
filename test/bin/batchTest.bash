@@ -132,7 +132,7 @@ do
 						else
 							echo "Translation Successful!" | tee -a $translog
 						fi
-						echo $example | grep -e altera -e "_aspen" > /dev/null
+						echo $example | grep -e altera -e "_aspen" -e "_mcl" > /dev/null
 						if [ $? -eq 0 ]; then
 							echo "" | tee -a $translog
 							echo "====> Skip compilation of ${example}!" | tee -a $translog
