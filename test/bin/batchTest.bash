@@ -132,12 +132,21 @@ do
 						else
 							echo "Translation Successful!" | tee -a $translog
 						fi
-						echo $example | grep -e altera -e "_aspen" -e "_mcl" > /dev/null
+						echo $example | grep -e altera -e "_aspen" -e "_mcl" -e "_cuda" > /dev/null
 						if [ $? -eq 0 ]; then
 							echo "" | tee -a $translog
 							echo "====> Skip compilation of ${example}!" | tee -a $translog
 							echo "" | tee -a $translog
 							continue
+						fi
+						if [ ${OPENARC_ARCH} -ne 0 ]; then
+							echo $example | grep -e "_cuda" > /dev/null
+							if [ $? -eq 0 ]; then
+								echo "" | tee -a $translog
+								echo "====> Skip compilation of ${example}!" | tee -a $translog
+								echo "" | tee -a $translog
+								continue
+							fi
 						fi
 						makeCMD=""
 						runCMD=""
@@ -194,6 +203,15 @@ do
 							continue
 						fi
 
+						if [ ${OPENARC_ARCH} -ne 0 ]; then
+							echo $example | grep -e "unified" > /dev/null
+							if [ $? -eq 0 ]; then
+								echo "" | tee -a $compilelog
+								echo "====> Skip execution of ${example}!" | tee -a $compilelog
+								echo "" | tee -a $compilelog
+								continue
+							fi
+						fi
 						echo "" | tee -a $runlog
 						echo "==> Target: ${example}" | tee -a $runlog
 						echo "" | tee -a $runlog
