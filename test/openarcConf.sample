@@ -83,7 +83,7 @@
 ########################################
 #Option: SetAccEntryFunction
 ########################################
-#SetAccEntryFunction=filename
+#SetAccEntryFunction=functionname
 #Name of the entry function, from which all device-related codes will be executed. (Default is main.)
 #
 ########################################
@@ -818,7 +818,7 @@
 #SkipGPUTranslation=N
 #showInternalAnnotations=1
 #skipKernelLoopBoundChecking
-#SetAccEntryFunction=filename
+#SetAccEntryFunction=functionname
 #SetOutputKernelFileNameBase=filename
 addIncludePath=__openarcrt__
 #macro=_N_=__inputSize__

@@ -5541,6 +5541,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 		  Set<Symbol> callerParamSymSet, Stack<Procedure> devProcStack) {
 	  List<FunctionCall> funcList = IRTools.getFunctionCalls(at);
 	  if( funcList != null ) {
+		  Procedure parent_proc = IRTools.getParentProcedure(at);
 		  for( FunctionCall fCall : funcList ) {
 			  FunctionCall refFCall = null;
 			  IDExpression fCallName = (IDExpression)fCall.getName();
@@ -6136,6 +6137,13 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 								  i++;
 							  }
 						  }
+					  }
+					  // Move the parent procedure before the new procedure in the stack, if not.
+					  int parent_index = devProcStack.indexOf(parent_proc);
+					  int child_index = devProcStack.indexOf(new_proc);
+					  if( parent_index > child_index ) {
+						  devProcStack.remove(parent_proc);
+						  devProcStack.add(child_index, parent_proc);
 					  }
 				  }
 			  } else {

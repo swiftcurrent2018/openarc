@@ -369,7 +369,7 @@ public class ACC2GPUDriver extends Driver
 				"Name of the file that contains user directives. " + 
 				"The file should exist in the current directory.");
 		
-		options.add(options.UTILITY, "SetAccEntryFunction", "filename",
+		options.add(options.UTILITY, "SetAccEntryFunction", "functionname",
 				"Name of the entry function, from which all device-related codes will be executed. " +
 				"(Default is main.)");
 
