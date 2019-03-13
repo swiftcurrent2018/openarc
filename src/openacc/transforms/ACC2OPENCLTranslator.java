@@ -77,10 +77,6 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     new HashMap<TranslationUnit, Map<Procedure, Map<String, Procedure>>>();
   protected Map<Procedure, Map<String, Procedure>> devProcMap;
 
-  protected String mainEntryFunc = null;
-
-  protected TranslationUnit kernelsTranslationUnit = null;
-  protected AnnotationDeclaration accHeaderDecl = null;
   private Integer trait_readonly = new Integer(0);
   private Integer trait_writeonly = new Integer(1);
   private Integer trait_readwrite = new Integer(2);
@@ -5652,6 +5648,15 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 			  }
 			  if( StandardLibrary.contains(fCallName.toString()) ) {
 				  //Standard libaray calls are handled by the underlying backend compiler.
+				  String fCallNameString = fCallName.toString();
+				  if( fCallNameString.equals("printf") ) {
+					  kernelContainsStdioCalls = true;
+				  } else if( fCallNameString.equals("malloc") 
+						  || fCallNameString.equals("free") 
+						  || fCallNameString.equals("memcpy") 
+						  || fCallNameString.equals("memset")) {
+					  kernelContainsStdlibCalls = true;
+				  }
 				  continue;
 			  } else if( c_proc != null ) {
 				  FunctionCall new_fCall = null;

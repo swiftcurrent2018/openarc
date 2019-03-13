@@ -157,6 +157,7 @@ public class OpenCLStdLibrary
     add("minmag");
     add("powr");
     add("rootn");
+    add("printf");
   }
 
   /** Adds the specified properties to the call */

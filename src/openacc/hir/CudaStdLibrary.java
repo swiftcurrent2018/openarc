@@ -207,6 +207,11 @@ public class CudaStdLibrary
     add("nan");
     add("nextafterf");
     add("nextafter");
+    add("printf");
+    add("malloc");
+    add("free", Property.SIDE_EFFECT_PARAMETER);
+    add("memcpy", Property.SIDE_EFFECT_PARAMETER);
+    add("memset", Property.SIDE_EFFECT_PARAMETER);
   }
 
   /** Adds the specified properties to the call */

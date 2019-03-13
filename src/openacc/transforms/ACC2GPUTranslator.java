@@ -44,6 +44,11 @@ public abstract class ACC2GPUTranslator {
 	protected List<FunctionCall> acc_shutdown_list = new LinkedList<FunctionCall>();
 	protected List<Statement> optPrintStmts = new LinkedList<Statement>();
 	protected List<Statement> confPrintStmts = new LinkedList<Statement>();
+	protected TranslationUnit kernelsTranslationUnit = null;
+	protected AnnotationDeclaration accHeaderDecl = null;
+	protected String mainEntryFunc = null;
+	protected boolean kernelContainsStdioCalls = false;
+	protected boolean kernelContainsStdlibCalls = false;
 	
 	protected boolean opt_MallocPitch = false;
 	protected boolean opt_MatrixTranspose = false;
@@ -424,6 +429,8 @@ public abstract class ACC2GPUTranslator {
 				}
 			}
 		}
+		addStandardHeadersToKernelsTranlationUnit();
+
 		if( targetArch == 4 ) {
 			for( int i=0; i<main_List.size(); i++ ) {
 				Procedure tmain = main_List.get(i);
@@ -1850,6 +1857,29 @@ public abstract class ACC2GPUTranslator {
 		if( list_size == 0 ) {return;}
 		else {
 			for( int i=0; i<list_size; i++ ) {}
+		}
+	}
+	
+	protected void addStandardHeadersToKernelsTranlationUnit () {
+		StringBuilder kernelStr = null;
+		if( targetArch == 0 ) {
+			if( kernelContainsStdioCalls ) {
+				kernelStr = new StringBuilder(64);
+				kernelStr.append("#include <stdio.h>\n");
+			} 
+			if( kernelContainsStdlibCalls ) {
+				if( kernelStr == null ) {
+					kernelStr = new StringBuilder(64);
+				}
+				kernelStr.append("#include <stdlib.h>\n");
+			} 
+		}
+		if( kernelStr != null ) {
+			CodeAnnotation accHeaderAnnot2 = new CodeAnnotation(kernelStr.toString());
+	        AnnotationDeclaration accHeaderDecl2 = new AnnotationDeclaration(accHeaderAnnot2);
+			if( accHeaderDecl != null ) {
+				kernelsTranslationUnit.addDeclarationAfter(accHeaderDecl, accHeaderDecl2);	
+			}
 		}
 	}
 }

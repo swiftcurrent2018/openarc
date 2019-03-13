@@ -435,7 +435,8 @@ public abstract class AnalysisTools {
 		for( Procedure proc : procList ) {
 			List return_type = proc.getReturnType();
 			if( return_type.contains(CUDASpecifier.CUDA_DEVICE) 
-					|| return_type.contains(CUDASpecifier.CUDA_GLOBAL) ) {
+					|| return_type.contains(CUDASpecifier.CUDA_GLOBAL)
+					|| return_type.contains(OpenCLSpecifier.OPENCL_KERNEL) ) {
 				kernelProcs.add(proc);
 			}
 		}

@@ -72,9 +72,6 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		new HashMap<TranslationUnit, Map<Procedure, Map<String, Procedure>>>();
 	protected Map<Procedure, Map<String, Procedure>> devProcMap;
 	
-	protected String mainEntryFunc = null;
-	protected TranslationUnit kernelsTranslationUnit = null;
-    protected AnnotationDeclaration accHeaderDecl = null;
 	/**
 	 * @param prog
 	 */
@@ -6252,6 +6249,15 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					}
 				}
 				if( StandardLibrary.contains(fCallName.toString()) ) {
+					String fCallNameString = fCallName.toString();
+					if( fCallNameString.equals("printf") ) {
+						kernelContainsStdioCalls = true;
+					} else if( fCallNameString.equals("malloc") 
+							|| fCallNameString.equals("free") 
+							|| fCallNameString.equals("memcpy") 
+							|| fCallNameString.equals("memset")) {
+						kernelContainsStdlibCalls = true;
+					}
 					continue;
 				} else if( (c_proc != null) ) {
 					FunctionCall new_fCall = null;
@@ -6666,7 +6672,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 							//     1) Update symbols in the new procedure, including symbols       //
 							//        in ACCAnnoations.                                            //
 							/////////////////////////////////////////////////////////////////////////
-							//[DEBUG] the new device function will be moved to the kernelTranslationUnit at the end of 
+							//[DEBUG] the new device function will be moved to the kernelsTranslationUnit at the end of 
 							//the ACC2CUDATranslator, and thus below checking will complain missing declation if
 							//a device function accesses kernel-file-global-constant array.
 							SymbolTools.linkSymbol(new_proc, 0);
