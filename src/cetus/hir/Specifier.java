@@ -21,7 +21,8 @@ public class Specifier implements Printable {
             "threadsafe", "synchronized", "strictfp", "boolean", "byte",
             "_Bool", "_Complex", "_Imaginary", "__thread",
             "__nvl__", "__nvl_wp__",
-            "int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t"};
+            "int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t",
+            "size_t"};
 
     public static final Specifier CHAR = new Specifier(0);
     public static final Specifier WCHAR_T = new Specifier(1);
@@ -110,6 +111,12 @@ public class Specifier implements Printable {
     public static final Specifier UINT32_T = new Specifier(48);
     public static final Specifier INT64_T = new Specifier(49);
     public static final Specifier UINT64_T = new Specifier(50);
+
+    /**
+     * size_t types in C99
+     * [Added by Seyong Lee]
+     */
+    public static final Specifier SIZE_T = new Specifier(51);
 
     /** Predefined integer value of each specifiers. */
     protected int value;

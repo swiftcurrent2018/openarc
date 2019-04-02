@@ -5464,7 +5464,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 
 		VariableDeclarator dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
 		Identifier dimGrid = new Identifier(dimGrid_declarator);
-		Declaration dimGrid_decl = new VariableDeclaration(CUDASpecifier.INT, dimGrid_declarator);
+		Declaration dimGrid_decl = new VariableDeclaration(CUDASpecifier.SIZE_T, dimGrid_declarator);
 		DeclarationStatement dimGrid_stmt = new DeclarationStatement(dimGrid_decl);
 		TransformTools.addStatementBefore(confRefParent, confRefStmt, dimGrid_stmt);
         for(int j = 2; j >= 0; j--)
@@ -5485,7 +5485,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 
 		VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
 		Identifier dimBlock = new Identifier(dimBlock_declarator);
-		Declaration dimBlock_decl = new VariableDeclaration(CUDASpecifier.INT, dimBlock_declarator);
+		Declaration dimBlock_decl = new VariableDeclaration(CUDASpecifier.SIZE_T, dimBlock_declarator);
 		DeclarationStatement dimBlock_stmt = new DeclarationStatement(dimBlock_decl);
 		TransformTools.addStatementBefore(confRefParent, confRefStmt, dimBlock_stmt);
         for(int j = 2; j >= 0; j--)

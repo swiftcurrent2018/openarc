@@ -88,7 +88,7 @@ public:
     HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
     HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
-    HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
+    HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
     HI_error_t HI_synchronize( int forcedSync = 0 );
     HI_error_t destroy();
     HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
@@ -184,7 +184,7 @@ public:
     HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
     HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
     HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
-    HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
+    HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
     HI_error_t HI_synchronize( int forcedSync = 0 );
     HI_error_t destroy();
     HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);

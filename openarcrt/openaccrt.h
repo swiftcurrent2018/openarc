@@ -175,7 +175,7 @@ public:
     virtual HI_error_t HI_register_kernels(std::set<std::string>kernelNames) = 0;
     virtual HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args) = 0;
     virtual HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type) = 0;
-    virtual HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL) = 0;
+    virtual HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL) = 0;
     virtual HI_error_t HI_synchronize( int forcedSync = 0 )=0;
 
     // Memory Allocation
@@ -1194,7 +1194,7 @@ extern HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_ar
 //Register an argument to be passed to a kernel.
 extern HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
 //Launch a kernel.
-extern HI_error_t HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
+extern HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
 extern HI_error_t HI_synchronize( int forcedSync = 0);
 
 /////////////////////////////

@@ -1850,11 +1850,13 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     //        		(dataClauseT != DataClauseType.PipeOut) )
     if(asyncExp != null)
     {
-      FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
-      setAsyncCall.addArgument(asyncExp.clone());
-      if( isFirstData ) {
-        TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall.clone()));
-      }
+    	if( targetArch != 4 ) {
+    		FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
+    		setAsyncCall.addArgument(asyncExp.clone());
+    		if( isFirstData ) {
+    			TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall.clone()));
+    		}
+    	}
     }
 
     List<Specifier> clonedspecs = new ChainedList<Specifier>();
@@ -4807,6 +4809,27 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         				);
         		TransformTools.addStatementAfter(confRefParent, dimGlobal_stmt, new ExpressionStatement(assignmentExpression));
         	}
+
+        	//Dim3Specifier dim3Spec = new Dim3Specifier(num_workers.get(0), num_workers.get(1), num_workers.get(2));
+        	//VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), dim3Spec);
+        	//Identifier dimBlock = new Identifier(dimBlock_declarator);
+        	//Declaration dimBlock_decl = new VariableDeclaration(OpenCLSpecifier.CUDA_DIM3, dimBlock_declarator);
+        	//TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimBlock_decl));
+
+        	VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
+        	dimBlock = new Identifier(dimBlock_declarator);
+        	Declaration dimBlock_decl = new VariableDeclaration(OpenCLSpecifier.UINT64_T, dimBlock_declarator);
+        	DeclarationStatement dimBlock_stmt = new DeclarationStatement(dimBlock_decl);
+        	TransformTools.addStatementBefore(confRefParent, confRefStmt, dimBlock_stmt);
+        	for(int j = 2; j >= 0; j--)
+        	{
+        		AssignmentExpression assignmentExpression = new AssignmentExpression(
+        				new ArrayAccess(dimBlock.clone(), new IntegerLiteral(j)),
+        				AssignmentOperator.NORMAL,
+        				num_workers.get(j).clone()
+        				);
+        		TransformTools.addStatementAfter(confRefParent, dimBlock_stmt, new ExpressionStatement(assignmentExpression));
+        	}
         } else {
 
         	//Dim3Specifier dim3Spec = new Dim3Specifier(num_gangs.get(0), num_gangs.get(1), num_gangs.get(2));
@@ -4817,7 +4840,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 
         	VariableDeclarator dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
         	dimGrid = new Identifier(dimGrid_declarator);
-        	Declaration dimGrid_decl = new VariableDeclaration(OpenCLSpecifier.INT, dimGrid_declarator);
+        	Declaration dimGrid_decl = new VariableDeclaration(OpenCLSpecifier.SIZE_T, dimGrid_declarator);
         	DeclarationStatement dimGrid_stmt = new DeclarationStatement(dimGrid_decl);
         	TransformTools.addStatementBefore(confRefParent, confRefStmt, dimGrid_stmt);
         	for(int j = 2; j >= 0; j--)
@@ -4838,7 +4861,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
 
         	VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
         	dimBlock = new Identifier(dimBlock_declarator);
-        	Declaration dimBlock_decl = new VariableDeclaration(OpenCLSpecifier.INT, dimBlock_declarator);
+        	Declaration dimBlock_decl = new VariableDeclaration(OpenCLSpecifier.SIZE_T, dimBlock_declarator);
         	DeclarationStatement dimBlock_stmt = new DeclarationStatement(dimBlock_decl);
         	TransformTools.addStatementBefore(confRefParent, confRefStmt, dimBlock_stmt);
         	for(int j = 2; j >= 0; j--)
@@ -5200,6 +5223,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         if( targetArch == 4 ) {
         	kernelConf.add((Identifier)mclHandle.clone()); 
         	kernelConf.add((Identifier)dimGlobal.clone()); 
+        	kernelConf.add((Identifier)dimBlock.clone()); 
         	kernelConf.add(mclFlags.clone()); 
         	kernelConf.add(src_code.clone()); 
         } else {

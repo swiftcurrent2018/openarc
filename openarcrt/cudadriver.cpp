@@ -2312,7 +2312,7 @@ HI_error_t CudaDriver::HI_register_kernel_arg(std::string kernel_name, int arg_i
 
 
 
-HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, int gridSize[3], int blockSize[3], int async, int num_waits, int *waits)
+HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async, int num_waits, int *waits)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {

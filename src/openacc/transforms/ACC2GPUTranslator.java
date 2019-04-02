@@ -1526,16 +1526,18 @@ public abstract class ACC2GPUTranslator {
 			//be inserted before the kernel call; re-enable below as an easy but inefficient fix
 			if(pAnnot.containsKey("async"))
             {
-                FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
-                if(pAnnot.get("async") != null)
-                {
-                    setAsyncCall.addArgument(new NameID(pAnnot.get("async").toString()));
-                }
-                else
-                {
-                    setAsyncCall.addArgument(new NameID("acc_async_noval"));
-                }
-                TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall));
+				if( targetArch != 4 ) {
+					FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
+					if(pAnnot.get("async") != null)
+					{
+						setAsyncCall.addArgument(new NameID(pAnnot.get("async").toString()));
+					}
+					else
+					{
+						setAsyncCall.addArgument(new NameID("acc_async_noval"));
+					}
+					TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall));
+				}
             }
 			List<Statement> inStmts = new LinkedList<Statement>();
 			List<Statement> outStmts = new LinkedList<Statement>();
@@ -1561,16 +1563,18 @@ public abstract class ACC2GPUTranslator {
 			//be inserted before the kernel call; re-enable below as an easy but inefficient fix
 			if(kAnnot.containsKey("async"))
             {
-                FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
-                if(kAnnot.get("async") != null)
-                {
-                    setAsyncCall.addArgument(new NameID(kAnnot.get("async").toString()));
-                }
-                else
-                {
-                    setAsyncCall.addArgument(new NameID("acc_async_noval"));
-                }
-                TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall));
+				if( targetArch != 4 ) {
+					FunctionCall setAsyncCall = new FunctionCall(new NameID("HI_set_async"));
+					if(kAnnot.get("async") != null)
+					{
+						setAsyncCall.addArgument(new NameID(kAnnot.get("async").toString()));
+					}
+					else
+					{
+						setAsyncCall.addArgument(new NameID("acc_async_noval"));
+					}
+					TransformTools.addStatementBefore((CompoundStatement)((Statement)at).getParent(), (Statement)at, new ExpressionStatement(setAsyncCall));
+				}
             }
 			List<Statement> inStmts = new LinkedList<Statement>();
 			List<Statement> outStmts = new LinkedList<Statement>();

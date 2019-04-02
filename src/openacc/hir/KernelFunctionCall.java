@@ -23,7 +23,7 @@ public class KernelFunctionCall extends FunctionCall
   private LinkedList<Expression> argSizes;
   //configuration list contains configuration values used for this kernel function call.
   //if targetArch < 4: {Grid dimensions, threadblock dimensions, shared memory size, async ID, wait ID list}
-  //if targetArch == 4: {Grid dimensions, threadblock dimensions, task handle, source code pointer, async ID, wait ID list}
+  //if targetArch == 4: {task handle, Global dimensions, threadblock dimensions, mcl flags, source code pointer, async ID, wait ID list}
   private Procedure linkedProcedure;
 
   static
@@ -128,7 +128,7 @@ public class KernelFunctionCall extends FunctionCall
     	p.print("mcl_task_set_kernel(");
 		p.print(conflist.get(0)); //add MCL handle
 		p.print(",");
-		p.print(conflist.get(3)); //add src_code pointer
+		p.print(conflist.get(4)); //add src_code pointer
 		p.print(",");
 
     } else {
@@ -262,16 +262,18 @@ public class KernelFunctionCall extends FunctionCall
 		p.print(",");
 		p.print(conflist.get(1)); //add global dimensions
 		p.print(",");
-		p.print(conflist.get(2)); //add MCL flags
+		p.print(conflist.get(2)); //add thread-block dimensions
+		p.print(",");
+		p.print(conflist.get(3)); //add MCL flags
 		p.println(");");
-		if(conflist.get(4) == null)
+		if(conflist.get(5) == null)
 		{
 			p.print("mcl_wait(");
 			p.print(conflist.get(0)); //add MCL handle
 			p.print(")");
 		} else {
 			p.print("mcl_acc_set_handle(");
-			p.print(conflist.get(4)); //add asyncID
+			p.print(conflist.get(5)); //add asyncID
 			p.print(",");
 			p.print(conflist.get(0)); //add MCL handle
 			p.print(")");

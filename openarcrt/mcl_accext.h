@@ -6,6 +6,9 @@ extern "C" {
 //#include "utils.h"
 }
 
+#include "openacc.h"
+
+/*
 typedef enum {
     acc_device_none = 0,
     acc_device_default = 1,
@@ -18,7 +21,7 @@ typedef enum {
     acc_device_current = 8,
     acc_device_altera = 9 
 } acc_device_t;
-
+*/
 
 int		mcl_acc_wait(int asyncID);
 int		mcl_acc_test(int asyncID);
