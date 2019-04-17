@@ -143,7 +143,7 @@ public class AccReduction extends AnalysisPass {
 										cAnnot + "; reduction transformation for this reduction variable will be skipped!\n", 0);
 							} else {
 								//DEBUG: in current implementation, all internal symbol sets contains IR symbols.
-								//       (ex: in accshared, accprivate, and accreduction)
+								//       (ex: in accshared, accprivate, accfirstprivate, and accreduction)
 								Symbol IRSym = redSym;
 								if( redSym instanceof PseudoSymbol ) {
 									IRSym = ((PseudoSymbol)redSym).getIRSymbol();

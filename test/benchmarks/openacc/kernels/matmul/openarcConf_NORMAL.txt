@@ -389,7 +389,7 @@ defaultNumWorkers=128
 # Misc. Cetus configururation #
 ###############################
 #outdir=cetus_output
-macro=_N_=__inputSize__,VERIFICATION=0,_UNROLL_FAC_=__unrollfac__,HOST_MEM_ALIGNMENT=1
+macro=_N_=__inputSize__,VERIFICATION=1,_UNROLL_FAC_=__unrollfac__,HOST_MEM_ALIGNMENT=1
 #dump-options
 #dump-system-options
 #induction

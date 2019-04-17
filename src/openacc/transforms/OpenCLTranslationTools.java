@@ -6,6 +6,7 @@ import openacc.analysis.AnalysisTools;
 import openacc.analysis.SubArray;
 import openacc.hir.ACCAnnotation;
 import openacc.hir.ARCAnnotation;
+import openacc.hir.KernelFunctionCall;
 import openacc.hir.OpenCLSpecifier;
 import openacc.hir.ReductionOperator;
 
@@ -20,6 +21,10 @@ import java.util.*;
  */
 public abstract class OpenCLTranslationTools {
 	private static int tempIndexBase = 1000;
+	private static Integer trait_readonly = new Integer(0);
+	private static Integer trait_writeonly = new Integer(1);
+	private static Integer trait_readwrite = new Integer(2);
+	private static Integer trait_temporary = new Integer(3);
 
 	/**
 	 * Java doesn't allow a class to be both abstract and final,
@@ -645,9 +650,9 @@ public abstract class OpenCLTranslationTools {
                                                 Expression asyncID, Statement confRefStmt,
                                                 CompoundStatement prefixStmts, CompoundStatement postscriptStmts,
                                                 List<Statement> preList, List<Statement> postList,
-                                                FunctionCall call_to_new_proc, Procedure new_proc, TranslationUnit main_TrUnt,
+                                                KernelFunctionCall call_to_new_proc, Procedure new_proc, TranslationUnit main_TrUnt,
                                                 Map<TranslationUnit, Declaration> OpenACCHeaderEndMap, boolean IRSymbolOnly,
-                                                boolean opt_addSafetyCheckingCode, Set<Symbol> arrayElmtCacheSymbols, boolean isSingleTask ) {
+                                                boolean opt_addSafetyCheckingCode, Set<Symbol> arrayElmtCacheSymbols, boolean isSingleTask, int targetArch ) {
         PrintTools.println("[OpenCL privateTransformation() begins] current procedure: " + cProc.getSymbolName() +
                 "\ncompute region type: " + cRegionKind + "\n", 2);
 
@@ -709,6 +714,14 @@ public abstract class OpenCLTranslationTools {
                 }
             }
         }
+
+		ACCAnnotation readonlyprivateAnnot = region.getAnnotation(ACCAnnotation.class, "accreadonlyprivate");
+		Set<Symbol> accreadonlyprivateSet = null;
+		if( readonlyprivateAnnot != null ) {
+			accreadonlyprivateSet = readonlyprivateAnnot.get("accreadonlyprivate");
+		} else {
+			accreadonlyprivateSet = new HashSet<Symbol>();
+		}
 
         //Find index symbols for work-sharing loops, which are private to each thread by default.
         Set<Symbol> loopIndexSymbols = AnalysisTools.getWorkSharingLoopIndexVarSet(region);
@@ -1023,7 +1036,38 @@ public abstract class OpenCLTranslationTools {
                 boolean insertMalloc = false;
                 boolean insertWMalloc = false;
 
-                if( isWorkerPrivate ) {
+				if( isGangPrivate && (FirstPrivSymSet != null) && FirstPrivSymSet.contains(privSym) &&
+						accreadonlyprivateSet.contains(privSym) && !isArray && !isPointer ) {
+					Identifier lfpriv_var = null;
+					String localFPSymName = "lfpriv__" + symNameBase;
+					//////////////////////////////////////////////////////////////////////////////
+					// If firstprivate variable is scalar, the corresponding shared variable is //
+					// passed as a kernel parameter instead of using GPU global memory, which   //
+					// has the effect of caching it on the GPU Shared Memory.                   //
+					//////////////////////////////////////////////////////////////////////////////
+					// Create a GPU kernel parameter corresponding to privSym
+					// ex: float lfpriv__x;
+					VariableDeclarator lfpriv_declarator = new VariableDeclarator(new NameID(localFPSymName));
+					VariableDeclaration lfpriv_decl = new VariableDeclaration(typeSpecs, 
+							lfpriv_declarator);
+					lfpriv_var = new Identifier(lfpriv_declarator);
+					new_proc.addDeclaration(lfpriv_decl);
+
+					// Insert argument to the kernel function call
+					if( privSym instanceof AccessSymbol ) {
+						AccessExpression accExp = AnalysisTools.accessSymbolToExpression((AccessSymbol)privSym, null);
+						call_to_new_proc.addArgument(accExp);
+					} else {
+						call_to_new_proc.addArgument(new Identifier(privSym));
+					}
+					if( targetArch == 4 ) {
+                        SizeofExpression sizeof_expr = new SizeofExpression(typeSpecs);
+						call_to_new_proc.addArgSize(sizeof_expr);
+						call_to_new_proc.addArgTrait(trait_readonly);
+					}
+					TransformTools.replaceAll(region, new Identifier(privSym), lfpriv_var);
+					continue;
+				} else if( isWorkerPrivate ) {
                     if( workerPrivOnGlobal ) {
                         //Option to allocate worker-private variable on global memory is checked first, since it may be
                         //mandatory due to too large private array size.
@@ -1047,7 +1091,12 @@ public abstract class OpenCLTranslationTools {
                         // Insert cudaMalloc() function before the region  //
                         /////////////////////////////////////////////////////
                         // Ex: cudaMalloc(((void *  * )( & gwpriv__x)), gpuBytes);
-                        FunctionCall malloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
+                        FunctionCall malloc_call = null;
+                        if( targetArch == 4 ) {
+                        	malloc_call = new FunctionCall(new NameID("malloc"));
+                        } else {
+                        	malloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
+                        }
                         List<Specifier> specs = new ArrayList<Specifier>(4);
                         specs.add(Specifier.VOID);
                         specs.add(PointerSpecifier.UNQUALIFIED);
@@ -1090,14 +1139,29 @@ public abstract class OpenCLTranslationTools {
                         // Ex1: "float lwpriv__x[][SIZE1]"
                         // Ex2: "float lwpriv__x[][SIZE1][SIZE2]"
                         VariableDeclarator arrayV_declarator =	arrayPrivConv(privSym, localWPSymName, typeSpecs, startList,
-                                lengthList, new_proc, region, scope, 1, call_to_new_proc, gwpriv_var.clone());
+                                lengthList, new_proc, region, scope, 1, call_to_new_proc, gwpriv_var.clone(), targetArch);
                         lpriv_var = new Identifier(arrayV_declarator);
+                        if( targetArch == 4 ) {
+                        	call_to_new_proc.addArgSize(biexp.clone());
+                        	call_to_new_proc.addArgTrait(trait_temporary);
+                        }
 
+                        ExpressionStatement malloc_stmt = null;
                         // Add gpuBytes argument to cudaMalloc() call
                         arg_list.add((Identifier)cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_current"));
-                        malloc_call.setArguments(arg_list);
-                        ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
+                        if( targetArch == 4 ) {
+                        	malloc_call.addArgument(cloned_bytes.clone());
+                        	List castspecs = new LinkedList();
+                        	castspecs.addAll(typeSpecs);
+                        	castspecs.add(PointerSpecifier.UNQUALIFIED);
+                        	Expression assignExt = new AssignmentExpression(gwpriv_var.clone(), AssignmentOperator.NORMAL, 
+                    			new Typecast(castspecs, malloc_call));
+                        	malloc_stmt = new ExpressionStatement(assignExt);
+                        } else {
+                        	malloc_call.setArguments(arg_list);
+                        	malloc_stmt = new ExpressionStatement(malloc_call);
+                        }
                         // Insert malloc statement.
                         if( insertWMalloc ) {
                             //mallocScope.addStatementBefore(confRefStmt, gpuBytes_stmt);
@@ -1120,14 +1184,20 @@ public abstract class OpenCLTranslationTools {
                             //	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
                             //}
                             // Insert "cudaFree(gwpriv__x);"
-                            FunctionCall accTmpFreeCall = new FunctionCall(new NameID("HI_tempFree"));
-                            List<Specifier> freeSpecs = new LinkedList<Specifier>();
-                            freeSpecs.add(Specifier.VOID);
-                            freeSpecs.add(PointerSpecifier.UNQUALIFIED);
-                            freeSpecs.add(PointerSpecifier.UNQUALIFIED);
-                            accTmpFreeCall.addArgument(new Typecast(freeSpecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-                                    (Identifier) gwpriv_var.clone())));
-                            accTmpFreeCall.addArgument(new NameID("acc_device_current"));
+                            FunctionCall accTmpFreeCall = null;
+                            if( targetArch == 4 ) {
+                            	accTmpFreeCall = new FunctionCall(new NameID("free"));
+                            	accTmpFreeCall.addArgument(gwpriv_var.clone());
+                            } else {
+                            	accTmpFreeCall = new FunctionCall(new NameID("HI_tempFree"));
+                            	List<Specifier> freeSpecs = new LinkedList<Specifier>();
+                            	freeSpecs.add(Specifier.VOID);
+                            	freeSpecs.add(PointerSpecifier.UNQUALIFIED);
+                            	freeSpecs.add(PointerSpecifier.UNQUALIFIED);
+                            	accTmpFreeCall.addArgument(new Typecast(freeSpecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+                            			(Identifier) gwpriv_var.clone())));
+                            	accTmpFreeCall.addArgument(new NameID("acc_device_current"));
+                            }
                             ExpressionStatement accTmpFreeStmtstmt = new ExpressionStatement(accTmpFreeCall);
                             //mallocScope.addStatementAfter(confRefStmt, accTmpFreeStmtstmt);
                             //mallocScope.addStatementAfter(confRefStmt, gpuBytes_stmt.clone());
@@ -1226,7 +1296,12 @@ public abstract class OpenCLTranslationTools {
                     // Insert cudaMalloc() function before the region  //
                     /////////////////////////////////////////////////////
                     // Ex: cudaMalloc(((void *  * )( & ggpriv__x)), gpuBytes);
-                    FunctionCall malloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
+                    FunctionCall malloc_call = null;
+                    if( targetArch == 4 ) {
+                    	malloc_call = new FunctionCall(new NameID("malloc"));
+                    } else {
+                    	malloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
+                    }
                     List<Specifier> specs = new ArrayList<Specifier>(4);
                     specs.add(Specifier.VOID);
                     specs.add(PointerSpecifier.UNQUALIFIED);
@@ -1258,11 +1333,15 @@ public abstract class OpenCLTranslationTools {
                         if( regROCachingMap.keySet().contains(privSym) ) {
                             registerRO = true;
                         }
-                        VariableDeclarator pointerV_declarator =
-                                scalarGangPrivConv(privSym, localGPSymName, typeSpecs, new_proc, region, scope,
+                        VariableDeclarator pointerV_declarator = null;
+                        pointerV_declarator = scalarGangPrivConv(privSym, localGPSymName, typeSpecs, new_proc, region, scope,
                                         registerRO, false, call_to_new_proc, ggpriv_var.clone());
                         lpriv_var = new Identifier(pointerV_declarator);
-
+                        if( targetArch == 4 ) {
+                        	call_to_new_proc.addArgSize(new BinaryExpression((Expression)numBlocks.clone(),
+                                    BinaryOperator.MULTIPLY, sizeof_expr.clone()));
+                        	call_to_new_proc.addArgTrait(trait_temporary);
+                        }
                     } else { //non-scalar variables
                         // Insert "gpuBytes = gpuNumBlocks * (dimension1 * dimension2 * ..)
                         // * sizeof(varType);" statement
@@ -1286,15 +1365,30 @@ public abstract class OpenCLTranslationTools {
                         // Ex1: "float lgpriv__x[][SIZE1]"
                         // Ex2: "float lgpriv__x[][SIZE1][SIZE2]"
                         VariableDeclarator arrayV_declarator =	arrayPrivConv(privSym, localGPSymName, typeSpecs, startList,
-                                lengthList, new_proc, region, scope, 0, call_to_new_proc, ggpriv_var.clone());
+                                lengthList, new_proc, region, scope, 0, call_to_new_proc, ggpriv_var.clone(), targetArch);
                         lpriv_var = new Identifier(arrayV_declarator);
+                        if( targetArch == 4 ) {
+                        	call_to_new_proc.addArgSize(biexp.clone());
+                        	call_to_new_proc.addArgTrait(trait_temporary);
+                        }
 
                     }
+                    ExpressionStatement malloc_stmt = null;
                     // Add gpuBytes argument to cudaMalloc() call
                     arg_list.add((Identifier)cloned_bytes.clone());
                     arg_list.add(new NameID("acc_device_current"));
-                    malloc_call.setArguments(arg_list);
-                    ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
+                    if( targetArch == 4 ) {
+                    	malloc_call.addArgument(cloned_bytes.clone());
+                    	List castspecs = new LinkedList();
+                    	castspecs.addAll(typeSpecs);
+                    	castspecs.add(PointerSpecifier.UNQUALIFIED);
+                    	Expression assignExt = new AssignmentExpression(ggpriv_var.clone(), AssignmentOperator.NORMAL, 
+                    			new Typecast(castspecs, malloc_call));
+                    	malloc_stmt = new ExpressionStatement(assignExt);
+                    } else {
+                    	malloc_call.setArguments(arg_list);
+                    	malloc_stmt = new ExpressionStatement(malloc_call);
+                    }
                     // Insert malloc statement.
                     if( insertMalloc ) {
                         //mallocScope.addStatementBefore(confRefStmt, gpuBytes_stmt);
@@ -1321,15 +1415,21 @@ public abstract class OpenCLTranslationTools {
                     //	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
                     //}
                     // Insert "cudaFree(ggpriv__x);"
-                    FunctionCall HIFree_call = new FunctionCall(new NameID("HI_tempFree"));
-                    List<Specifier> freeSpecs = new ArrayList<Specifier>(4);
-                    freeSpecs.add(Specifier.VOID);
-                    freeSpecs.add(PointerSpecifier.UNQUALIFIED);
-                    freeSpecs.add(PointerSpecifier.UNQUALIFIED);
-                    List<Expression> arg_list = new ArrayList<Expression>();
-                    HIFree_call.addArgument(new Typecast(freeSpecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-                            (Identifier)ggpriv_var.clone())));
-                    HIFree_call.addArgument(new NameID("acc_device_current"));
+                	FunctionCall HIFree_call = null;
+                	if( targetArch == 4 ) {
+                		HIFree_call = new FunctionCall(new NameID("free"));
+                		HIFree_call.addArgument(ggpriv_var.clone());
+                	} else {
+                		HIFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                		List<Specifier> freeSpecs = new ArrayList<Specifier>(4);
+                		freeSpecs.add(Specifier.VOID);
+                		freeSpecs.add(PointerSpecifier.UNQUALIFIED);
+                		freeSpecs.add(PointerSpecifier.UNQUALIFIED);
+                		List<Expression> arg_list = new ArrayList<Expression>();
+                		HIFree_call.addArgument(new Typecast(freeSpecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+                				(Identifier)ggpriv_var.clone())));
+                		HIFree_call.addArgument(new NameID("acc_device_current"));
+                	}
                     ExpressionStatement HIFree_stmt = new ExpressionStatement(HIFree_call);
                     //mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
                     //mallocScope.addStatementAfter(confRefStmt, gpuBytes_stmt.clone());
@@ -1356,7 +1456,7 @@ public abstract class OpenCLTranslationTools {
                     //////////////////////////////////////////////////////////////////////////////
                     if( !isArray && !isPointer ) { //scalar variable
                         // Create a GPU kernel parameter corresponding to privSym
-                        // ex: flaot lfpriv__x;
+                        // ex: float lfpriv__x;
                         VariableDeclarator lfpriv_declarator = new VariableDeclarator(new NameID(localFPSymName));
                         VariableDeclaration lfpriv_decl = new VariableDeclaration(typeSpecs,
                                 lfpriv_declarator);
@@ -1369,6 +1469,11 @@ public abstract class OpenCLTranslationTools {
                             call_to_new_proc.addArgument(accExp);
                         } else {
                             call_to_new_proc.addArgument(new Identifier(privSym));
+                        }
+                        if( targetArch == 4 ) {
+                        	SizeofExpression sizeof_expr = new SizeofExpression(typeSpecs);
+                        	call_to_new_proc.addArgSize(sizeof_expr);
+                        	call_to_new_proc.addArgTrait(trait_readonly);
                         }
 
                         ///////////////////////////////////////////////////////////////////////////////
@@ -1443,7 +1548,12 @@ public abstract class OpenCLTranslationTools {
                         // - Insert cudaMalloc() function before the region.                   //
                         // Ex: cudaMalloc(((void *  * )( & gfpriv__x)), gpuBytes);             //
                         /////////////////////////////////////////////////////////////////////////
-                        FunctionCall malloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
+                        FunctionCall malloc_call = null;
+                        if( targetArch == 4 ) {
+                        	malloc_call = new FunctionCall(new NameID("malloc"));
+                        } else {
+                        	malloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
+                        }
                         List<Specifier> specs = new ArrayList<Specifier>(4);
                         specs.add(Specifier.VOID);
                         specs.add(PointerSpecifier.UNQUALIFIED);
@@ -1467,11 +1577,22 @@ public abstract class OpenCLTranslationTools {
                                     AssignmentOperator.NORMAL, biexp2);
                             orgGpuBytes_stmt = new ExpressionStatement(assignex);
                         }
+                        ExpressionStatement malloc_stmt = null;
                         // Add gpuBytes argument to cudaMalloc() call
                         arg_list.add((Identifier)cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_current"));
-                        malloc_call.setArguments(arg_list);
-                        ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
+                        if( targetArch == 4 ) {
+                        	malloc_call.addArgument(cloned_bytes.clone());
+                        	List castspecs = new LinkedList();
+                        	castspecs.addAll(typeSpecs);
+                        	castspecs.add(PointerSpecifier.UNQUALIFIED);
+                        	Expression assignExt = new AssignmentExpression(gfpriv_var.clone(), AssignmentOperator.NORMAL, 
+                        			new Typecast(castspecs, malloc_call));
+                        	malloc_stmt = new ExpressionStatement(assignExt);
+                        } else {
+                        	malloc_call.setArguments(arg_list);
+                        	malloc_stmt = new ExpressionStatement(malloc_call);
+                        }
                         if( insertMalloc ) {
                             //mallocScope.addStatementBefore(confRefStmt, orgGpuBytes_stmt.clone());
                             //mallocScope.addStatementBefore(confRefStmt, malloc_stmt);
@@ -1509,30 +1630,42 @@ public abstract class OpenCLTranslationTools {
                         //////////////////////////////////////////////////
                         // Insert argument to the kernel function call. //
                         //////////////////////////////////////////////////
-                        if( dimsize == 1 ) {
-                            // Simply pass address of the pointer
-                            // Ex:  "gfpriv_x"
+                        if( targetArch == 4 ) {
                             call_to_new_proc.addArgument((Identifier)gfpriv_var.clone());
-                        } else {
-                            //Cast the gpu variable to pointer-to-array type
-                            // Ex: (float (*)[dimesion2]) gfpriv_x
-                            List castspecs = new LinkedList();
-                            castspecs.addAll(typeSpecs);
-							/*
-							 * FIXME: NestedDeclarator was used for (*)[SIZE2], but this may not be
-							 * semantically correct way to represent (*)[SIZE2] in IR.
-							 */
-                            List tindices = new LinkedList();
-                            for( int i=1; i<dimsize; i++) {
-                                tindices.add(lengthList.get(i).clone());
+                            Expression biexp = lengthList.get(0).clone();
+                            for( int i=1; i<dimsize; i++ )
+                            {
+                                biexp = new BinaryExpression(biexp, BinaryOperator.MULTIPLY, lengthList.get(i).clone());
                             }
-                            ArraySpecifier aspec = new ArraySpecifier(tindices);
-                            List tailSpecs = new ArrayList(1);
-                            tailSpecs.add(aspec);
-                            VariableDeclarator childDeclr = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, new NameID(""));
-                            NestedDeclarator nestedDeclr = new NestedDeclarator(new ArrayList(), childDeclr, null, tailSpecs);
-                            castspecs.add(nestedDeclr);
-                            call_to_new_proc.addArgument(new Typecast(castspecs, (Identifier)gfpriv_var.clone()));
+                            biexp = new BinaryExpression(biexp, BinaryOperator.MULTIPLY, sizeof_expr);
+                            call_to_new_proc.addArgSize(biexp);
+                            call_to_new_proc.addArgTrait(trait_readonly);
+                        } else {
+                        	if( dimsize == 1 ) {
+                        		// Simply pass address of the pointer
+                        		// Ex:  "gfpriv_x"
+                        		call_to_new_proc.addArgument((Identifier)gfpriv_var.clone());
+                        	} else {
+                        		//Cast the gpu variable to pointer-to-array type
+                        		// Ex: (float (*)[dimesion2]) gfpriv_x
+                        		List castspecs = new LinkedList();
+                        		castspecs.addAll(typeSpecs);
+                        		/*
+                        		 * FIXME: NestedDeclarator was used for (*)[SIZE2], but this may not be
+                        		 * semantically correct way to represent (*)[SIZE2] in IR.
+                        		 */
+                        		List tindices = new LinkedList();
+                        		for( int i=1; i<dimsize; i++) {
+                        			tindices.add(lengthList.get(i).clone());
+                        		}
+                        		ArraySpecifier aspec = new ArraySpecifier(tindices);
+                        		List tailSpecs = new ArrayList(1);
+                        		tailSpecs.add(aspec);
+                        		VariableDeclarator childDeclr = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, new NameID(""));
+                        		NestedDeclarator nestedDeclr = new NestedDeclarator(new ArrayList(), childDeclr, null, tailSpecs);
+                        		castspecs.add(nestedDeclr);
+                        		call_to_new_proc.addArgument(new Typecast(castspecs, (Identifier)gfpriv_var.clone()));
+                        	}
                         }
 
                         ///////////////////////////////////////////////////////////////////////////////
@@ -1637,14 +1770,20 @@ public abstract class OpenCLTranslationTools {
                             //	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
                             //}
                             // Insert "cudaFree(gfpriv__x);"
-                            FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
-							specs = new ArrayList<Specifier>(4);
-							specs.add(Specifier.VOID);
-							specs.add(PointerSpecifier.UNQUALIFIED);
-							specs.add(PointerSpecifier.UNQUALIFIED);
-							cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-									(Identifier)gfpriv_var.clone())));
-                            cudaFree_call.addArgument(new NameID("acc_device_current"));
+                        	FunctionCall cudaFree_call = null;
+                        	if( targetArch == 4 ) {
+                        		cudaFree_call = new FunctionCall(new NameID("free"));
+                        		cudaFree_call.addArgument(gfpriv_var.clone());
+                        	} else {
+                        		cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                        		specs = new ArrayList<Specifier>(4);
+                        		specs.add(Specifier.VOID);
+                        		specs.add(PointerSpecifier.UNQUALIFIED);
+                        		specs.add(PointerSpecifier.UNQUALIFIED);
+                        		cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+                        				(Identifier)gfpriv_var.clone())));
+                        		cudaFree_call.addArgument(new NameID("acc_device_current"));
+                        	}
                             ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
                             //mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
                             //mallocScope.addStatementAfter(confRefStmt, orgGpuBytes_stmt.clone());
@@ -1803,7 +1942,7 @@ public abstract class OpenCLTranslationTools {
      */
     protected static VariableDeclarator arrayPrivConv(Symbol privSym, String symName, List<Specifier> typeSpecs,
                                                       List<Expression> startList, List<Expression> lengthList, Procedure new_proc, Statement region,
-                                                      CompoundStatement scope, int privType, FunctionCall call_to_new_proc, Expression ggpriv_var) {
+                                                      CompoundStatement scope, int privType, FunctionCall call_to_new_proc, Expression ggpriv_var, int targetArch) {
         // Create an extended array type
         // Ex: "float b[][SIZE1][SIZE2]"
         int dimsize = lengthList.size();
@@ -2203,11 +2342,11 @@ public abstract class OpenCLTranslationTools {
                                                   Expression asyncID, Statement confRefStmt,
                                                   CompoundStatement prefixStmts, CompoundStatement postscriptStmts,
                                                   List<Statement> preList, List<Statement> postList,
-                                                  FunctionCall call_to_new_proc, Procedure new_proc, TranslationUnit main_TrUnt,
+                                                  KernelFunctionCall call_to_new_proc, Procedure new_proc, TranslationUnit main_TrUnt,
                                                   Map<TranslationUnit, Declaration> OpenACCHeaderEndMap, boolean IRSymbolOnly,
                                                   boolean opt_addSafetyCheckingCode, boolean opt_UnrollOnReduction, int maxBlockSize,
                                                   Expression totalnumgangs, boolean kernelVerification, boolean memtrVerification, FloatLiteral EPSILON,
-                                                  int SIMDWidth, FloatLiteral minCheckValue, int localRedVarConf) {
+                                                  int SIMDWidth, FloatLiteral minCheckValue, int localRedVarConf, int targetArch) {
         PrintTools.println("[OpenCL reductionTransformation() begins] current procedure: " + cProc.getSymbolName() +
                 "\ncompute region type: " + cRegionKind + "\n", 2);
         
@@ -2585,11 +2724,15 @@ public abstract class OpenCLTranslationTools {
 				 */
                 VariableDeclaration gpu_gred_decl = null;
                 VariableDeclaration gpu_wred_decl = null;
+                VariableDeclaration cpu_extred_decl = null;
+                VariableDeclaration cpu_orgred_decl = null;
                 Identifier ggred_var = null;
                 Identifier lgred_var = null;
                 Identifier lgcred_var = null;
                 Identifier gwred_var = null;
                 Identifier lwred_var = null;
+                Identifier extended_var = null;
+                Identifier orgred_var = null;
                 String symNameBase = null;
                 if( redSym instanceof AccessSymbol) {
                     symNameBase = TransformTools.buildAccessSymbolName((AccessSymbol)redSym);
@@ -2599,6 +2742,8 @@ public abstract class OpenCLTranslationTools {
                 String gpuGRedSymName = "ggred__" + symNameBase;
                 String localGRedSymName = "lgred__" + symNameBase;
                 String localGCRedSymName = "lgcred__" + symNameBase;
+                String extGRedName = "extred__" + symNameBase;
+                String orgGRedName = "orgred__" + symNameBase;
                 //String gpuWRedSymName = "gwred__" + symNameBase;
 				String gpuWRedSymName = "gwred__" + symNameBase;
                 String localWRedSymNameOnShared = "lwreds__" + symNameBase;
@@ -2762,9 +2907,13 @@ public abstract class OpenCLTranslationTools {
                         // Ex1: "float lwredg__x[][SIZE1]"
                         // Ex2: "float lwredg__x[][SIZE1][SIZE2]"
                         VariableDeclarator arrayV_declarator =	arrayPrivConv(redSym, localWRedSymNameOnGlobal, wTypeSpecs, startList,
-                                lengthList, new_proc, region, scope, 1, call_to_new_proc, gwred_var.clone());
+                                lengthList, new_proc, region, scope, 1, call_to_new_proc, gwred_var.clone(), targetArch);
 						//PrintTools.println(arrayV_declarator.toString(), 0);
                         lwred_var = new Identifier(arrayV_declarator);
+                        if( targetArch == 4 ) {
+                        	call_to_new_proc.addArgSize(biexp.clone());
+                        	call_to_new_proc.addArgTrait(trait_writeonly);
+                        }
 
                         // Add gpuBytes argument to cudaMalloc() call
                         arg_list.add((Identifier)cloned_bytes.clone());
@@ -2891,6 +3040,11 @@ public abstract class OpenCLTranslationTools {
                         insertGMalloc = true;
                         allocatedGangReductionSet.add(redSym);
                     }
+                    if( insertGMalloc ) {
+                    	cpu_extred_decl =  TransformTools.getGPUVariable(extGRedName, targetSymbolTable,
+                    			typeSpecs, main_TrUnt, OpenACCHeaderEndMap, new IntegerLiteral(0));
+                    	extended_var = new Identifier((VariableDeclarator)cpu_extred_decl.getDeclarator(0));
+                    }
 
                     //PrintTools.println("[reductionTransformation] gang reduction point 2", 2);
                     if( !isArray && !isPointer ) { //scalar variable
@@ -2915,9 +3069,18 @@ public abstract class OpenCLTranslationTools {
                                 && !AnalysisTools.ipContainPragmas(scope, ACCAnnotation.class, "worker", null) ) {
                             isPureGangReduction = true;
                         }
-                        VariableDeclarator pointerV_declarator =
-                                scalarGangPrivConv(redSym, localGRedSymName, typeSpecs, new_proc, region, scope,
-                                        registerRO, isPureGangReduction, call_to_new_proc, ggred_var.clone());
+                        VariableDeclarator pointerV_declarator = null;
+                        
+                        if( targetArch == 4 ) {
+                        	pointerV_declarator = scalarGangPrivConv(redSym, localGRedSymName, typeSpecs, new_proc, region, scope,
+                        			registerRO, isPureGangReduction, call_to_new_proc, extended_var.clone());
+                        	call_to_new_proc.addArgSize(new BinaryExpression((Expression)numBlocks.clone(),
+                        			BinaryOperator.MULTIPLY, sizeof_expr.clone()));
+                        	call_to_new_proc.addArgTrait(trait_writeonly);
+                        } else {
+                        	pointerV_declarator = scalarGangPrivConv(redSym, localGRedSymName, typeSpecs, new_proc, region, scope,
+                        			registerRO, isPureGangReduction, call_to_new_proc, ggred_var.clone());
+                        }
                         lgred_var = new Identifier(pointerV_declarator);
                         //PrintTools.println("[reductionTransformation] gang reduction point 3", 2);
                     } else { //non-scalar variables
@@ -2942,8 +3105,16 @@ public abstract class OpenCLTranslationTools {
                         // Create an extended array type
                         // Ex1: "float b[][SIZE1]"
                         // Ex2: "float b[][SIZE1][SIZE2]"
-                        VariableDeclarator arrayV_declarator =	arrayPrivConv(redSym, localGRedSymName, typeSpecs, startList,
-                                lengthList, new_proc, region, scope, 0, call_to_new_proc, ggred_var.clone() );
+                        VariableDeclarator arrayV_declarator =	null;
+                        if( targetArch == 4 ) {
+                        	arrayV_declarator = arrayPrivConv(redSym, extGRedName, typeSpecs, startList,
+                        			lengthList, new_proc, region, scope, 0, call_to_new_proc, extended_var.clone(), targetArch);
+                        	call_to_new_proc.addArgSize(biexp2.clone());
+                        	call_to_new_proc.addArgTrait(trait_writeonly);
+                        } else {
+                        	arrayV_declarator = arrayPrivConv(redSym, localGRedSymName, typeSpecs, startList,
+                        			lengthList, new_proc, region, scope, 0, call_to_new_proc, ggred_var.clone(), targetArch);
+                        }
                         lgred_var = new Identifier(arrayV_declarator);
                         //PrintTools.println("[reductionTransformation] gang reduction point 4", 2);
                     }
@@ -2958,7 +3129,9 @@ public abstract class OpenCLTranslationTools {
                         //mallocScope.addStatementBefore(confRefStmt, gpuBytes_stmt);
                         //mallocScope.addStatementBefore(confRefStmt, malloc_stmt);
                         prefixStmts.addStatement(gpuBytes_stmt);
-                        prefixStmts.addStatement(malloc_stmt);
+                        if( targetArch != 4 ) {
+                        	prefixStmts.addStatement(malloc_stmt);
+                        }
                         if( opt_addSafetyCheckingCode ) {
                             // Insert "gpuGmemSize += gpuBytes;" statement
                             //mallocScope.addStatementBefore(gpuBytes_stmt.clone(),
@@ -2987,30 +3160,32 @@ public abstract class OpenCLTranslationTools {
                         ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
                         //postscriptStmts.addStatement(gpuBytes_stmt.clone());
                         refSt = cudaFree_stmt;
-                        if( asyncID == null ) {
-                            if( confRefStmt != region ) {
-                                postscriptStmts.addStatement(cudaFree_stmt);
-                                if( opt_addSafetyCheckingCode  ) {
-                                    postscriptStmts.addStatement(gMemSub_stmt.clone());
-                                }
-                            } else {
-                                if( opt_addSafetyCheckingCode  ) {
-                                    regionParent.addStatementAfter(region, gMemSub_stmt.clone());
-                                }
-                                regionParent.addStatementAfter(region, cudaFree_stmt);
-                            }
-                        } else {
-                            if( asyncConfRefChanged ) {
-                                postRedStmts.add(cudaFree_stmt);
-                                if( opt_addSafetyCheckingCode  ) {
-                                    postRedStmts.add(gMemSub_stmt.clone());
-                                }
-                            } else {
-                                postscriptStmts.addStatement(cudaFree_stmt);
-                                if( opt_addSafetyCheckingCode  ) {
-                                    postscriptStmts.addStatement(gMemSub_stmt.clone());
-                                }
-                            }
+                        if( targetArch != 4 ) {
+                        	if( asyncID == null ) {
+                        		if( confRefStmt != region ) {
+                        			postscriptStmts.addStatement(cudaFree_stmt);
+                        			if( opt_addSafetyCheckingCode  ) {
+                        				postscriptStmts.addStatement(gMemSub_stmt.clone());
+                        			}
+                        		} else {
+                        			if( opt_addSafetyCheckingCode  ) {
+                        				regionParent.addStatementAfter(region, gMemSub_stmt.clone());
+                        			}
+                        			regionParent.addStatementAfter(region, cudaFree_stmt);
+                        		}
+                        	} else {
+                        		if( asyncConfRefChanged ) {
+                        			postRedStmts.add(cudaFree_stmt);
+                        			if( opt_addSafetyCheckingCode  ) {
+                        				postRedStmts.add(gMemSub_stmt.clone());
+                        			}
+                        		} else {
+                        			postscriptStmts.addStatement(cudaFree_stmt);
+                        			if( opt_addSafetyCheckingCode  ) {
+                        				postscriptStmts.addStatement(gMemSub_stmt.clone());
+                        			}
+                        		}
+                        	}
                         }
                     }
                     tGangParamRedVarMap.put(redSym, lgred_var.clone());
@@ -3182,12 +3357,13 @@ public abstract class OpenCLTranslationTools {
                 // The reduction statement is executed separately for each    //
                 // gang-reduction for CPU locality.                           //
                 ////////////////////////////////////////////////////////////////
-                String extGRedName = "extred__" + symNameBase;
-                String orgGRedName = "orgred__" + symNameBase;
-                VariableDeclaration cpu_extred_decl = null;
-                VariableDeclaration cpu_orgred_decl = null;
-                Identifier extended_var = null;
-                Identifier orgred_var = null;
+                //Below definitions are moved to upward for MCL translation.
+                //String extGRedName = "extred__" + symNameBase;
+                //String orgGRedName = "orgred__" + symNameBase;
+                //VariableDeclaration cpu_extred_decl = null;
+                //VariableDeclaration cpu_orgred_decl = null;
+                //Identifier extended_var = null;
+                //Identifier orgred_var = null;
                 ///////////////////////////////////////////////////////////////////////////////////////
                 // Create a temporary array that is an extended version of the reduction variable.   //
                 // - The extended array is used for final reduction across thread blocks on the CPU. //
@@ -3199,9 +3375,10 @@ public abstract class OpenCLTranslationTools {
                 // ex: float * orgred__x;                                                            //
                 ///////////////////////////////////////////////////////////////////////////////////////
                 if( insertGMalloc ) {
-                    cpu_extred_decl =  TransformTools.getGPUVariable(extGRedName, targetSymbolTable,
-                            typeSpecs, main_TrUnt, OpenACCHeaderEndMap, new IntegerLiteral(0));
-                    extended_var = new Identifier((VariableDeclarator)cpu_extred_decl.getDeclarator(0));
+                	//Below two statements are moved upward for MCL translation.
+ /*               	cpu_extred_decl =  TransformTools.getGPUVariable(extGRedName, targetSymbolTable,
+                			typeSpecs, main_TrUnt, OpenACCHeaderEndMap, new IntegerLiteral(0));
+                	extended_var = new Identifier((VariableDeclarator)cpu_extred_decl.getDeclarator(0));*/
                     if( kernelVerification ) {
                         cpu_orgred_decl =  TransformTools.getGPUVariable(orgGRedName, targetSymbolTable,
                                 typeSpecs, main_TrUnt, OpenACCHeaderEndMap, new IntegerLiteral(0));
@@ -3211,18 +3388,30 @@ public abstract class OpenCLTranslationTools {
                     // Create a malloc statement:                                                       //
                     //     HI_tempMalloc1D(((void *  * )( & extred__x)), gpuBytes, acc_device_host); //
                     //////////////////////////////////////////////////////////////////////////////////////
-                    FunctionCall tempMalloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
                     List<Specifier> castspecs = new ArrayList<Specifier>(4);
-                    castspecs.add(Specifier.VOID);
-                    castspecs.add(PointerSpecifier.UNQUALIFIED);
-                    castspecs.add(PointerSpecifier.UNQUALIFIED);
                     List<Expression> arg_list = new ArrayList<Expression>();
-                    arg_list.add(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-                            (Identifier)extended_var.clone())));
-                    arg_list.add(cloned_bytes.clone());
-                    arg_list.add(new NameID("acc_device_host"));
-                    tempMalloc_call.setArguments(arg_list);
-                    ExpressionStatement eMallocStmt = new ExpressionStatement(tempMalloc_call);
+                    FunctionCall tempMalloc_call = null;
+                    ExpressionStatement eMallocStmt = null;
+                    if( targetArch == 4 ) {
+                    	tempMalloc_call = new FunctionCall(new NameID("malloc"));
+                    	tempMalloc_call.addArgument(cloned_bytes.clone());
+                    	castspecs.addAll(typeSpecs);
+                    	castspecs.add(PointerSpecifier.UNQUALIFIED);
+                    	Expression assignExt = new AssignmentExpression(extended_var.clone(), AssignmentOperator.NORMAL, 
+                    			new Typecast(castspecs, tempMalloc_call));
+                    	eMallocStmt = new ExpressionStatement(assignExt);
+                    } else {
+                    	tempMalloc_call = new FunctionCall(new NameID("HI_tempMalloc1D"));
+                    	castspecs.add(Specifier.VOID);
+                    	castspecs.add(PointerSpecifier.UNQUALIFIED);
+                    	castspecs.add(PointerSpecifier.UNQUALIFIED);
+                    	arg_list.add(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+                    			(Identifier)extended_var.clone())));
+                    	arg_list.add(cloned_bytes.clone());
+                    	arg_list.add(new NameID("acc_device_host"));
+                    	tempMalloc_call.setArguments(arg_list);
+                    	eMallocStmt = new ExpressionStatement(tempMalloc_call);
+                    }
                     prefixStmts.addStatement(eMallocStmt);
 /*					/////////////////////////////////////////////////////////////////////////
 					// Create malloc() statement, "extred__x = (float *)malloc(gpuBytes);" //
@@ -3329,15 +3518,22 @@ public abstract class OpenCLTranslationTools {
                     /////////////////////////////////////////////////////////////////////////////////////////
                     // Insert free(extred__x); ==> HI_tempFree((void **)(& extred__x), acc_device_host) //
                     /////////////////////////////////////////////////////////////////////////////////////////
-                    FunctionCall free_call = new FunctionCall(new NameID("HI_tempFree"));
-                    castspecs = new ArrayList<Specifier>(4);
-                    castspecs.add(Specifier.VOID);
-                    castspecs.add(PointerSpecifier.UNQUALIFIED);
-                    castspecs.add(PointerSpecifier.UNQUALIFIED);
-                    free_call.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-                            (Identifier)extended_var.clone())));
-                    free_call.addArgument(new NameID("acc_device_host"));
-                    Statement free_stmt = new ExpressionStatement(free_call);
+                    Statement free_stmt = null;
+                    FunctionCall free_call = null;
+                    if( targetArch == 4 ) {
+                    	free_call = new FunctionCall(new NameID("free"));
+                    	free_call.addArgument(extended_var.clone());
+                    } else {
+                    	free_call = new FunctionCall(new NameID("HI_tempFree"));
+                    	castspecs = new ArrayList<Specifier>(4);
+                    	castspecs.add(Specifier.VOID);
+                    	castspecs.add(PointerSpecifier.UNQUALIFIED);
+                    	castspecs.add(PointerSpecifier.UNQUALIFIED);
+                    	free_call.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+                    			(Identifier)extended_var.clone())));
+                    	free_call.addArgument(new NameID("acc_device_host"));
+                    }
+                    free_stmt = new ExpressionStatement(free_call);
                     ////mallocScope.addStatementAfter(
                     ////	confRefStmt, free_stmt);
                     if( asyncID == null ) {
@@ -3690,12 +3886,16 @@ public abstract class OpenCLTranslationTools {
 					 */
                     if( asyncID == null ) {
                         if( ifCond == null ) {
-                            regionParent.addStatementAfter(region, memCopy_stmt);
-                            regionParent.addStatementAfter(region, gpuBytes_stmt.clone());
+                        	if( targetArch != 4 ) {
+                        		regionParent.addStatementAfter(region, memCopy_stmt);
+                        		regionParent.addStatementAfter(region, gpuBytes_stmt.clone());
+                        	}
                         } else {
                             CompoundStatement ifBody2 = new CompoundStatement();
-                            ifBody2.addStatement(gpuBytes_stmt.clone());
-                            ifBody2.addStatement(memCopy_stmt);
+                        	if( targetArch != 4 ) {
+                        		ifBody2.addStatement(gpuBytes_stmt.clone());
+                        		ifBody2.addStatement(memCopy_stmt);
+                        	}
                             ifBody2.addStatement(innerLoop);
                             if( resetStatusCallStmt != null ) {
                                 ifBody2.addStatement(resetStatusCallStmt);
@@ -3704,17 +3904,19 @@ public abstract class OpenCLTranslationTools {
                             regionParent.addStatementAfter(region, ifStmt2);
                         }
                     } else {
-                        if( kernelVerification && (resultCompareStmts != null) ) {
-                            for( int k=resultCompareStmts.size()-1; k>=0; k-- ) {
-                                postRedStmts.add(0, resultCompareStmts.get(k));
-                            }
-                        }
-                        if( resetStatusCallStmt != null ) {
-                            postRedStmts.add(0, resetStatusCallStmt);
-                        }
-                        postRedStmts.add(0, innerLoop);
-                        postRedStmts.add(0, memCopy_stmt);
-                        postRedStmts.add(0, gpuBytes_stmt.clone());
+                    	if( kernelVerification && (resultCompareStmts != null) ) {
+                    		for( int k=resultCompareStmts.size()-1; k>=0; k-- ) {
+                    			postRedStmts.add(0, resultCompareStmts.get(k));
+                    		}
+                    	}
+                    	if( resetStatusCallStmt != null ) {
+                    		postRedStmts.add(0, resetStatusCallStmt);
+                    	}
+                    	postRedStmts.add(0, innerLoop);
+                    	if( targetArch != 4 ) {
+                    		postRedStmts.add(0, memCopy_stmt);
+                    		postRedStmts.add(0, gpuBytes_stmt.clone());
+                    	}
                     }
                 }
                 gPostRedStmts.addAll(postRedStmts);

@@ -215,10 +215,18 @@ public class LocalityAnalysis extends AnalysisPass {
 						Set<Symbol> privVars = annot.get("accprivate");
 						if(privVars == null)
 							privVars = new HashSet<Symbol>();
+						Set<Symbol> firstprivVars = annot.get("accfirstprivate");
+						if(firstprivVars == null)
+							firstprivVars = new HashSet<Symbol>();
 						Set<Symbol> accreadonlySet = annot.get("accreadonly");
 						if( accreadonlySet == null ) {
 							accreadonlySet = new HashSet<Symbol>();
 							annot.put("accreadonly", accreadonlySet);
+						}
+						Set<Symbol> accreadonlyprivateSet = annot.get("accreadonlyprivate");
+						if( accreadonlyprivateSet == null ) {
+							accreadonlyprivateSet = new HashSet<Symbol>();
+							annot.put("accreadonlyprivate", accreadonlyprivateSet);
 						}
 						Set<Symbol> accExShared = annot.get("accexplicitshared");
 						if( accExShared == null ) {
@@ -642,6 +650,21 @@ public class LocalityAnalysis extends AnalysisPass {
 								}
 								tSharedRWSet.add(sym.getSymbolName());
 								tPrvAr.add(sym.getSymbolName());
+							}
+							if( !defSymSet.contains(sym) ) {
+								accreadonlyprivateSet.add(sym);
+							}
+						}
+						for( Symbol sym: firstprivVars ) {
+							if( SymbolTools.isArray(sym) || SymbolTools.isPointer(sym) ) {
+								if( prvtArryCachingOnSM ) {
+									cudaSharedRWSet.add(sym);
+								}
+								tSharedRWSet.add(sym.getSymbolName());
+								tPrvAr.add(sym.getSymbolName());
+							}
+							if( !defSymSet.contains(sym) ) {
+								accreadonlyprivateSet.add(sym);
 							}
 						}
 						cudaRegROSet.removeAll(noRegMap.keySet());

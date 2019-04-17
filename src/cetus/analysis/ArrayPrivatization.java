@@ -191,9 +191,15 @@ public class ArrayPrivatization extends AnalysisPass {
         while (iter.hasNext()) {
             Procedure p = iter.next();
             if (alias_result != 0) {
-                PrintTools.printlnStatus(-2, tag,
-                    "[WARNING] Automatic privatization fails due to all-to-all alias; user should \"explicitly\" specify which variables are private! (automatic parallelization will fails too, and thus worksharing clauses (gang, worker, etc.) should be explicitly specified too!)");
-                break;
+            	if( option > PRIV_SCALAR ) {
+            		PrintTools.printlnStatus(-2, tag,
+            				"[WARNING] Automatic privatization fails due to all-to-all alias; "
+            						+ "user should \"explicitly\" specify which variables are private! "
+            						+ "(automatic parallelization will fails too, and thus worksharing clauses (gang, worker, etc.) should be explicitly specified too!)");
+            		break;
+            	} else {
+            		alias_result = 0;
+            	}
             }
             analyzeProcedure(p);
         }
@@ -222,8 +228,14 @@ public class ArrayPrivatization extends AnalysisPass {
             analyzeLoop(iter.next());
         }
         addAnnotation(proc);
+ /*       if (alias_result != 0) {
+        	PrintTools.printlnStatus(-2, tag,
+        			"[WARNING] Automatic privatization fails during analyzing a procedure " + proc.getName() + " due to all-to-all alias; "
+        					+ "user should \"explicitly\" specify which variables are private" + 
+        					"! (automatic parallelization will fails too, and thus worksharing clauses (gang, worker, etc.) should be explicitly specified too!)");
+        }*/
         PrintTools.printlnStatus(1, tag,
-                String.format("...... %.2f seconds", Tools.getTime(timer)));
+        		String.format("...... %.2f seconds", Tools.getTime(timer)));
     }
 
     /**
@@ -250,7 +262,11 @@ public class ArrayPrivatization extends AnalysisPass {
                 for (Object aliased : alias_set) {
                     if (aliased.equals("*")) {
                         alias_result = 1;
-                        return; // all aliased; stop further analysis.
+                        if( option > PRIV_SCALAR ) {
+                        	return; // all aliased; stop further analysis.
+                        } else {
+                        	//loop_pri_set.remove(var);
+                        }
                     } else if (var != aliased) {
                         loop_pri_set.remove(var);
                         PrintTools.printlnStatus(1, tag,
@@ -313,6 +329,13 @@ public class ArrayPrivatization extends AnalysisPass {
         Iterator<Symbol> iter = aggregates.iterator();
         while (iter.hasNext()) {
             Symbol var = iter.next();
+            //[FIXME] Remove AccessSymbol but why? (Added by Seyong Lee)
+            if( !(var instanceof Traversable) ) {
+            	PrintTools.printlnStatus(0, tag,
+            			"Removing non-traverable variable:",var);
+            	iter.remove();
+            	continue;
+            }
             // Removes non-aggregate types and automatic private variables.
             if (IRTools.isAncestorOf(loop, (Traversable)var)) {
                 iter.remove();

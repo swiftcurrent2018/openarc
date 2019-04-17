@@ -351,10 +351,12 @@ GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
+#GBACKEND_FLAGS = -O3 -fPIC -mcmodel=large
 GBACKEND_FLAGS = -O3
 GBACKEND_INCLUDES = -I/usr/local/cuda/include
 GBACKEND_LIBS = -L/usr/local/cuda/lib64 -lOpenCL
 GBACKEND_DEBUG = -g
+#GFRONTEND_FLAGS = -O3 -fPIC -mcmodel=large
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = -I$(OPENARCLIB)
 GFRONTEND_LIBS = -L$(OPENARCLIB) -L/usr/local/cuda/lib64 -lOpenCL

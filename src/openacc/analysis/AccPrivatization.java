@@ -273,6 +273,7 @@ public class AccPrivatization extends AnalysisPass {
 					if( iAnnot != null ) {
 						Set<Symbol> accSharedSymbols = (Set<Symbol>)iAnnot.get("accshared");
 						Set<Symbol>	accPrivateSymbols = (Set<Symbol>)iAnnot.get("accprivate");
+						Set<Symbol>	accFirstPrivateSymbols = (Set<Symbol>)iAnnot.get("accfirstprivate");
 						//Set<Symbol> accReductionSymbols = (Set<Symbol>)iAnnot.get("accreduction");
 						Set<SubArray> pcopySet =  null;
 						Annotation tAnnot = at.getAnnotation(ACCAnnotation.class, "pcopy");
@@ -292,6 +293,11 @@ public class AccPrivatization extends AnalysisPass {
 						tAnnot = at.getAnnotation(ACCAnnotation.class, "private");
 						if( tAnnot != null ) {
 							privateSet =  (Set<SubArray>)tAnnot.get("private");
+						}
+						Set<SubArray> firstPrivateSet =  null;
+						tAnnot = at.getAnnotation(ACCAnnotation.class, "firstprivate");
+						if( tAnnot != null ) {
+							firstPrivateSet =  (Set<SubArray>)tAnnot.get("firstprivate");
 						}
 						for( Symbol pSym : privatisables ) {
 							if( accSharedSymbols.contains(pSym) ) {
@@ -321,9 +327,43 @@ public class AccPrivatization extends AnalysisPass {
 									}
 									if( kernelType.equals("parallel") ) {
 										privateSet.add(sArry);
+										if( accPrivateSymbols == null ) {
+											accPrivateSymbols = new HashSet<Symbol>();
+											iAnnot.put("accprivate", accPrivateSymbols);
+										}
 										accPrivateSymbols.add(pSym);
 									}
 									accSharedSymbols.remove(pSym);
+								}
+							} else if( (accFirstPrivateSymbols != null) && accFirstPrivateSymbols.contains(pSym) ) {
+								SubArray sArry = AnalysisTools.subarrayOfSymbol(firstPrivateSet, pSym);
+								Set<SubArray> targetSet = firstPrivateSet;
+								String targetClause = "firstprivate";
+								if( sArry == null ) {
+									PrintTools.println("[INFO] AccPrivatization found the following symbol can be privatized, " +
+											"but it conflicts with user's annotation; privatization of this symbol is skipped!\n" +
+											"To enforce privatization, put the symbol in the pcopy clause.\n" +
+											"Symbol: " + pSym.getSymbolName() + "\nACCAnnotation: " + cAnnot + "\n", 0);
+									continue;
+								} else {
+									if( kernelType.equals("parallel") && (privateSet == null) ) {
+										privateSet = new HashSet<SubArray>();
+										cAnnot.put("private", privateSet);
+									}
+									targetSet.remove(sArry);
+									if( targetSet.isEmpty() ) {
+										tAnnot = at.getAnnotation(ACCAnnotation.class, targetClause);
+										tAnnot.remove(targetClause);
+									}
+									if( kernelType.equals("parallel") ) {
+										privateSet.add(sArry);
+										if( accPrivateSymbols == null ) {
+											accPrivateSymbols = new HashSet<Symbol>();
+											iAnnot.put("accprivate", accPrivateSymbols);
+										}
+										accPrivateSymbols.add(pSym);
+									}
+									accFirstPrivateSymbols.remove(pSym);
 								}
 							}
 						}

@@ -1224,7 +1224,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 									ACCAnnotation iAnnot = at.getAnnotation(ACCAnnotation.class, "refname");
 									Procedure cProc = IRTools.getParentProcedure(at);
 									if( iAnnot == null ) {
-										StringBuilder str = new StringBuilder("[ERROR in ACC2CUDATranslator.handleDataClauses()] can not find referenc name " +
+										StringBuilder str = new StringBuilder("[ERROR in ACC2CUDATranslator.handleDataClauses()] can not find reference name " +
 												"used for memory transfer verification; please turn off the verification option " +
 												"(programVerification != 1).\n" +
 												"OpenACC Annotation: " + dAnnot + "\n");
@@ -4194,6 +4194,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		//HashSet<Symbol> accprivateSet = new HashSet<Symbol>();
 		//HashSet<Symbol> rcreateSet = new HashSet<Symbol>();
 		HashSet<Symbol> accreductionSet = new HashSet<Symbol>();
+		List<Symbol> confSymbolList = new LinkedList<Symbol>();
 		////////////////////////////////////////////////////////////////
 		// Create a mapping between a shared symbol and its subarray. //
 		////////////////////////////////////////////////////////////////
@@ -4860,22 +4861,38 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			num_workers.add(new IntegerLiteral(1));
 			totalnumworkers = new IntegerLiteral(1);
 		} else {
+			Expression tConfExp = null;
+			Symbol tConfSym = null;
 			if( cRegionKind.equals("parallel") ) {
 				tAnnot = region.getAnnotation(ACCAnnotation.class, "num_gangs");
 				if( tAnnot == null ) {
 					Tools.exit("[ERROR in ACC2CUDATranslator.extractComputeRegion()] num_gangs clause is missing;\n" +
 							"Enclosing procedure: " + cProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");
 				} else {
-					num_gangs.add(((Expression)tAnnot.get("num_gangs")).clone());
+					tConfExp = ((Expression)tAnnot.get("num_gangs")).clone();
+					num_gangs.add(tConfExp);
 					num_gangs.add(new IntegerLiteral(1));
 					num_gangs.add(new IntegerLiteral(1));
+					if( !(tConfExp instanceof Literal) ) {
+						tConfSym = SymbolTools.getSymbolOf(tConfExp);
+						if( (tConfSym != null) && !confSymbolList.contains(tConfSym) ) {
+							confSymbolList.add(tConfSym);
+						}
+					}
 				}
 				totalnumgangs = num_gangs.get(0).clone();
 				tAnnot = region.getAnnotation(ACCAnnotation.class, "num_workers");
 				if( tAnnot == null ) {
 					num_workers.add(new IntegerLiteral(defaultNumWorkers));
 				} else {
-					num_workers.add(((Expression)tAnnot.get("num_workers")).clone());
+					tConfExp = ((Expression)tAnnot.get("num_workers")).clone();
+					num_workers.add(tConfExp);
+					if( !(tConfExp instanceof Literal) ) {
+						tConfSym = SymbolTools.getSymbolOf(tConfExp);
+						if( (tConfSym != null) && !confSymbolList.contains(tConfSym) ) {
+							confSymbolList.add(tConfSym);
+						}
+					}
 				}
 				num_workers.add(new IntegerLiteral(1));
 				num_workers.add(new IntegerLiteral(1));
@@ -4892,7 +4909,14 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 					List<Expression> gangConfs = tAnnot.get("gangconf");
 					int tsize = gangConfs.size();
 					for( int i=0; i<tsize; i++ ) {
-						num_gangs.add(i, gangConfs.get(i).clone());
+						tConfExp = gangConfs.get(i).clone();
+						num_gangs.add(i, tConfExp);
+						if( !(tConfExp instanceof Literal) ) {
+							tConfSym = SymbolTools.getSymbolOf(tConfExp);
+							if( (tConfSym != null) && !confSymbolList.contains(tConfSym) ) {
+								confSymbolList.add(tConfSym);
+							}
+						}
 					}
 					for( int i=tsize; i<3; i++ ) {
 						num_gangs.add(i, new IntegerLiteral(1));
@@ -4917,7 +4941,14 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 						int tsize = workerConfs.size();
 						if( m == 0 ) {
 							for( int i=0; i<tsize; i++ ) {
-								num_workers.add(i, workerConfs.get(i).clone());
+								tConfExp = workerConfs.get(i).clone();
+								num_workers.add(i, tConfExp);
+								if( !(tConfExp instanceof Literal) ) {
+									tConfSym = SymbolTools.getSymbolOf(tConfExp);
+									if( (tConfSym != null) && !confSymbolList.contains(tConfSym) ) {
+										confSymbolList.add(tConfSym);
+									}
+								}
 							}
 							for( int i=tsize; i<3; i++ ) {
 								num_workers.add(i, new IntegerLiteral(1));
@@ -5063,11 +5094,28 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		textureOffsetMap.clear();
 		constantSymMap.clear();
 		Set<Symbol> callerProcSymSet = new HashSet<Symbol>();
+		Set<Symbol> accSharedSymSet =  new HashSet<Symbol>();
+		accSharedSymSet.addAll(accSharedMap.keySet());
+		for( Symbol tConfSym : confSymbolList ) {
+			if( !accSharedSymSet.contains(tConfSym) ) {
+				accSharedSymSet.add(tConfSym);
+				cudaSharedROSet.add(tConfSym);
+			}
+		}
 		// Perform kernel code conversion for each shared symbol
-		Collection<Symbol> sortedSet = AnalysisTools.getSortedCollection(accSharedMap.keySet());
+		//[FIXME] Below will break if conf symbol is not a scalar variable.
+		Collection<Symbol> sortedSet = AnalysisTools.getSortedCollection(accSharedSymSet);
 		for( Symbol sharedSym : sortedSet ) {
-			SubArray sArray = accSharedMap.get(sharedSym);
-			Expression hostVar = sArray.getArrayName();
+			boolean isConfSymbol = false;
+			SubArray sArray = null;
+			Expression hostVar = null;
+			if(accSharedMap.containsKey(sharedSym)) {
+				sArray = accSharedMap.get(sharedSym);
+			} else {
+				sArray = AnalysisTools.createSubArray(sharedSym, true, null);
+				isConfSymbol = true;
+			}
+			hostVar = sArray.getArrayName();
 
 			List<Specifier> removeSpecs = new ArrayList<Specifier>();
 			removeSpecs.add(Specifier.STATIC);
@@ -5133,6 +5181,12 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			}
 
 			Boolean isScalar = !isArray && !isPointer;
+			if( isConfSymbol && !isScalar ) {
+				Tools.exit("[ERROR in ACC2CUDATranslator.extractComputeRegion()] the current implementation cannot handle the case "
+						+ "where gang/worker/vector clause argument contains non-scalar varibles; please change that argument to "
+						+ "simple expression consisting of scalar variables and constants; exit\n"
+						+ AnalysisTools.getEnclosingAnnotationContext(cAnnot));
+			}
 			
 			List<Expression> startList = new LinkedList<Expression>();
 			List<Expression> lengthList = new LinkedList<Expression>();

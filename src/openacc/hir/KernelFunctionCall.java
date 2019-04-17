@@ -25,6 +25,10 @@ public class KernelFunctionCall extends FunctionCall
   //if targetArch < 4: {Grid dimensions, threadblock dimensions, shared memory size, async ID, wait ID list}
   //if targetArch == 4: {task handle, Global dimensions, threadblock dimensions, mcl flags, source code pointer, async ID, wait ID list}
   private Procedure linkedProcedure;
+  private static int trait_readonly = 0;
+  private static int trait_writeonly = 1;
+  private static int trait_readwrite = 2;
+  private static int trait_temporary = 3;
 
   static
   {
@@ -182,13 +186,15 @@ public class KernelFunctionCall extends FunctionCall
 				p.print(",");
 				p.print(call.getArgSize(i));
 				p.print(",");
-				if( call.getArgTrait(i).intValue() == 0 ) {
+				if( call.getArgTrait(i).intValue() == trait_readonly ) {
 					argTrait = new BinaryExpression(new NameID("MCL_ARG_INPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_BUFFER"));
-				} else if( call.getArgTrait(i).intValue() == 1 ) {
+				} else if( call.getArgTrait(i).intValue() == trait_writeonly ) {
 					argTrait = new BinaryExpression(new NameID("MCL_ARG_OUTPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_BUFFER"));
-				} else {
+				} else if( call.getArgTrait(i).intValue() == trait_readwrite ) {
 					argTrait = new BinaryExpression(new NameID("MCL_ARG_INPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_OUTPUT"));
 					argTrait = new BinaryExpression(argTrait, BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_BUFFER"));
+				} else {
+					argTrait = new NameID("MCL_ARG_BUFFER");
 				}
 				p.print(argTrait);
 			} else {
@@ -197,13 +203,15 @@ public class KernelFunctionCall extends FunctionCall
 				p.print(",");
 				p.print(new SizeofExpression(specifierList));
 				p.print(",");
-				if( call.getArgTrait(i).intValue() == 0 ) {
+				if( call.getArgTrait(i).intValue() == trait_readonly ) {
 					argTrait = new BinaryExpression(new NameID("MCL_ARG_INPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_SCALAR"));
-				} else if( call.getArgTrait(i).intValue() == 1 ) {
+				} else if( call.getArgTrait(i).intValue() == trait_writeonly ) {
 					argTrait = new BinaryExpression(new NameID("MCL_ARG_OUTPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_SCALAR"));
-				} else {
+				} else if( call.getArgTrait(i).intValue() == trait_readwrite ) {
 					argTrait = new BinaryExpression(new NameID("MCL_ARG_INPUT"), BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_OUTPUT"));
 					argTrait = new BinaryExpression(argTrait, BinaryOperator.BITWISE_INCLUSIVE_OR, new NameID("MCL_ARG_SCALAR"));
+				} else {
+					argTrait = new NameID("MCL_ARG_SCALAR");
 				}
 				p.print(argTrait);
 			}

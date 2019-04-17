@@ -105,13 +105,13 @@ do
 						echo $example | grep -e "_tuning" -e "_task" -e "_cash" > /dev/null
 						if [ $? -eq 0 ]; then
 							echo "" | tee -a $translog
-							echo "====> Skip ${example}!" | tee -a $translog
+							echo "====> Skip ${targetDir}/${example}!" | tee -a $translog
 							echo "" | tee -a $translog
 							continue
 						fi
 						cd ${targetDir}/${example}	
 						echo "" | tee -a $translog
-						echo "==> Target: ${example}" | tee -a $translog
+						echo "==> Target: ${targetDir}/${example}" | tee -a $translog
 						echo "" | tee -a $translog
 						rm -f openarcConf.txt options.cetus
 						echo "${example}" | grep "nvl-c" > /dev/null
@@ -126,7 +126,7 @@ do
 						if [ $? -eq 0 ]; then
 							echo "Translation Failed!" | tee -a $translog
 							echo "" | tee -a $faillog
-							echo "==> Target: ${example} : failed during translation!" | tee -a $faillog
+							echo "==> Target: ${targetDir}/${example} : failed during translation!" | tee -a $faillog
 							echo "" | tee -a $faillog
 							continue
 						else
@@ -135,7 +135,7 @@ do
 						echo $example | grep -e altera -e "_aspen" -e "_mcl" -e "_cuda" > /dev/null
 						if [ $? -eq 0 ]; then
 							echo "" | tee -a $translog
-							echo "====> Skip compilation of ${example}!" | tee -a $translog
+							echo "====> Skip compilation of ${targetDir}/${example}!" | tee -a $translog
 							echo "" | tee -a $translog
 							continue
 						fi
@@ -143,7 +143,7 @@ do
 							echo $example | grep -e "_cuda" > /dev/null
 							if [ $? -eq 0 ]; then
 								echo "" | tee -a $translog
-								echo "====> Skip compilation of ${example}!" | tee -a $translog
+								echo "====> Skip compilation of ${targetDir}/${example}!" | tee -a $translog
 								echo "" | tee -a $translog
 								continue
 							fi
@@ -177,7 +177,7 @@ do
 						done < <(cat $templog)
 
 						echo "" | tee -a $compilelog
-						echo "==> Target: ${example}" | tee -a $compilelog
+						echo "==> Target: ${targetDir}/${example}" | tee -a $compilelog
 						echo "" | tee -a $compilelog
 						echo "makeCMD: $makeCMD" | tee -a $compilelog
 						echo "" | tee -a $compilelog
@@ -187,7 +187,7 @@ do
 							if [ $? -eq 0 ]; then
 								echo "Compile Failed!" | tee -a $compilelog
 								echo "" | tee -a $faillog
-								echo "==> Target: ${example} : failed during compilation!" | tee -a $faillog
+								echo "==> Target: ${targetDir}/${example} : failed during compilation!" | tee -a $faillog
 								echo "" | tee -a $faillog
 								continue
 							else
@@ -198,7 +198,7 @@ do
 						else
 							echo "Compile Failed!" | tee -a $compilelog
 							echo "" | tee -a $faillog
-							echo "==> Target: ${example} : cannot find compile-command!" | tee -a $faillog
+							echo "==> Target: ${targetDir}/${example} : cannot find compile-command!" | tee -a $faillog
 							echo "" | tee -a $faillog
 							continue
 						fi
@@ -207,13 +207,13 @@ do
 							echo $example | grep -e "unified" > /dev/null
 							if [ $? -eq 0 ]; then
 								echo "" | tee -a $compilelog
-								echo "====> Skip execution of ${example}!" | tee -a $compilelog
+								echo "====> Skip execution of ${targetDir}/${example}!" | tee -a $compilelog
 								echo "" | tee -a $compilelog
 								continue
 							fi
 						fi
 						echo "" | tee -a $runlog
-						echo "==> Target: ${example}" | tee -a $runlog
+						echo "==> Target: ${targetDir}/${example}" | tee -a $runlog
 						echo "" | tee -a $runlog
 						echo "runCMD: $runCMD" | tee -a $runlog
 						echo "" | tee -a $runlog
@@ -234,7 +234,7 @@ do
 							if [ $? -eq 0 ]; then
 								echo "Run Failed!" | tee -a $runlog
 								echo "" | tee -a $faillog
-								echo "==> Target: ${example} : failed during execution!" | tee -a $faillog
+								echo "==> Target: ${targetDir}/${example} : failed during execution!" | tee -a $faillog
 								echo "" | tee -a $faillog
 								continue
 							else
@@ -245,7 +245,7 @@ do
 						else
 							echo "Run Failed!" | tee -a $runlog
 							echo "" | tee -a $faillog
-							echo "==> Target: ${example} : cannot find run-command!" | tee -a $faillog
+							echo "==> Target: ${targetDir}/${example} : cannot find run-command!" | tee -a $faillog
 							echo "" | tee -a $faillog
 							continue
 						fi

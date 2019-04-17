@@ -23,7 +23,7 @@ import java.util.*;
  *         Seyong Lee <lees2@ornl.gov>
  *
  */
-public class OMP2ACCTranslator extends TransformPass {
+public class OMP4toACCTranslator extends TransformPass {
     private enum OmpRegion
     {
         Target,
@@ -44,7 +44,7 @@ public class OMP2ACCTranslator extends TransformPass {
     	outerTask
     }
 
-    protected String pass_name = "[OMP2ACCTranslator]";
+    protected String pass_name = "[OMP4toACCTranslator]";
     protected Program program;
     //Main refers either a procedure containing acc_init() call or main() procedure if no explicit acc_init() call exists.
     protected Procedure main;
@@ -59,8 +59,9 @@ public class OMP2ACCTranslator extends TransformPass {
     private List<Declaration> procDeclList = null;
 	private	List<FunctionCall> funcCallList = null;
 	private int defaultNumAsyncQueues = 4;
+	private boolean createDeviceTask = false;
 
-    public OMP2ACCTranslator(Program prog, int numAsyncQueues) {
+    public OMP4toACCTranslator(Program prog, int numAsyncQueues) {
         super(prog);
         program = prog;
         defaultNumAsyncQueues = numAsyncQueues;
@@ -74,8 +75,8 @@ public class OMP2ACCTranslator extends TransformPass {
     @Override
     public void start() 
     {
-		System.err.println(pass_name + " is under construction; exit");
-		System.exit(1);	
+        System.err.println(pass_name + " is under construction; exit");
+        System.exit(1); 
     }
 
 }

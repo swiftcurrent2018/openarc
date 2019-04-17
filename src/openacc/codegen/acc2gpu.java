@@ -32,7 +32,10 @@ public class acc2gpu extends CodeGenPass
 	private int FaultInjectionOption = 1;
 	private int pipelineTransformation = 1;
 	private int slidingWindowTransformation = 1;
-    private boolean convertOpenMPtoOpenACC = false;
+	private boolean convertOpenMP3toOpenACC = false;
+	private boolean convertOpenMP4toOpenACC = false;
+	private boolean convertOpenACCtoOpenMP4 = false;
+	private boolean convertOpenACCtoOpenMP3 = false;
 	private boolean enableFaultInjection = false;
 	private boolean enableCustomProfiling = false;
 	private boolean ParallelLoopSwap = false;
@@ -143,11 +146,17 @@ public class acc2gpu extends CodeGenPass
 				opt_GenDistOpenACC = true;
 			}
 		}
-        value = Driver.getOptionValue("omp2acc");
+		value = Driver.getOptionValue("ompaccInter");
         if( value != null ) {
         	if( Integer.valueOf(value).intValue() == 1 )
-        		convertOpenMPtoOpenACC = true;
-        }
+        		convertOpenMP3toOpenACC = true;
+      		if( Integer.valueOf(value).intValue() == 2 )
+        		convertOpenMP4toOpenACC = true;
+      		if( Integer.valueOf(value).intValue() == 3 )
+        		convertOpenACCtoOpenMP3 = true;
+      		if( Integer.valueOf(value).intValue() == 4 )
+        		convertOpenACCtoOpenMP4 = true;
+    	}
 		value = Driver.getOptionValue("AccAnalysisOnly");
 		if( value != null ) {
 			AccAnalysisOnly = Integer.valueOf(value).intValue();
@@ -324,11 +333,17 @@ public class acc2gpu extends CodeGenPass
 		/*****************************************************************/
 		TransformPass.run(new ACCAnnotationParser(program));
 
-        if(convertOpenMPtoOpenACC)
-        {
-            OMP2ACCTranslator omp2ACCTranslator = new OMP2ACCTranslator(program, defaultNumAsyncQueues);
+		if(convertOpenMP3toOpenACC)
+		{
+			OMP3toACCTranslator omp2ACCTranslator = new OMP3toACCTranslator(program, defaultNumAsyncQueues);
+			TransformPass.run(omp2ACCTranslator);
+		}
+
+		if(convertOpenMP4toOpenACC)
+		{
+			OMP4toACCTranslator omp2ACCTranslator = new OMP4toACCTranslator(program, defaultNumAsyncQueues);
             TransformPass.run(omp2ACCTranslator);
-        }
+		}
 
 		if( AccAnalysisOnly == 1 ) {
 			cleanAnnotations();
@@ -643,8 +658,23 @@ public class acc2gpu extends CodeGenPass
 			TransformPass.run(new CustomProfilingTransformation(program, IRSymbolOnly));
 		}
 		
+		if(convertOpenACCtoOpenMP3) {
+			//ACCtoOMP3Translator.ACCtoOMP3Trans(program);
+			ACCtoOMP3Translator acc2OMPTranslator = new ACCtoOMP3Translator(program, defaultNumAsyncQueues);
+			TransformPass.run(acc2OMPTranslator);
+			cleanAnnotations();
+			return;
+		}
+
+		if(convertOpenACCtoOpenMP4) {
+			//ACCtoOMP4Translator.ACCtoOMP4Trans(program);
+			ACCtoOMP4Translator acc2OMPTranslator = new ACCtoOMP4Translator(program, defaultNumAsyncQueues);
+			TransformPass.run(acc2OMPTranslator);
+			cleanAnnotations();
+			return;
+		}
 		
-		
+
 		if( SkipGPUTranslation == 1 ) {
 			cleanAnnotations();
 			return;

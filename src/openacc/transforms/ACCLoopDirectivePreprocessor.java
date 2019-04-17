@@ -21,6 +21,7 @@ import java.util.*;
 public class ACCLoopDirectivePreprocessor extends TransformPass {
 	private static String pass_name = "[ACCLoopDirectivePreprocessor]";
 	private boolean disableWorkShareLoopCollapsing = false;
+	private boolean acc2ompTranslation = false;
 
 	/**
 	 * @param program
@@ -44,6 +45,7 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 	 */
 	private void baseComputeRegionPreprocessor() {
 		
+		List<FunctionCall> funcCallList = null;
 		List<ACCAnnotation>  cRegionAnnots = AnalysisTools.collectPragmas(program, ACCAnnotation.class, ACCAnnotation.computeRegions, false);
 		if( cRegionAnnots != null ) {
 			for( ACCAnnotation cAnnot : cRegionAnnots ) {
@@ -52,20 +54,49 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 				if( cAnnot.containsKey("parallel") ) {
 					isParallelRegion = true;
 				}
-				//Replace vector clause with worker clause if existing, since the current implementation does not support vector clause yet.
-				Set<String> searchKeys = new HashSet<String>();
-				searchKeys.add("loop");
-				searchKeys.add("vector");
-				List<ACCAnnotation> vectorAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, searchKeys, true, null);
-				if( vectorAnnots != null ) {
-					for( ACCAnnotation vAnnot : vectorAnnots ) {
-						vAnnot.remove("vector");
-						vAnnot.put("worker", "_clause");
+        		//The independent clause is implied on all loop constructs without a seq or auto clause, if they are in a parallel region. 
+				//If a loop construct contains an auto clause, an independent clause will be added if a Cetus parallel annotation exists.
+        		List<ACCAnnotation> cloopAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, "loop", null); 
+        		if( (cloopAnnots != null) && (!cloopAnnots.isEmpty()) ) {
+        			for( ACCAnnotation lAnnot : cloopAnnots ) {
+        				//Do not modify user-provided information.
+        				if( lAnnot.containsKey("gang") || lAnnot.containsKey("worker") || 
+        						lAnnot.containsKey("vector") || lAnnot.containsKey("seq") || lAnnot.containsKey("independent") ) {
+        					continue;
+        				} else {
+        					if( isParallelRegion && !lAnnot.containsKey("auto") ) {
+        						lAnnot.put("independent", "_clause");
+        					} else {
+        						Annotatable lat = lAnnot.getAnnotatable();
+        						CetusAnnotation cetusAnnot = lat.getAnnotation(CetusAnnotation.class, "parallel");
+        						if( cetusAnnot != null ) {
+        							lAnnot.put("independent", "_clause");
+        							if( lAnnot.containsKey("auto") ) {
+        								lAnnot.remove("auto");
+        							}
+        						}
+        					}
+        				}
+        			}
+        		} 
+        		//Below change will be applied later in the IndependentLoopPreprocessor pass.
+/*				if( !acc2ompTranslation ) {
+					//Replace vector clause with worker clause if existing, since the current implementation does not support vector clause yet.
+					Set<String> searchKeys = new HashSet<String>();
+					searchKeys.add("loop");
+					searchKeys.add("vector");
+					List<ACCAnnotation> vectorAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, searchKeys, true, null);
+					if( vectorAnnots != null ) {
+						for( ACCAnnotation vAnnot : vectorAnnots ) {
+							vAnnot.remove("vector");
+							vAnnot.put("worker", "_clause");
+						}
 					}
-				}
+				}*/
+
 				if( at instanceof ForLoop ) {
+					//If kernels loop has separate kernels annotation and loop annotation, merge them together.
 					if( !cAnnot.containsKey("loop") ) {
-						//If kernels loop has separate kernels annotation and loop annotaion, merge them together.
 						ACCAnnotation lAnnot = at.getAnnotation(ACCAnnotation.class, "loop");
 						if( (lAnnot != null) && (!lAnnot.equals(cAnnot)) ) {
 							for( String key : lAnnot.keySet() ) {
@@ -83,17 +114,31 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 							}
 						}
 					}
+
+					//If a compute region is a loop, but not having loop directive, add it.
 					if( !at.containsAnnotation(ACCAnnotation.class, "loop") ) {
-						//If a compute region is a loop, but not having loop directive, add it.
 						cAnnot.put("loop", "_directive");
+						if( isParallelRegion ) {
+							cAnnot.put("independent", "_clause");
+						} else {
+							CetusAnnotation cetusAnnot = at.getAnnotation(CetusAnnotation.class, "parallel");
+							if( cetusAnnot != null ) {
+								cAnnot.put("independent", "_clause");
+							} else {
+								cAnnot.put("auto", "_clause");
+							}
+						}
 					}
+
 					//if( !cAnnot.containsKey("gang") && !cAnnot.containsKey("worker") && !cAnnot.containsKey("seq")) {
 					if( !cAnnot.containsKey("gang") && !cAnnot.containsKey("seq")) {
 						if( isParallelRegion ) {
 							cAnnot.put("gang", "_clause");
-							if( !AnalysisTools.ipContainPragmas(at, ACCAnnotation.class, "worker", null) ) {
-								NestedParallelLoopsPreprocessor((ForLoop)at, isParallelRegion);
-							}
+							//if( !acc2ompTranslation ) {
+								if( !AnalysisTools.ipContainPragmas(at, ACCAnnotation.class, "worker", null) ) {
+									NestedParallelLoopsPreprocessor((ForLoop)at, isParallelRegion);
+								}
+							//}
 						} else {
 							boolean isIndependent = false;
 							if( cAnnot.containsKey("independent") ) {
@@ -106,13 +151,15 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 							}
 							if( isIndependent ) {
 								cAnnot.put("gang", "_clause");
-								if( !AnalysisTools.ipContainPragmas(at, ACCAnnotation.class, "worker", null) ) {
-									NestedParallelLoopsPreprocessor((ForLoop)at, isParallelRegion);
-								}
+								//if( !acc2ompTranslation ) {
+									if( !AnalysisTools.ipContainPragmas(at, ACCAnnotation.class, "worker", null) ) {
+										NestedParallelLoopsPreprocessor((ForLoop)at, isParallelRegion);
+									}
+								//}
 							} else {
 								Procedure cProc = IRTools.getParentProcedure(at);
 								PrintTools.println("\n[WARNING] the following kernels region does not have any loop directive with " +
-										"worksharing clause (gang or worker) or independent clause, which will be executed sequentially by default. " +
+										"worksharing clause (gang, worker, or vector) or independent clause, which will be executed sequentially by default. " +
 										"To enable automatic parallelization, set AccParallelization to 1.\n" +
 										"Enclosing procedure: " + cProc.getSymbolName() + "\n" +
 										"Compute region: " + cAnnot + "\n", 0);
@@ -159,20 +206,33 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 										gLoop.containsAnnotation(ACCAnnotation.class, "seq") ) {
 									continue;
 								} else {
+									boolean noGangLoopFound = true;
+									if( !isLexicallyIncluded ) {
+										if( funcCallList == null ) {
+											funcCallList = IRTools.getFunctionCalls(program);
+										}
+										ACCAnnotation gangAnnot = AnalysisTools.ipFindFirstPragmaInParent(gLoop, ACCAnnotation.class, "gang", funcCallList, null);
+										if( (gangAnnot != null) && !gangAnnot.isEmpty() ) {
+											noGangLoopFound = false;
+										}
+									}
+
 									Traversable lBody = ((Loop)gLoop).getBody();
-									if( !AnalysisTools.ipContainPragmas(lBody, ACCAnnotation.class, "gang", null) ) {
+									if( noGangLoopFound && !AnalysisTools.ipContainPragmas(lBody, ACCAnnotation.class, "gang", null) ) {
 										if( isParallelRegion ) {
 											//OpenACC loop without worksharing clauses in a parallel region is implicitly parallel. 
 											lAnnot.put("gang", "_clause");
-											if( !AnalysisTools.ipContainPragmas(lBody, ACCAnnotation.class, "worker", null) ) {
-												lAnnot.put("worker", "_clause");
+											if( !AnalysisTools.ipContainPragmas(gLoop, ACCAnnotation.class, "worker", null) ) {
+												//lAnnot.put("worker", "_clause");
+												NestedParallelLoopsPreprocessor((ForLoop)gLoop, isParallelRegion);
 											}
 										} else {
 											//OpenACC loop without worksharing clauses in a kernels region is implementation-dependent.
 											if( lAnnot.containsKey("independent") || gLoop.containsAnnotation(CetusAnnotation.class, "parallel") ) {
 												lAnnot.put("gang", "_clause");
-												if( !AnalysisTools.ipContainPragmas(lBody, ACCAnnotation.class, "worker", null) ) {
-													lAnnot.put("worker", "_clause");
+												if( !AnalysisTools.ipContainPragmas(gLoop, ACCAnnotation.class, "worker", null) ) {
+													//lAnnot.put("worker", "_clause");
+													NestedParallelLoopsPreprocessor((ForLoop)gLoop, isParallelRegion);
 												}
 											} else {
 												lAnnot.put("seq", "_clause");
@@ -926,14 +986,23 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 	}
 	
 	/**
-	 * In OpenACC V1.0, "independent" clause is allowed on loop directives in kernels region.
-	 * For now, if a pure independent loop is not enclosed by any gang/worker loop, the compiler adds
-	 * gang and worker clauses to it.
-	 * If it is used in other region, it will be ignored.
+	 * [Step1]
+	 * If a pure independent loop construct is not enclosed by any gang/worker/vector clause, the compiler
+	 * 	add a gang clause to it.
+	 * Else if it is enclosed by a gang clause,
+	 * 	add a worker clause to it.
+	 * Else if it is enclosed by a worker clause,
+	 * 	add a vector clause to it.
+	 *
+	 * [Step2]
+	 * IF a gang loop does not contain any inner work/vector loops, add worker clauses.
+	 * Else if a gang loop contains inner vector loops only, change the vector loop to a worker loop.
+	 * 
 	 * 
 	 */
 	private void IndependentLoopsPreprocessor() {
-		List<ACCAnnotation> computeRegions = IRTools.collectPragmas(program, ACCAnnotation.class, "kernels");
+		List<ACCAnnotation>  computeRegions = AnalysisTools.collectPragmas(program, ACCAnnotation.class, ACCAnnotation.computeRegions, false);
+		//[Step 1]
 		for( ACCAnnotation rAnnot : computeRegions ) {
 			Annotatable rAt = rAnnot.getAnnotatable();
 			List<ACCAnnotation> indAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "independent", null);
@@ -945,15 +1014,73 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 							(!at.containsAnnotation(ACCAnnotation.class, "vector")) &&
 							(!at.containsAnnotation(ACCAnnotation.class, "seq"))  ) {
 						ACCAnnotation tGWA = AnalysisTools.ipFindFirstPragmaInParent(at, ACCAnnotation.class, 
-								ACCAnnotation.parallelWorksharingClauses, false, null, null);
-						if( tGWA == null ) {
-							List<ForLoop> indLoops = AnalysisTools.findDirectlyNestedLoopsWithClause((ForLoop)at, "independent");
-							for( ForLoop indL : indLoops ) {
-								ACCAnnotation tAt = indL.getAnnotation(ACCAnnotation.class, "independent");
-								if( tAt != null ) {
-									if( !tAt.containsKey("seq") ) {
+								ACCAnnotation.worksharingClauses, false, null, null);
+						boolean noGang = true;
+						boolean noWorker = true;
+						boolean noVector = true;
+						if( tGWA != null ) {
+							if( tGWA.containsKey("vector") ) {
+								noGang = false;
+								noWorker = false;
+								noVector = false;
+							} else if( tGWA.containsKey("worker") ) {
+								noGang = false;
+								noWorker = false;
+							} else if( tGWA.containsKey("gang") ) {
+								noGang = false;
+							}
+						}
+						List<ForLoop> indLoops = AnalysisTools.findDirectlyNestedLoopsWithClause((ForLoop)at, "independent");
+						for( ForLoop indL : indLoops ) {
+							ACCAnnotation tAt = indL.getAnnotation(ACCAnnotation.class, "independent");
+							if( tAt != null ) {
+								if( !tAt.containsKey("seq") ) {
+									if( noGang ) {
 										tAt.put("gang", "_clause");
+									} else if( noWorker ) {
 										tAt.put("worker", "_clause");
+									} else if( noVector ) {
+										tAt.put("vector", "_clause");
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		
+		//[Step 2]
+		for( ACCAnnotation rAnnot : computeRegions ) {
+			Annotatable rAt = rAnnot.getAnnotatable();
+			List<ACCAnnotation> gangAnnots = AnalysisTools.ipCollectPragmas(rAt, ACCAnnotation.class, "gang", null);
+			if( gangAnnots != null ) { 
+				for( ACCAnnotation gAt : gangAnnots ) {
+					Annotatable at = gAt.getAnnotatable();
+					if( at instanceof ForLoop ) {
+						if( !at.containsAnnotation(ACCAnnotation.class, "worker") ) {
+							ForLoop tLoop = (ForLoop)at;
+							Set<String> searchKeys = new HashSet<String>();
+							searchKeys.add("worker");
+							searchKeys.add("vector");
+							List<ACCAnnotation> workshareAnnots = AnalysisTools.ipCollectPragmas(tLoop.getBody(), ACCAnnotation.class, searchKeys, false, null);
+							if( (workshareAnnots == null) || workshareAnnots.isEmpty() ) {
+								gAt.put("worker", "_clause");
+							} else {
+								boolean containWorkerAnnots = false;
+								List<ACCAnnotation> vectorAnnots = new LinkedList<ACCAnnotation>();
+								for( ACCAnnotation lAnnot : workshareAnnots ) {
+									if( lAnnot.containsKey("worker") ) {
+										containWorkerAnnots = true;
+										break;
+									} else if( lAnnot.containsKey("vector") ) {
+										vectorAnnots.add(lAnnot);
+									}
+								}
+								if( !containWorkerAnnots ) {
+									for( ACCAnnotation vAnnot : vectorAnnots ) {
+										vAnnot.remove("vector");
+										vAnnot.put("worker", "_clause");
 									}
 								}
 							}
@@ -1001,7 +1128,13 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 				cAnnot.put("gang", "_clause");
 			}
 			if( !cAnnot.containsKey("worker") ) {
-				cAnnot.put("worker", "_clause");
+				Set<String> searchKeys = new HashSet<String>();
+				searchKeys.add("independent");
+				searchKeys.add("worker");
+				List<ACCAnnotation> workshareAnnots = AnalysisTools.ipCollectPragmas(tLoop.getBody(), ACCAnnotation.class, searchKeys, false, null);
+				if( (workshareAnnots == null) || workshareAnnots.isEmpty() ) {
+					cAnnot.put("worker", "_clause");
+				}
 			}
 		} else if( nLoopSize >= 2 ) {
 			ForLoop cLoop = nestedParallelLoops.get(0);
@@ -1019,24 +1152,33 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 				cAnnot = new ACCAnnotation("loop", "_directive");
 				cLoop.annotate(cAnnot);
 			}
-			if( !cAnnot.containsKey("worker") ) {
-				cAnnot.put("worker", "_clause");
+			if( !cAnnot.containsKey("independent") ) {
+				cAnnot.put("independent", "_clause");
 			}
-			if( nLoopSize > 2 ) {
-				int OuterCollapseLevel = 0;
-				cAnnot = tLoop.getAnnotation(ACCAnnotation.class, "collapse");
-				if( cAnnot != null ) {
-					OuterCollapseLevel = (int)((IntegerLiteral)cAnnot.get("collapse")).getValue();
-					if( OuterCollapseLevel < nLoopSize ) {
-						IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize);
-						cAnnot.put("collapse", collapseLevel);
-					}
-				} else {
-					cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "collapse");
-					if( cAnnot == null ) {
-						cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "loop");
-						IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize-1);
-						cAnnot.put("collapse", collapseLevel);
+			if( !cAnnot.containsKey("worker") ) {
+				Set<String> searchKeys = new HashSet<String>();
+				searchKeys.add("independent");
+				searchKeys.add("worker");
+				List<ACCAnnotation> workshareAnnots = AnalysisTools.ipCollectPragmas(cLoop.getBody(), ACCAnnotation.class, searchKeys, false, null);
+				if( (workshareAnnots == null) || workshareAnnots.isEmpty() ) {
+					cAnnot.put("worker", "_clause");
+					if( nLoopSize > 2 ) {
+						int OuterCollapseLevel = 0;
+						cAnnot = tLoop.getAnnotation(ACCAnnotation.class, "collapse");
+						if( cAnnot != null ) {
+							OuterCollapseLevel = (int)((IntegerLiteral)cAnnot.get("collapse")).getValue();
+							if( OuterCollapseLevel < nLoopSize ) {
+								IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize);
+								cAnnot.put("collapse", collapseLevel);
+							}
+						} else {
+							cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "collapse");
+							if( cAnnot == null ) {
+								cAnnot = cLoop.getAnnotation(ACCAnnotation.class, "loop");
+								IntegerLiteral collapseLevel = new IntegerLiteral(nLoopSize-1);
+								cAnnot.put("collapse", collapseLevel);
+							}
+						}
 					}
 				}
 			}
@@ -1052,6 +1194,13 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 		String value = Driver.getOptionValue("disableWorkShareLoopCollapsing");
 		if( value != null ) {
 			disableWorkShareLoopCollapsing = true;
+		}
+		value = Driver.getOptionValue("ompaccInter");
+		if( value != null ) {
+			int IntV = Integer.valueOf(value).intValue();
+			if( (IntV == 3) || (IntV == 4) ) {
+				acc2ompTranslation = true;
+			}
 		}
 		baseComputeRegionPreprocessor();
 		CollapseClausePreprocessor(program);

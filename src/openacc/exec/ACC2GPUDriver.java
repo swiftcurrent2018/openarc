@@ -122,12 +122,16 @@ public class ACC2GPUDriver extends Driver
         "If not set, the target is decided by OPENARC_ARCH env variable." );
 		optionsWithIntArgument.add("targetArch");
 
-        options.add(options.UTILITY, "omp2acc", "N",
-                "Generate OpenACC program from OpenMP 4.0 program: \n" + 
-        "        =0 disable this option (default)\n" +
-        "        =1 enable this option");
-		optionsWithIntArgument.add("omp2acc");
 	    
+    options.add(options.UTILITY, "ompaccInter", "N",
+        "Interchange OpenACC directives with OpenMP 3.0 or OpenMP 4.0 directives: \n" + 
+        "        =0 disable this option (default)\n" +
+        "        =1 generate OpenACC directives from OpenMP 3.0 directives\n" +
+        "        =2 generate OpenACC directives from OpenMP 4.0 directives\n" +
+        "        =3 generate OpenMP 3.0 directives from OpenACC directives\n" +
+        "        =4 generate OpenMP 4.0 directives from OpenACC directives\n"); 
+    optionsWithIntArgument.add("ompaccInter");
+
 		options.add(options.ANALYSIS, "AccAnalysisOnly", "N",
 		"Conduct OpenACC analysis only and exit if option value > 0\n" +
 		"        =0 disable this option (default)\n" +
@@ -478,9 +482,9 @@ public class ACC2GPUDriver extends Driver
 		boolean implicitMallocOptSet = false;
 		boolean disableDefaultCachingOpts = false;
 		
-		String value = getOptionValue("omp2acc");
+		String value = getOptionValue("ompaccInter");
 		if( value != null ) {
-			if( Integer.valueOf(value).intValue() == 1 ) {
+			if( Integer.valueOf(value).intValue() > 0 ) {
 				value = getOptionValue("acc2gpu");
 				if( value == null ) {
 					setOptionValue("acc2gpu", "1");
@@ -854,9 +858,9 @@ public class ACC2GPUDriver extends Driver
 		{
 			preprocessorString += " -D_OPENACC=" + openacc_version;
 		}
-		value = getOptionValue("omp2acc");
+		value = getOptionValue("ompaccInter");
 		if( value != null ) {
-			if( Integer.valueOf(value).intValue() == 1 ) {
+			if( Integer.valueOf(value).intValue() == 1 || Integer.valueOf(value).intValue() == 2) {
 				preprocessorString += " -D_OPENMP";
 			}
 		}

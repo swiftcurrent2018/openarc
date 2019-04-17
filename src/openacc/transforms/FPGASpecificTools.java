@@ -532,6 +532,7 @@ public abstract class FPGASpecificTools {
             tKey.equals("accshared") ||
             tKey.equals("accexplicitshared") ||
             tKey.equals("accreadonly") ||
+            tKey.equals("accfirstprivate") ||
             tKey.equals("accprivate")) {
 
         }
@@ -596,10 +597,14 @@ public abstract class FPGASpecificTools {
       gAnnot = region.getAnnotation(ACCAnnotation.class, "num_gangs");
       wAnnot = region.getAnnotation(ACCAnnotation.class, "num_workers");
 
-      if( gAnnot == null )
-        Tools.exit("ERROR in isFPGASingleWorkItemRegion(...): num_gangs null\n");
-      if( wAnnot == null )
-        Tools.exit("ERROR in isFPGASingleWorkItemRegion(...): num_workers null\n");
+      if( gAnnot == null ) {
+        //Tools.exit("ERROR in isFPGASingleWorkItemRegion(...): num_gangs null\n");
+		return false;
+      }
+      if( wAnnot == null ) {
+        //Tools.exit("ERROR in isFPGASingleWorkItemRegion(...): num_workers null\n");
+		return false;
+      }
       totalnumgangs = ((Expression)gAnnot.get("num_gangs")).clone();
       totalnumworkers = ((Expression)wAnnot.get("num_workers")).clone();
     }

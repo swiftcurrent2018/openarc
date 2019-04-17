@@ -215,8 +215,8 @@ public class ACCAnnotation extends PragmaAnnotation
 		"if", "num_gangs", "num_workers", "vector_length", "reduction",
 		"use_device", "collapse", "cache", "device_resident", "host",
 		"device", 
-		"accglobal", "accshared", "accprivate", "accreduction", "accdeviceptr",
-		"accexplicitshared", "accreadonly", "accpreadonly",
+		"accglobal", "accshared", "accprivate", "accfirstprivate", "accreduction", "accdeviceptr",
+		"accexplicitshared", "accreadonly", "accpreadonly", "accreadonlyprivate",
 		"iterspace", "rcreate", "gangdim", "workerdim", "gangconf", "workerconf",
 		"totalnumgangs", "totalnumworkers", "tile", "pipe", "pipein", "pipeout",
 		"default_async", "device_num", "device_type", "delete",
@@ -317,8 +317,8 @@ public class ACCAnnotation extends PragmaAnnotation
 	public static final Set<String> pipeIOClauses = new HashSet(Arrays.asList("pipein", "pipeout"));
 	
 	public static final Set<String> internalDataClauses =
-		new HashSet<String>(Arrays.asList("accglobal", "accshared", "accprivate",
-		"accreduction", "accdeviceptr", "accexplicitshared", "accreadonly", "rcreate"));
+		new HashSet<String>(Arrays.asList("accglobal", "accshared", "accprivate", "accfirstprivate",
+		"accreduction", "accdeviceptr", "accexplicitshared", "accreadonly", "accreadonlyprivate", "rcreate"));
 	
 	public static final Set<String> internalConfigClauses =
 		new HashSet<String>(Arrays.asList("iterspace", "gangdim", "workerdim",

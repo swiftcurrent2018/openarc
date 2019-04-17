@@ -466,12 +466,15 @@
 #Normalize return statements for all procedures
 #
 ########################################
-#Option: omp2acc
+#Option: ompaccInter
 ########################################
-#omp2acc=N
-#Generate OpenACC program from OpenMP 4.0 program: 
+#ompaccInter=N
+#Interchange OpenACC directives with OpenMP 3.0 or OpenMP 4.0 directives: 
 #        =0 disable this option (default)
-#        =1 enable this option
+#        =1 generate OpenACC directives from OpenMP 3.0 directives
+#        =2 generate OpenACC directives from OpenMP 4.0 directives
+#        =3 generate OpenMP 3.0 directives from OpenACC directives
+#        =4 generate OpenMP 4.0 directives from OpenACC directives
 #
 ########################################
 #Option: ompGen
@@ -805,7 +808,7 @@
 # Translation configuration #
 #############################
 #acc2gpu=1
-#omp2acc=N
+#ompaccInter=N
 #targetArch=0
 #AccAnalysisOnly=1
 #SkipGPUTranslation=N

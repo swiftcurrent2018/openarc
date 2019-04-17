@@ -26,7 +26,8 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 	private String pass_name = "[CompRegionConfAnalysis]";
 	private int defaultNumWorkers = 64;
 	private int maxNumGangs = 0;
-	private int systemMaxNumGangs = 65535; //Maximum number of gangs that CUDA system allows.
+	private long systemMaxNumGangsYZ = 65535; //Maximum number of gangs that CUDA system allows for Y and Z dimensions.
+	private long systemMaxNumGangsX = 2147483647; //Maximum number of gangs that CUDA system allows for X dimension.
 	private int maxNumWorkers = 512;
 	private int OPENARC_ARCH = 0;
 
@@ -268,10 +269,16 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 								gLoop.annotate(iAnnot);
 							}
 							List<Expression> rExpList = new ArrayList<Expression>(tExpList.size());
+							long systemMaxNumGangs;
 							for( int i=tExpList.size()-1; i>=0; i--) {
 								Expression tExp = tExpList.get(i);
-								if( (tExp instanceof IntegerLiteral) && 
-										(((IntegerLiteral)tExp).getValue() > systemMaxNumGangs) ) {
+								if( (tExp instanceof IntegerLiteral) ) { 
+									if( i == 0 ) {
+										systemMaxNumGangs = systemMaxNumGangsX;
+									} else {
+										systemMaxNumGangs = systemMaxNumGangsYZ;
+									}
+									if(	(((IntegerLiteral)tExp).getValue() > systemMaxNumGangs) ) {
 									Procedure pProc = IRTools.getParentProcedure(at);
 /*									Tools.exit("[ERROR in CompRegionConfAnalysis.calKernelLoopConfiguration()] the number of gangs (" +
 											tExp.toString() + ") in the following compute region is bigger than the system-supported maximum size (" + 
@@ -285,6 +292,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 									ForLoop ttloop = nestedGLoops.get(i);
 									ACCAnnotation ttAnnot = ttloop.getAnnotation(ACCAnnotation.class, "gang");
 									ttAnnot.put("gang", tExp.clone());
+								}
 								}
 								rExpList.add(tExp.clone());
 							}
@@ -565,19 +573,21 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 					}
 					//Put the maximum gang loop size as num_gang clause value.
 					cAnnot.put("num_gangs", num_gangs);
-					if( (num_gangs instanceof IntegerLiteral) && 
-							(((IntegerLiteral)num_gangs).getValue() > systemMaxNumGangs) ) {
-						Procedure pProc = IRTools.getParentProcedure(at);
-/*						Tools.exit("[ERROR in CompRegionConfAnalysis.calParallelRegionConfiguration()] the number of gangs (" +
+					if( (num_gangs instanceof IntegerLiteral) ) {
+						long systemMaxNumGangs = systemMaxNumGangsX;
+						if(	(((IntegerLiteral)num_gangs).getValue() > systemMaxNumGangs) ) {
+							Procedure pProc = IRTools.getParentProcedure(at);
+							/*						Tools.exit("[ERROR in CompRegionConfAnalysis.calParallelRegionConfiguration()] the number of gangs (" +
 								num_gangs.toString() + ") in the following compute region is bigger than the system-supported maximum size (" + 
 								systemMaxNumGangs + "); either put explicit smaller gang size or increase worker size to meet the system limt; exit\n" + 
 								"Enclosing procedure: " + pProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n");*/
-						PrintTools.println("[WARNING in CompRegionConfAnalysis.calParallelRegionConfiguration()] the number of gangs (" +
-								num_gangs.toString() + ") in the following compute region is bigger than the system-supported maximum size (" + 
-								systemMaxNumGangs + "); the system-supported maximum size will be used for the number of gang.\n" + 
-								"Enclosing procedure: " + pProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n", 0);
-						num_gangs = new IntegerLiteral(systemMaxNumGangs);
-						cAnnot.put("num_gangs", num_gangs);
+							PrintTools.println("[WARNING in CompRegionConfAnalysis.calParallelRegionConfiguration()] the number of gangs (" +
+									num_gangs.toString() + ") in the following compute region is bigger than the system-supported maximum size (" + 
+									systemMaxNumGangs + "); the system-supported maximum size will be used for the number of gang.\n" + 
+									"Enclosing procedure: " + pProc.getSymbolName() + "\nOpenACC annotation: " + cAnnot + "\n", 0);
+							num_gangs = new IntegerLiteral(systemMaxNumGangs);
+							cAnnot.put("num_gangs", num_gangs);
+						}
 					}
 				}
 			}

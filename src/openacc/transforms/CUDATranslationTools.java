@@ -3087,6 +3087,14 @@ public abstract class CUDATranslationTools {
 			}
 		}
 		
+		ACCAnnotation readonlyprivateAnnot = region.getAnnotation(ACCAnnotation.class, "accreadonlyprivate");
+		Set<Symbol> accreadonlyprivateSet = null;
+		if( readonlyprivateAnnot != null ) {
+			accreadonlyprivateSet = readonlyprivateAnnot.get("accreadonlyprivate");
+		} else {
+			accreadonlyprivateSet = new HashSet<Symbol>();
+		}
+		
 		//Find index symbols for work-sharing loops, which are private to each thread by default.
 		Set<Symbol> loopIndexSymbols = AnalysisTools.getWorkSharingLoopIndexVarSet(region);
 		
@@ -3401,7 +3409,33 @@ public abstract class CUDATranslationTools {
 				boolean insertMalloc = false;
 				boolean insertWMalloc = false;
 				
-				if( isWorkerPrivate ) {
+				if( isGangPrivate && (FirstPrivSymSet != null) && FirstPrivSymSet.contains(privSym) &&
+						accreadonlyprivateSet.contains(privSym) && !isArray && !isPointer ) {
+					Identifier lfpriv_var = null;
+					String localFPSymName = "lfpriv__" + symNameBase;
+					//////////////////////////////////////////////////////////////////////////////
+					// If firstprivate variable is scalar, the corresponding shared variable is //
+					// passed as a kernel parameter instead of using GPU global memory, which   //
+					// has the effect of caching it on the GPU Shared Memory.                   //
+					//////////////////////////////////////////////////////////////////////////////
+					// Create a GPU kernel parameter corresponding to privSym
+					// ex: float lfpriv__x;
+					VariableDeclarator lfpriv_declarator = new VariableDeclarator(new NameID(localFPSymName));
+					VariableDeclaration lfpriv_decl = new VariableDeclaration(typeSpecs, 
+							lfpriv_declarator);
+					lfpriv_var = new Identifier(lfpriv_declarator);
+					new_proc.addDeclaration(lfpriv_decl);
+
+					// Insert argument to the kernel function call
+					if( privSym instanceof AccessSymbol ) {
+						AccessExpression accExp = AnalysisTools.accessSymbolToExpression((AccessSymbol)privSym, null);
+						call_to_new_proc.addArgument(accExp);
+					} else {
+						call_to_new_proc.addArgument(new Identifier(privSym));
+					}
+					TransformTools.replaceAll(region, new Identifier(privSym), lfpriv_var);
+					continue;
+				}else if( isWorkerPrivate ) {
 					if( workerPrivOnGlobal ) {
 						//Option to allocate worker-private variable on global memory is checked first, since it may be
 						//mandatory due to too large private array size.
@@ -3733,7 +3767,7 @@ public abstract class CUDATranslationTools {
 					//////////////////////////////////////////////////////////////////////////////
 					if( !isArray && !isPointer ) { //scalar variable
 						// Create a GPU kernel parameter corresponding to privSym
-						// ex: flaot lfpriv__x;
+						// ex: float lfpriv__x;
 						VariableDeclarator lfpriv_declarator = new VariableDeclarator(new NameID(localFPSymName));
 						VariableDeclaration lfpriv_decl = new VariableDeclaration(typeSpecs, 
 								lfpriv_declarator);
@@ -3747,7 +3781,7 @@ public abstract class CUDATranslationTools {
 						} else {
 							call_to_new_proc.addArgument(new Identifier(privSym));
 						}
-
+						
 						///////////////////////////////////////////////////////////////////////////////
 						// Load the value of the passed shared variable to the firstprivate variable //
 						///////////////////////////////////////////////////////////////////////////////

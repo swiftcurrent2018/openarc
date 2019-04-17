@@ -449,8 +449,8 @@ public class ACCAnalysis extends AnalysisPass
 	 *         - The internal annotation contains an accshared clause whose set contains symbols existing
 	 *         in data clauses of the region.
 	 *         - If the region is compute region (parallel region or kernels region)
-	 *             - Add accprivate and accreduction clauses to the internal annotation.
-	 * - The symbols in an accshared/accprivate/accreduction set can be one of the following types:
+	 *             - Add accprivate, accfirstprivate, and accreduction clauses to the internal annotation.
+	 * - The symbols in an accshared/accprivate/accfirstprivate/accreduction set can be one of the following types:
 	 *     VariableDeclarator or NestedDeclarator (If PseudoSymbol exists, its IRSymbol will be inserted instead.)
 	 */
 	private void declareDirectiveAnalysis(boolean IRSymbolOnly) {
@@ -473,6 +473,7 @@ public class ACCAnalysis extends AnalysisPass
 			for( ACCAnnotation dAnnot : dataAnnots ) {
 				Set<Symbol> accSharedSymbols = null;
 				Set<Symbol> accPrivateSymbols = null;
+				Set<Symbol> accFirstPrivateSymbols = null;
 				Set<Symbol> accReductionSymbols = null;
 				Annotatable at = dAnnot.getAnnotatable();
 				String directiveType;
@@ -493,8 +494,10 @@ public class ACCAnalysis extends AnalysisPass
 						iAnnot.put("accglobal", new HashSet<String>()); //Create an empty set, which will be filled in next step.
 					} else {
 						accPrivateSymbols = new HashSet<Symbol>();
+						accFirstPrivateSymbols = new HashSet<Symbol>();
 						accReductionSymbols = new HashSet<Symbol>();
 						iAnnot.put("accprivate", accPrivateSymbols); //compute region may contain private clauses.
+						iAnnot.put("accfirstprivate", accFirstPrivateSymbols); //compute region may contain private clauses.
 						iAnnot.put("accreduction", accReductionSymbols); //compute region may contain reduction clauses.
 					}
 					iAnnot.setSkipPrint(true);
@@ -511,6 +514,11 @@ public class ACCAnalysis extends AnalysisPass
 						if( accPrivateSymbols == null ) {
 							accPrivateSymbols = new HashSet<Symbol>();
 							iAnnot.put("accprivate", accPrivateSymbols);
+						}
+						accFirstPrivateSymbols = (Set<Symbol>)iAnnot.get("accfirstprivate");
+						if( accFirstPrivateSymbols == null ) {
+							accFirstPrivateSymbols = new HashSet<Symbol>();
+							iAnnot.put("accfirstprivate", accFirstPrivateSymbols);
 						}
 						accReductionSymbols = (Set<Symbol>)iAnnot.get("accreduction");
 						if( accReductionSymbols == null ) {
@@ -587,7 +595,12 @@ public class ACCAnalysis extends AnalysisPass
 										"subarrays of key," + aKey + ", in ACCAnnotation, " + dAnnot + AnalysisTools.getEnclosingAnnotationContext(dAnnot));
 							} else {
 								if( !directiveType.equals("data") && ACCAnnotation.privateClauses.contains(aKey) ) {
-									accPrivateSymbols.addAll(symDSet);
+									if( aKey.equals("firstprivate") ) {
+										accFirstPrivateSymbols.addAll(symDSet);
+										//accPrivateSymbols.addAll(symDSet);
+									} else {
+										accPrivateSymbols.addAll(symDSet);
+									}
 								//} else if( !ACCAnnotation.pipeClauses.contains(aKey) ){
 								} else {
 									Set<Symbol> removeSet = new HashSet<Symbol>();
@@ -989,7 +1002,8 @@ public class ACCAnalysis extends AnalysisPass
 		*    - Find enclosing explicit/implicit data regions
 		*    - For each symbol that is in accshared set, but not in dataSet
 		*        - If it is not included in accshared set in any enclosing explicit/implicit data region 
-		*            - put it into pcopy set of the region.
+		*        	- If it is scalar variable in a parallel region, put it into firstprivate.
+		*           - Else, put it into pcopy set of the region.
 		*        - Else, put it into present set of the region.
 		*            
 		* CAVEAT: current analysis compares IR symbols if PseudoSymbols exist. To allow comparison of PseudoSymbols,
@@ -1009,11 +1023,16 @@ public class ACCAnalysis extends AnalysisPass
 				TranslationUnit parentTu = IRTools.getParentTranslationUnit(at);
 				Set<Symbol> accSharedSymbols = null;
 				Set<Symbol> accPrivateSymbols = null;
+				Set<Symbol> accFirstPrivateSymbols = null;
 				Set<Symbol> accReductionSymbols = null;
 				Set<Symbol> dataSet = new HashSet<Symbol>();
 				Set<Symbol> newPrivSymbols = new HashSet<Symbol>();
 				boolean privateClauseAllowed = false;
-				if( at.containsAnnotation(ACCAnnotation.class, "parallel") || at.containsAnnotation(ACCAnnotation.class, "loop") ) {
+				boolean isParallelConstruct = false;
+				if( at.containsAnnotation(ACCAnnotation.class, "parallel") ) {
+					privateClauseAllowed = true;
+					isParallelConstruct = true;
+				} else if( at.containsAnnotation(ACCAnnotation.class, "loop") ) {
 					privateClauseAllowed = true;
 				}
 				if( iAnnot != null ) {
@@ -1032,6 +1051,9 @@ public class ACCAnalysis extends AnalysisPass
 						accPrivateSymbols = (Set<Symbol>)iAnnot.get("accprivate");
 						if(accPrivateSymbols == null)	
 							accPrivateSymbols = new HashSet<Symbol>();
+						accFirstPrivateSymbols = (Set<Symbol>)iAnnot.get("accfirstprivate");
+						if(accFirstPrivateSymbols == null)	
+							accFirstPrivateSymbols = new HashSet<Symbol>();
 						accReductionSymbols = (Set<Symbol>)iAnnot.get("accreduction");
 						if(accReductionSymbols == null)	
 							accReductionSymbols = new HashSet<Symbol>();
@@ -1175,6 +1197,7 @@ public class ACCAnalysis extends AnalysisPass
 							}
 						}
 						accSharedSymbols.removeAll(accPrivateSymbols);
+						accSharedSymbols.removeAll(accFirstPrivateSymbols);
 						accSharedSymbols.removeAll(accReductionSymbols);
 						for( Symbol dSym : accSharedSymbols ) {
 							boolean isIncluded = false;
@@ -1183,7 +1206,7 @@ public class ACCAnalysis extends AnalysisPass
 							if( dataSet.contains(dSym) ) { 
 								//dSym is included in the data clauses of the current compute region.
 								continue;
-							} else if( accPrivateSymbols.contains(dSym) ||
+							} else if( accPrivateSymbols.contains(dSym) || accFirstPrivateSymbols.contains(dSym) ||
 									accReductionSymbols.contains(dSym) ) {
 								//dSym is included in the private/firstprivate/reduction clauses of the 
 								//current compute region.
@@ -1281,10 +1304,18 @@ public class ACCAnalysis extends AnalysisPass
 							String dataClause = "present"; //symbol, dSym, is included in an enclosing data region.
 							if( !isIncluded ) {
 								if( SymbolTools.isScalar(dSym) && !SymbolTools.isPointer(dSym) && !(dSym instanceof NestedDeclarator)) {
-									if( SymbolTools.containsSpecifier(dSym, Specifier.CONST) ) {
-										dataClause = "copyin";
+									//[OpenACC V2.7 Section 2.5.1 Line 675 - 677] "A scalar variable referenced in the parallel construct 
+									//that does not appear in a data clause for the construct or any enclosing data construct will be 
+									//treated as if it appeared in a firstprivate clause."
+									if( isParallelConstruct ) {
+										dataClause = "firstprivate";
+										accFirstPrivateSymbols.add(dSym);
 									} else {
-										dataClause = "copy";
+										if( SymbolTools.containsSpecifier(dSym, Specifier.CONST) ) {
+											dataClause = "copyin";
+										} else {
+											dataClause = "copy";
+										}
 									}
 								} else {
 									dataClause = "pcopy";
@@ -1317,6 +1348,7 @@ public class ACCAnalysis extends AnalysisPass
 										", is accessed in the following compute region, but not visible." + AnalysisTools.getEnclosingContext(at));
 							}
 						}
+						accSharedSymbols.removeAll(accFirstPrivateSymbols);
 						if( privateClauseAllowed && !newPrivSymbols.isEmpty() ) {
 							Set<SubArray> privSet = null; 
 							ACCAnnotation privAnnot = at.getAnnotation(ACCAnnotation.class, "private");
