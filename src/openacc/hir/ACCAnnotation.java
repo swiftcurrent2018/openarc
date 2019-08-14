@@ -297,7 +297,7 @@ public class ACCAnnotation extends PragmaAnnotation
 			"pipe", "pipein", "pipeout", "delete"));
 
 	public static final Set<String> unstructuredDataClauses = new HashSet(Arrays.asList("copyin", "pcopyin", "create",
-			"pcreate", "copyoput", "delete"));
+			"pcreate", "copyout", "pcopyout", "delete"));
 
 	public static final Set<String> enterDataClauses = new HashSet(Arrays.asList("copyin", "pcopyin", "create",
 			"pcreate"));

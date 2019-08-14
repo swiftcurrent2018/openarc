@@ -8,6 +8,7 @@ import openacc.hir.OpenCLStdLibrary;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
@@ -21,6 +22,7 @@ import java.util.Set;
 public class OpenCLKernelTranslationTools extends TransformPass
 {
 	private String kernelFileNameBase = "openarc_kernel";
+	private boolean addressSpecifierUpdated = true;
     /**
      * @param program
      */
@@ -85,6 +87,7 @@ public class OpenCLKernelTranslationTools extends TransformPass
         // Casting a pointer to address space A to a pointer to address space B is illegal.            //
         /////////////////////////////////////////////////////////////////////////////////////////////////
         Set<Procedure> visitedProcedureSet = new HashSet<Procedure>();
+        List<Procedure> kernelProcedures = new LinkedList<Procedure>();
         for(Declaration decl : kernelsTranslationUnit.getDeclarations())
         {
         	if(!(decl instanceof Procedure))
@@ -93,9 +96,41 @@ public class OpenCLKernelTranslationTools extends TransformPass
         	Procedure kernelProc = (Procedure)decl;
         	List typeList = kernelProc.getReturnType();
         	if( typeList.contains(OpenCLSpecifier.OPENCL_KERNEL)) {
-        		addAddressSpaceQualifier(kernelProc, visitedProcedureSet);
+        		kernelProcedures.add(kernelProc);
         	}
         }
+        int i=0;
+        while( addressSpecifierUpdated ) {
+        	//PrintTools.println("\n==> Address space qualitier update phase " + i++, 0);
+        	addressSpecifierUpdated = false;
+        	for(Procedure kernelProc : kernelProcedures)
+        	{
+        		addAddressSpaceQualifier(kernelProc, visitedProcedureSet);
+        	}
+        	visitedProcedureSet.clear();
+        }
+    }
+    
+    protected Set<Symbol> getAccessedSymbolsExcludingArguments(Traversable inExp) {
+    	Set<Symbol> retSet = new HashSet<Symbol>();
+    	if( inExp != null ) {
+    		DFIterator<Expression> iter =
+            new DFIterator<Expression>(inExp, Expression.class);
+    		iter.pruneOn(FunctionCall.class);
+    		while (iter.hasNext()) {
+    			Symbol tSym = null;
+    			Expression tExp = iter.next();
+    			if( tExp instanceof FunctionCall ) {
+    				tSym = SymbolTools.getSymbolOf(((FunctionCall)tExp).getName());
+    			} else if( tExp instanceof IDExpression ) {
+    				tSym = SymbolTools.getSymbolOf(tExp);
+    			}
+    			if (tSym != null) {
+    				retSet.add(tSym);
+    			}
+    		}
+    	}
+    	return retSet;
     }
     
     protected void addAddressSpaceQualifier(Procedure devProc, Set<Procedure> visitedProcedureSet) {
@@ -104,6 +139,7 @@ public class OpenCLKernelTranslationTools extends TransformPass
     	} else {
     		visitedProcedureSet.add(devProc);
     	}
+        //PrintTools.println("[OpenCLKernelTranslationTools.addAddressSpaceQualifier()] visit a function, " + devProc.getSymbolName(), 0);
     	CompoundStatement kBody = devProc.getBody();
     	Set<Symbol> localPointers = new HashSet<Symbol>();
     	Set<Symbol> localSymbols = SymbolTools.getLocalSymbols(kBody);
@@ -134,36 +170,59 @@ public class OpenCLKernelTranslationTools extends TransformPass
     					if( lExp instanceof Identifier ) {
     						Symbol tSym = ((Identifier)lExp).getSymbol();
     						if( localPointers.contains(tSym) ) {
-    							Set<Symbol> accessedSyms = SymbolTools.getAccessedSymbols(rExp);
+    							VariableDeclaration tDecl = (VariableDeclaration)tSym.getDeclaration();
+    							List<Specifier> tSpec = tDecl.getSpecifiers();
+    							//Set<Symbol> accessedSyms = SymbolTools.getAccessedSymbols(rExp);
+    							Set<Symbol> accessedSyms = getAccessedSymbolsExcludingArguments(rExp);
     							for(Symbol ttSym : accessedSyms ) {
     								if( SymbolTools.isPointer(ttSym) || SymbolTools.isArray(ttSym) ) {
-    									List ttSpec = ttSym.getTypeSpecifiers();
+    									//List ttSpec = ttSym.getTypeSpecifiers();
+    									List<Specifier> ttSpec = null;
+    									Declaration ttDecl = ttSym.getDeclaration();
+    									if( ttDecl instanceof VariableDeclaration  ) {
+    										ttSpec = ((VariableDeclaration)ttDecl).getSpecifiers();
+    									} else if( ttDecl instanceof Procedure ) {
+    										ttSpec = ((Procedure)ttDecl).getReturnType();
+    									}
+    									if( ttSpec == null ) {
+    										continue;
+    									}
     									if( ttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    										if( !tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    											VariableDeclaration tDecl = (VariableDeclaration)tSym.getDeclaration();
-    											tDecl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);
-    										}
-    										localPointers.remove(tSym);
-    										if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) || 
-    												tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    											DFIterator<Identifier> titer =
-    													new DFIterator<Identifier>(rExp, Identifier.class);
-    											while( titer.hasNext() ) {
-    												List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
-    												if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
-    													break;
-    												} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
-    													break;
-    												} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
-    													break;
+    										if( !tSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+    											tSpec.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+    											addressSpecifierUpdated = true;
+    											//PrintTools.println("[addAddressSpaceQualifier() case 1] update a local symbol, " + tDecl, 0);
+    											if(tSym.getSymbolName().contains("_ret_val_")) {
+    												List returnTypes = devProc.getSpecifiers();
+    												if( !returnTypes.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+    													returnTypes.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
     												}
     											}
+    										}
+    										localPointers.remove(tSym);
+    										if( tSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) || 
+    												tSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+    											Tools.exit("[ERROR in OpenCLKernelTranslationTools.addAddressSpaceQualiter()] more than one address space qualifier "
+    													+ "is added to a variable, " + tSym + " in the procedure, " + devProc.getSymbolName() + "\n");
+/*    											DFIterator<Identifier> titer =
+    													new DFIterator<Identifier>(rExp, Identifier.class);
+    											while( titer.hasNext() ) {
+    												VariableDeclaration tttDecl = (VariableDeclaration)titer.next().getSymbol().getDeclaration();
+    												List tttSpec = tttDecl.getSpecifiers();
+    												if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+    													tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
+    													break;
+    												} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+    													tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
+    													break;
+    												} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+    													tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    													break;
+    												}
+    											}*/
     										}
     										if( rExp instanceof Typecast ) {
     											Typecast rTCExp = (Typecast)rExp;
@@ -175,30 +234,39 @@ public class OpenCLKernelTranslationTools extends TransformPass
     										break;
     									} else if( ttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
     										if( !tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-    											VariableDeclaration tDecl = (VariableDeclaration)tSym.getDeclaration();
-    											tDecl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_LOCAL);
+    											tSpec.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+    											addressSpecifierUpdated = true;
+    											if(tSym.getSymbolName().contains("_ret_val_")) {
+    												List returnTypes = devProc.getSpecifiers();
+    												if( !returnTypes.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+    													returnTypes.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+    												}
+    											}
     										}
     										localPointers.remove(tSym);
     										if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) || 
     												tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    											DFIterator<Identifier> titer =
+    											Tools.exit("[ERROR in OpenCLKernelTranslationTools.addAddressSpaceQualiter()] more than one address space qualifier "
+    													+ "is added to a variable, " + tSym + " in the procedure, " + devProc.getSymbolName() + "\n");
+/*    											DFIterator<Identifier> titer =
     													new DFIterator<Identifier>(rExp, Identifier.class);
     											while( titer.hasNext() ) {
-    												List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
+    												VariableDeclaration tttDecl = (VariableDeclaration)titer.next().getSymbol().getDeclaration();
+    												List tttSpec = tttDecl.getSpecifiers();
     												if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     													break;
     												} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     													break;
     												} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
     													break;
     												}
-    											}
+    											}*/
     										}
     										if( rExp instanceof Typecast ) {
     											Typecast rTCExp = (Typecast)rExp;
@@ -210,31 +278,41 @@ public class OpenCLKernelTranslationTools extends TransformPass
     										break;
     									} else if( ttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
     										if( !tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    											VariableDeclaration tDecl = (VariableDeclaration)tSym.getDeclaration();
-    											tDecl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_CONSTANT);
-    											tDecl.getSpecifiers().remove(Specifier.CONST);
+    											tSpec.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
+    											tSpec.remove(Specifier.CONST);
+    											addressSpecifierUpdated = true;
+    											if(tSym.getSymbolName().contains("_ret_val_")) {
+    												List returnTypes = devProc.getSpecifiers();
+    												if( !returnTypes.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+    													returnTypes.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
+    													returnTypes.remove(Specifier.CONST);
+    												}
+    											}
     										}
     										localPointers.remove(tSym);
     										if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) || 
     												tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    											DFIterator<Identifier> titer =
+    											Tools.exit("[ERROR in OpenCLKernelTranslationTools.addAddressSpaceQualiter()] more than one address space qualifier "
+    													+ "is added to a variable, " + tSym + " in the procedure, " + devProc.getSymbolName() + "\n");
+ /*   											DFIterator<Identifier> titer =
     													new DFIterator<Identifier>(rExp, Identifier.class);
     											while( titer.hasNext() ) {
-    												List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
+    												VariableDeclaration tttDecl = (VariableDeclaration)titer.next().getSymbol().getDeclaration();
+    												List tttSpec = tttDecl.getSpecifiers();
     												if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     													break;
     												} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     													break;
     												} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    													tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    													tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
     													break;
     												}
-    											}
+    											}*/
     										}
     										if( rExp instanceof Typecast ) {
     											Typecast rTCExp = (Typecast)rExp;
@@ -253,6 +331,7 @@ public class OpenCLKernelTranslationTools extends TransformPass
     			} else if( tStmt instanceof DeclarationStatement ) {
     				VariableDeclaration tDecl = (VariableDeclaration)((DeclarationStatement)tStmt).getDeclaration();
     				Symbol tSym = (Symbol)tDecl.getDeclarator(0);
+    				List<Specifier> tSpec = tDecl.getSpecifiers();
     				Initializer tInit = tDecl.getDeclarator(0).getInitializer();
     				if( tInit != null ) {
     					if( localPointers.contains(tSym) ) {
@@ -260,35 +339,58 @@ public class OpenCLKernelTranslationTools extends TransformPass
     						if( tInit.getChildren().get(0) instanceof Typecast ) {
     							tInitTCExp = (Typecast)tInit.getChildren().get(0);
     						}
-    						Set<Symbol> accessedSyms = SymbolTools.getAccessedSymbols(tInit);
+    						//Set<Symbol> accessedSyms = SymbolTools.getAccessedSymbols(tInit);
+    						Set<Symbol> accessedSyms = getAccessedSymbolsExcludingArguments(tInit);
     						for(Symbol ttSym : accessedSyms ) {
     							if( SymbolTools.isPointer(ttSym) || SymbolTools.isArray(ttSym) ) {
-    								List ttSpec = ttSym.getTypeSpecifiers();
+    								//List ttSpec = ttSym.getTypeSpecifiers();
+    								List<Specifier> ttSpec = null;
+    								Declaration ttDecl = ttSym.getDeclaration();
+    								if( ttDecl instanceof VariableDeclaration  ) {
+    									ttSpec = ((VariableDeclaration)ttDecl).getSpecifiers();
+    								} else if( ttDecl instanceof Procedure ) {
+    									ttSpec = ((Procedure)ttDecl).getReturnType();
+    								}
+    								if( ttSpec == null ) {
+    									continue;
+    								}
     								if( ttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    									if( !tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    										tDecl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+    									if( !tSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+    										tSpec.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+    										addressSpecifierUpdated = true;
+    										//PrintTools.println("[addAddressSpaceQualifier() case 2] update a local symbol, " + tDecl, 0);
+    										if(tSym.getSymbolName().contains("_ret_val_")) {
+    											List returnTypes = devProc.getSpecifiers();
+    											if( !returnTypes.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+    												returnTypes.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+    											}
+    										}
     									}
     									localPointers.remove(tSym);
     									if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) || 
     											tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    										DFIterator<Identifier> titer =
+    										Tools.exit("[ERROR in OpenCLKernelTranslationTools.addAddressSpaceQualiter()] more than one address space qualifier "
+    												+ "is added to a variable, " + tSym + " in the procedure, " + devProc.getSymbolName() + "\n");
+/*    										DFIterator<Identifier> titer =
     												new DFIterator<Identifier>(tInit, Identifier.class);
     										while( titer.hasNext() ) {
-    											List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
+    											//List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
+    											VariableDeclaration tttDecl = (VariableDeclaration)titer.next().getSymbol().getDeclaration();
+    											List tttSpec = tttDecl.getSpecifiers();
     											if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     												break;
     											} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     												break;
     											} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
     												break;
     											}
-    										}
+    										}*/
     									}
     									if( tInitTCExp != null ) {
     										List rTCSpecList = tInitTCExp.getSpecifiers();
@@ -299,29 +401,41 @@ public class OpenCLKernelTranslationTools extends TransformPass
     									break;
     								} else if( ttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
     									if( !tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-    										tDecl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_LOCAL);
+    										//tDecl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_LOCAL);
+    										tSpec.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+    										addressSpecifierUpdated = true;
+    										if(tSym.getSymbolName().contains("_ret_val_")) {
+    											List returnTypes = devProc.getSpecifiers();
+    											if( !returnTypes.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+    												returnTypes.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+    											}
+    										}
     									}
     									localPointers.remove(tSym);
     									if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) || 
     											tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    										DFIterator<Identifier> titer =
+    										Tools.exit("[ERROR in OpenCLKernelTranslationTools.addAddressSpaceQualiter()] more than one address space qualifier "
+    												+ "is added to a variable, " + tSym + " in the procedure, " + devProc.getSymbolName() + "\n");
+ /*   										DFIterator<Identifier> titer =
     												new DFIterator<Identifier>(tInit, Identifier.class);
     										while( titer.hasNext() ) {
-    											List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
+    											//List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
+    											VariableDeclaration tttDecl = (VariableDeclaration)titer.next().getSymbol().getDeclaration();
+    											List tttSpec = tttDecl.getSpecifiers();
     											if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     												break;
     											} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     												break;
     											} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
     												break;
     											}
-    										}
+    										}*/
     									}
     									if( tInitTCExp != null ) {
     										List rTCSpecList = tInitTCExp.getSpecifiers();
@@ -332,30 +446,42 @@ public class OpenCLKernelTranslationTools extends TransformPass
     									break;
     								} else if( ttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
     									if( !tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    										tDecl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_CONSTANT);
-    										tDecl.getSpecifiers().remove(Specifier.CONST);
+    										tSpec.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
+    										tSpec.remove(Specifier.CONST);
+    										addressSpecifierUpdated = true;
+    										if(tSym.getSymbolName().contains("_ret_val_")) {
+    											List returnTypes = devProc.getSpecifiers();
+    											if( !returnTypes.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+    												returnTypes.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
+    												returnTypes.remove(Specifier.CONST);
+    											}
+    										}
     									}
     									localPointers.remove(tSym);
     									if( tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) || 
     											tSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    										DFIterator<Identifier> titer =
+    										Tools.exit("[ERROR in OpenCLKernelTranslationTools.addAddressSpaceQualiter()] more than one address space qualifier "
+    												+ "is added to a variable, " + tSym + " in the procedure, " + devProc.getSymbolName() + "\n");
+/*    										DFIterator<Identifier> titer =
     												new DFIterator<Identifier>(tInit, Identifier.class);
     										while( titer.hasNext() ) {
-    											List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
+    											//List tttSpec = titer.next().getSymbol().getTypeSpecifiers();
+    											VariableDeclaration tttDecl = (VariableDeclaration)titer.next().getSymbol().getDeclaration();
+    											List tttSpec = tttDecl.getSpecifiers();
     											if( tttSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     												break;
     											} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_LOCAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_LOCAL);
     												break;
     											} else if( tttSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_CONSTANT);
-    												tSym.getTypeSpecifiers().remove(OpenCLSpecifier.OPENCL_GLOBAL);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_CONSTANT);
+    												tSpec.remove(OpenCLSpecifier.OPENCL_GLOBAL);
     												break;
     											}
-    										}
+    										}*/
     									}
     									if( tInitTCExp != null ) {
     										List rTCSpecList = tInitTCExp.getSpecifiers();
@@ -386,7 +512,8 @@ public class OpenCLKernelTranslationTools extends TransformPass
 						if( argSym == null ) {
 							if( argExp instanceof BinaryExpression ) {
 								//find argSym which is a parameter symbol of the calling procedure.
-								Set<Symbol> sSet = SymbolTools.getAccessedSymbols(argExp);
+								//Set<Symbol> sSet = SymbolTools.getAccessedSymbols(argExp);
+								Set<Symbol> sSet = getAccessedSymbolsExcludingArguments(argExp);
 								for( Symbol tSym : sSet ) {
 									if( argSym == null ) {
 										argSym = tSym;
@@ -430,18 +557,78 @@ public class OpenCLKernelTranslationTools extends TransformPass
 								}
 							}
 							if( argSym != null ) {
-								if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-									if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
-										typeSpecs.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+								List<Specifier> argSpec = null;
+								Declaration argDecl = null;
+								boolean foundAddressSpecifier = false;
+								if( argSym instanceof AccessSymbol ) {
+									Symbol memSym = ((AccessSymbol)argSym).getMemberSymbol();
+									while( memSym instanceof AccessSymbol ) {
+										memSym = ((AccessSymbol)memSym).getMemberSymbol();
 									}
-								} else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-									if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
-										typeSpecs.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
-										typeSpecs.remove(Specifier.CONST);
+									if( memSym instanceof PseudoSymbol ) {
+										memSym = ((PseudoSymbol)memSym).getIRSymbol();
 									}
-								} else if( argSym.getTypeSpecifiers().contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-									if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
-										typeSpecs.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+									if( SymbolTools.isArray(memSym) || SymbolTools.isPointer(memSym) ) {
+										argDecl = memSym.getDeclaration();
+										if( argDecl instanceof VariableDeclaration ) {
+											argSpec = ((VariableDeclaration)argDecl).getSpecifiers();
+										} 
+										if( argSpec != null ) {
+											if( argSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+												foundAddressSpecifier = true;
+												if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+													typeSpecs.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+													addressSpecifierUpdated = true;
+													//PrintTools.println("[addAddressSpaceQualifier() case 3] update a local symbol, " + param + " in a procedure, " + tProc.getSymbolName(), 0);
+												}
+											} else if( argSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+												foundAddressSpecifier = true;
+												if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+													typeSpecs.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
+													typeSpecs.remove(Specifier.CONST);
+													addressSpecifierUpdated = true;
+												}
+											} else if( argSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+												foundAddressSpecifier = true;
+												if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+													typeSpecs.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+													addressSpecifierUpdated = true;
+												}
+											}
+										}
+									}
+								}
+								if( !foundAddressSpecifier ) {
+									Symbol IRSymbol = null;
+									if( argSym instanceof PseudoSymbol ) {
+										IRSymbol = ((PseudoSymbol)argSym).getIRSymbol();
+									} else {
+										IRSymbol = argSym;
+									}
+									argDecl = IRSymbol.getDeclaration();
+									if( argDecl instanceof VariableDeclaration ) {
+										argSpec = ((VariableDeclaration)argDecl).getSpecifiers();
+									} 
+									if( argSpec == null ) {
+										continue;
+									}
+									if( argSpec.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+										if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_GLOBAL) ) {
+											typeSpecs.add(0, OpenCLSpecifier.OPENCL_GLOBAL);
+											addressSpecifierUpdated = true;
+											//PrintTools.println("[addAddressSpaceQualifier() case 3] update a local symbol, " + param + " in a procedure, " + tProc.getSymbolName(), 0);
+										}
+									} else if( argSpec.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+										if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_CONSTANT) ) {
+											typeSpecs.add(0, OpenCLSpecifier.OPENCL_CONSTANT);
+											typeSpecs.remove(Specifier.CONST);
+											addressSpecifierUpdated = true;
+										}
+									} else if( argSpec.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+										if( !typeSpecs.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+											typeSpecs.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+											addressSpecifierUpdated = true;
+										}
 									}
 								}
 							}

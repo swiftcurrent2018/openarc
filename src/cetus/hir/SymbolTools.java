@@ -151,7 +151,7 @@ public final class SymbolTools {
         }
     }
 
-    // Serach for declaration of the identifier
+    // Search for declaration of the identifier
     private static Declaration searchDeclaration(Identifier id) {
         Declaration ret = null;
         Traversable parent = id.getParent();

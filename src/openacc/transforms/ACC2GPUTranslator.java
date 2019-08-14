@@ -441,7 +441,13 @@ public abstract class ACC2GPUTranslator {
 				if( pProc != null ) {
 					pTrUnit = (TranslationUnit) pProc.getParent();
 					if( pTrUnit != null ) {
-						Declaration srcPtrDecl = SymbolTools.findSymbol(pTrUnit, "src_code");
+						String iFileNameBase = "";
+						String iFileName = pTrUnit.getOutputFilename();
+						int dot = iFileName.lastIndexOf(".");
+						if( dot >= 0 ) {
+							iFileNameBase = iFileName.substring(0, dot);
+						}
+						Declaration srcPtrDecl = SymbolTools.findSymbol(pTrUnit, "src_code_"+iFileNameBase);
 						if( (srcPtrDecl != null) && (srcPtrDecl instanceof VariableDeclaration) ) {
 							Declarator vDeclr = ((VariableDeclaration)srcPtrDecl).getDeclarator(0);
 							srcStringPtrID = vDeclr.getID();
@@ -1014,19 +1020,21 @@ public abstract class ACC2GPUTranslator {
 				if( dAnnot.containsKey(dClause) ) {
 					dataSet = (Set<SubArray>)dAnnot.get(dClause);
 					if( (dataSet != null) && (!dataSet.isEmpty()) ) {
-						FunctionCall fCall = null;
+						FunctionCall fCallOrg = null;
 						switch(dClause) {
-						case "copyin": fCall = new FunctionCall(new NameID("acc_copyin_async_wait"));
+						case "copyin": fCallOrg = new FunctionCall(new NameID("acc_copyin_async_wait"));
 						break;
-						case "pcopyin": fCall = new FunctionCall(new NameID("acc_pcopyin_async_wait"));
+						case "pcopyin": fCallOrg = new FunctionCall(new NameID("acc_pcopyin_async_wait"));
 						break;
-						case "create": fCall = new FunctionCall(new NameID("acc_create_async_wait"));
+						case "create": fCallOrg = new FunctionCall(new NameID("acc_create_async_wait"));
 						break;
-						case "pcreate": fCall = new FunctionCall(new NameID("acc_pcreate_async_wait"));
+						case "pcreate": fCallOrg = new FunctionCall(new NameID("acc_pcreate_async_wait"));
 						break;
-						case "copyout": fCall = new FunctionCall(new NameID("acc_copyout_async_wait"));
+						case "copyout": fCallOrg = new FunctionCall(new NameID("acc_copyout_async_wait"));
 						break;
-						case "pcopyout": fCall = new FunctionCall(new NameID("acc_pcopyout_async_wait"));
+						//case "pcopyout": fCallOrg = new FunctionCall(new NameID("acc_pcopyout_async_wait"));
+						//break;
+						case "delete": fCallOrg = new FunctionCall(new NameID("acc_delete_async_wait"));
 						break;
 						default: Tools.exit("[ERROR in ACC2GPUTranslator.handleEnterExitData()] unexpected data clause (" 
 										+ dClause + ") is found for the following annotation; exit!\nACCAnnotation: " 
@@ -1034,6 +1042,7 @@ public abstract class ACC2GPUTranslator {
 						break;
 						}
 						for( SubArray sArray : dataSet ) {
+							FunctionCall fCall = fCallOrg.clone();
 							Expression varName = sArray.getArrayName();
 							Symbol sym = SymbolTools.getSymbolOf(varName);
 							List<Expression> startList = new LinkedList<Expression>();
@@ -1411,12 +1420,17 @@ public abstract class ACC2GPUTranslator {
 				loopAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, tClause, null);
 				if( (loopAnnots != null) && !loopAnnots.isEmpty() ) {
 					for( ACCAnnotation tAnnot : loopAnnots ) {
-						ForLoop tLoop = (ForLoop)tAnnot.getAnnotatable();
+						//ForLoop tLoop = (ForLoop)tAnnot.getAnnotatable();
+						Annotatable tAnnotObj = tAnnot.getAnnotatable();
+						if( !(tAnnotObj instanceof ForLoop) ) {
+							continue;
+						}
+						ForLoop tLoop = (ForLoop)tAnnotObj;
 						ForLoop oLoop = null;
 						Traversable tt = tLoop.getParent();
 						boolean outermostloop = true;
 						while( tt != null ) {
-							if( (tt instanceof Annotatable) && ((Annotatable)tt).containsAnnotation(ACCAnnotation.class, tClause) ) {
+							if( (tt instanceof ForLoop) && ((Annotatable)tt).containsAnnotation(ACCAnnotation.class, tClause) ) {
 								outermostloop = false;
 								oLoop = (ForLoop)tt;
 							}
@@ -1601,7 +1615,7 @@ public abstract class ACC2GPUTranslator {
 			boolean IRSymbolOnly);
 	
 	protected abstract void runtimeTransformationForConstMemory(Procedure cProc, List<FunctionCall> fCallList );
-
+	
 	protected Traversable findKernelConfInsertPoint(Annotatable region, boolean IRSymbolOnly) {
 		Set<Symbol> reductionSymbols = null;
 		Traversable refstmt = region; //Refer to the optimal kernel configuration insertion point.
@@ -1883,6 +1897,50 @@ public abstract class ACC2GPUTranslator {
 	        AnnotationDeclaration accHeaderDecl2 = new AnnotationDeclaration(accHeaderAnnot2);
 			if( accHeaderDecl != null ) {
 				kernelsTranslationUnit.addDeclarationAfter(accHeaderDecl, accHeaderDecl2);	
+			}
+		}
+	}
+
+	protected void removeBackendSpecificSpecifiers(Traversable region, Set<Specifier> removeSpecs) {
+		Set<Symbol> localSymbols = SymbolTools.getLocalSymbols(region);
+		if( localSymbols != null ) {
+			for(Symbol lSym : localSymbols ) {
+				if( lSym instanceof Declarator ) {
+					List<Specifier> declspecs = null;
+					List<Specifier> declrspecs = ((Declarator)lSym).getSpecifiers();
+					Declaration decl = lSym.getDeclaration();
+					if( decl instanceof VariableDeclaration ) {
+						declspecs = ((VariableDeclaration)decl).getSpecifiers();
+					}
+					if( declrspecs != null ) {
+						if( removeSpecs != null ) {
+							declrspecs.removeAll(removeSpecs);
+						} else {
+							removeSpecs = new HashSet<Specifier>();
+							for(Specifier tspec : declrspecs) {
+								if( (tspec instanceof OpenCLSpecifier) || (tspec instanceof CUDASpecifier) ) {
+									removeSpecs.add(tspec);
+								}
+							}
+							declrspecs.removeAll(removeSpecs);
+							removeSpecs = null;
+						}
+					}
+					if( declspecs != null ) {
+						if( removeSpecs != null ) {
+							declspecs.removeAll(removeSpecs);
+						} else {
+							removeSpecs = new HashSet<Specifier>();
+							for(Specifier tspec : declspecs) {
+								if( (tspec instanceof OpenCLSpecifier) || (tspec instanceof CUDASpecifier) ) {
+									removeSpecs.add(tspec);
+								}
+							}
+							declspecs.removeAll(removeSpecs);
+							removeSpecs = null;
+						}
+					}
+				}
 			}
 		}
 	}

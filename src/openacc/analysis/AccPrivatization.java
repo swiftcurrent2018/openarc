@@ -134,6 +134,29 @@ public class AccPrivatization extends AnalysisPass {
 								}
 							}
 						}
+						//Variables locally declared inside of the current loop are not needed to be in the private clause.
+						for( Symbol pSym : privatisables ) {
+							if( removeSet.contains(pSym) ) {
+								continue;
+							}
+							Declaration tDecl = null;
+							if( pSym instanceof VariableDeclarator ) {
+								tDecl = ((VariableDeclarator)pSym).getDeclaration();
+							} else if( pSym instanceof NestedDeclarator ) {
+								tDecl = ((NestedDeclarator)pSym).getDeclaration();
+							}
+							if( tDecl != null ) {
+								Traversable tempTr = tDecl.getParent();
+								while ( (tempTr != null) && (tempTr != at) ) {
+									tempTr = tempTr.getParent();
+								}
+								if( tempTr == at ) {
+									//pSym is locally declared inside of the current loop, at.
+									removeSet.add(pSym);
+								}
+							}
+						}
+						
 						privatisables.removeAll(removeSet);
 						if( !kernelLoop ) {
 							Set<Symbol> privateSymSet = AnalysisTools.subarraysToSymbols(privateSet, IRSymbolOnly);

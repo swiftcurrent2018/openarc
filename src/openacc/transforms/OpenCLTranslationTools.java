@@ -343,8 +343,21 @@ public abstract class OpenCLTranslationTools {
 				
 				
 				CompoundStatement loopbody = (CompoundStatement)ploop.getBody();
+				boolean lexicallyIncluded = false;
+				Traversable tt = ploop;
+				while( tt != null ) {
+					if( tt instanceof Procedure ) {
+						break;
+					} else if( tt.equals(region) ) {
+						lexicallyIncluded = true;
+						break;
+					} else {
+						tt = tt.getParent();
+					}
+				}
 
 				Set<Symbol> localSymbols = SymbolTools.getVariableSymbols(loopbody);
+				//PrintTools.println("[worksharingLoopTransformation()] local symbols in the following loop: "+ localSymbols +AnalysisTools.getEnclosingAnnotationContext(lAnnot), 0);
 				//[FIXME] Below will not work since if multiple local variables with the same name exist; 
 				//temporarily disabled.
 				//Set<Symbol> localSymbols = SymbolTools.getLocalSymbols(loopbody);
@@ -375,6 +388,9 @@ public abstract class OpenCLTranslationTools {
 							//System.err.println("Found constant/static variable/pointer: " + decl);
 							continue;
 						} else {
+							if( !lexicallyIncluded ) {
+								continue;
+							}
 							if( lsm_init == null ) {
 								cParent.removeChild(lsm_stmt);
 							} else {
@@ -732,8 +748,57 @@ public abstract class OpenCLTranslationTools {
         //will be allocated on the GPU shared memory if they are not included in any gang private clauses.
         //However, if a kernel is a single task, all private variables can be worker-private.
         Set<Symbol> localGangPrivateSymbols = new HashSet<Symbol>();
+        Set<Symbol> ipLocalGangPrivateSymbols = new HashSet<Symbol>();
+        Set<Symbol> localGangPrivateSymbolsAll = new HashSet<Symbol>();
+        CompoundStatement ttCStmt = null;
         if( !isSingleTask ) {
+        	List<FunctionCall> fCallList = null;
         	if( region instanceof CompoundStatement ) {
+        		ttCStmt = (CompoundStatement)region;
+        	} else if( region instanceof Loop) {
+        		ttCStmt = (CompoundStatement)((Loop)region).getBody();
+        		if( region.containsAnnotation(ACCAnnotation.class, "worker") ) {
+        			ttCStmt = null;
+        		}
+        	} else {
+        		fCallList = IRTools.getFunctionCalls(region);
+        	}
+        	Set<Procedure> visitedProcedures = new HashSet<Procedure>();
+        	if( ttCStmt != null ) {
+        		localGangPrivateSymbols.addAll(ttCStmt.getSymbols());
+        		localGangPrivateSymbols.removeAll(AnalysisTools.getWorkSharingLoopIndexVarSet(ttCStmt));
+        		localGangPrivateSymbols.addAll(AnalysisTools.getLocalGangPrivateSymbols(ttCStmt, false, visitedProcedures));
+        		fCallList = IRTools.getFunctionCalls(ttCStmt);
+        	}
+        	if( fCallList != null ) {
+        		for(FunctionCall tfCall : fCallList) {
+        			Procedure tProc = tfCall.getProcedure();
+        			if( tProc != null ) {
+        				boolean foundWorkerLoop = false;
+        				Traversable tt = tfCall.getParent();
+        				while (tt != null) {
+        					if( tt instanceof Annotatable ) {
+        						Annotatable at = (Annotatable)tt;
+        						ACCAnnotation lAnnot = at.getAnnotation(ACCAnnotation.class, "loop");
+        						if( (lAnnot != null) && (lAnnot.containsKey("worker")) ) {
+        							foundWorkerLoop = true;
+        							break;
+        						}
+        					}
+        					tt = tt.getParent();
+        				}
+        				if( !foundWorkerLoop ) {
+        					CompoundStatement tBody = tProc.getBody();
+        					ipLocalGangPrivateSymbols.addAll(tBody.getSymbols());
+        					ipLocalGangPrivateSymbols.removeAll(AnalysisTools.getWorkSharingLoopIndexVarSet(tBody));
+        					ipLocalGangPrivateSymbols.addAll(AnalysisTools.getLocalGangPrivateSymbols(tBody, true, visitedProcedures));
+        				}
+
+        			}
+        		}
+        	}
+        	localGangPrivateSymbols.removeAll(arrayElmtCacheSymbols);
+/*        	if( region instanceof CompoundStatement ) {
         		//The local variables defined outside of gang loops but within a compute region are gang-private.
         		localGangPrivateSymbols.addAll(((CompoundStatement) region).getSymbols());
         		//symbols used to cache array elements on register should be worker-private.
@@ -762,7 +827,9 @@ public abstract class OpenCLTranslationTools {
         				}
         			}
         		}
-        	}
+        	}*/
+        	localGangPrivateSymbolsAll.addAll(localGangPrivateSymbols);
+        	localGangPrivateSymbolsAll.addAll(ipLocalGangPrivateSymbols);
         }
 
         //For correct translation, worker-private loops should be handled before gang-private regions.
@@ -1852,8 +1919,8 @@ public abstract class OpenCLTranslationTools {
             }
         }
 
-        if( !localGangPrivateSymbols.isEmpty() ) {
-        	//PrintTools.println("localGangPrivateSymbols: " + localGangPrivateSymbols, 0);
+        if( !localGangPrivateSymbolsAll.isEmpty() ) {
+        	//PrintTools.println("localGangPrivateSymbolsAll: " + localGangPrivateSymbolsAll, 0);
         	//PrintTools.println("loopIndexSymbols: " + loopIndexSymbols, 0);
         	//Put any implicit local gang-private variables not included in any OpenACC private clause
         	//in CUDA shared memory; the only exception is when the local symbol is an index variable of gang loop.
@@ -1869,7 +1936,7 @@ public abstract class OpenCLTranslationTools {
         	} else if( region instanceof CompoundStatement ) {
         		scope = (CompoundStatement)region;
         	}
-            for( Symbol lgSym : localGangPrivateSymbols ) {
+            for( Symbol lgSym : localGangPrivateSymbolsAll ) {
                 if( loopIndexSymbols.contains(lgSym) ) {
                     continue;
                 }
@@ -1877,8 +1944,36 @@ public abstract class OpenCLTranslationTools {
                 if( decl != null ) {
                     if( decl instanceof VariableDeclaration ) {
                         VariableDeclaration vaDecl = (VariableDeclaration)decl;
-                        List<Specifier> specs = vaDecl.getSpecifiers();
-                        specs.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+						boolean ispointer = false;
+						List<Specifier> symspecs = null;
+						if( lgSym instanceof VariableDeclarator ) {
+							symspecs = ((VariableDeclarator)lgSym).getSpecifiers();
+						} else if( lgSym instanceof NestedDeclarator ) {
+							Declarator nestedSym = ((NestedDeclarator)lgSym).getDeclarator();
+							if( nestedSym instanceof VariableDeclarator) {
+								symspecs = ((VariableDeclarator)nestedSym).getSpecifiers();
+							}
+						}
+						if( symspecs == null ) {
+                        	Tools.exit("[ERROR in OpenCLTranslation.privateTransformation()] error in handling local," +
+                        			" implicit gang-private variable: " + lgSym);
+						}
+						for(Specifier tspec : symspecs) {
+							if( tspec instanceof PointerSpecifier ) {
+								ispointer = true;
+								break;
+							}
+						}
+						if( ispointer ) {
+							if( !symspecs.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+								symspecs.add(OpenCLSpecifier.OPENCL_LOCAL);
+							}
+						} else {
+							List<Specifier> specs = vaDecl.getSpecifiers();
+							if( !specs.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+								specs.add(0, OpenCLSpecifier.OPENCL_LOCAL);
+							}
+						}
                         Declarator declr = vaDecl.getDeclarator(0);
                         Traversable parent = decl.getParent(); //parent should be DeclarationStatement.
                         CompoundStatement cStmt = null;
@@ -1911,14 +2006,16 @@ public abstract class OpenCLTranslationTools {
 										"variable has inseparable initialization: "+ lgSym);
 							}
                         }
-                        //Move the declaration statement into the enclosing compute region if symbols with the sam name
-						//does not exist.
-						if( !AnalysisTools.containsSymbol(scope.getSymbols(), lgSym.getSymbolName())) {
-							cStmt.removeChild(parent);
-							decl.setParent(null);
-							//parent.removeChild(decl); //disallowed.
-							scope.addDeclaration(decl);
-						}
+                        if( localGangPrivateSymbols.contains(lgSym) ) {
+                        	//Move the declaration statement into the enclosing compute region if symbols with the same name
+                        	//does not exist.
+                        	if( !AnalysisTools.containsSymbol(scope.getSymbols(), lgSym.getSymbolName())) {
+                        		cStmt.removeChild(parent);
+                        		decl.setParent(null);
+                        		//parent.removeChild(decl); //disallowed.
+                        		scope.addDeclaration(decl);
+                        	}
+                        }
                     }
                 }
             }
@@ -3989,6 +4086,11 @@ public abstract class OpenCLTranslationTools {
                     VariableDeclaration gangPriv_decl =
                             (VariableDeclaration)SymbolTools.findSymbol(wscope, localGPSymName);
 					if( gangPriv_decl == null ) {
+						//Check again to see if it is a gang-private variable.
+						gangPriv_decl = 
+								(VariableDeclaration)SymbolTools.findSymbol(new_proc, localGPSymName);
+					}
+					if( gangPriv_decl == null ) {
 						//local variable declared within a compute region but outside of worker loop is 
 						//gang-private, but in this case, variable name not changed.
 						//[FIXME] This will not work for access symbol.
@@ -4000,9 +4102,11 @@ public abstract class OpenCLTranslationTools {
                     if( gangPriv_decl != null ) {
                         gangPrivSym = (VariableDeclarator)gangPriv_decl.getDeclarator(0);
                         lgred_var = new Identifier(gangPrivSym);
-                        if( SymbolTools.containsSpecifier(gangPrivSym, OpenCLSpecifier.OPENCL_LOCAL) ) {
+						//[DEBUG] Local variable declared within a compute region but outside of worker loop is gang-private and
+						//will be cached on the shared memory later in the private transformation pass.
+                        //if( SymbolTools.containsSpecifier(gangPrivSym, OpenCLSpecifier.OPENCL_LOCAL) ) {
                             gpoffset = 0; //gang-private is cached on the shared memory.
-                        }
+                        //}
                     } else {
                         Tools.exit("[ERROR in OpenCLTranslationTools.reductionTransformation()] Gang-private variable for the " +
                                 "following worker-reduction variable is not visible: " + sArray.getArrayName()
@@ -5025,7 +5129,7 @@ public abstract class OpenCLTranslationTools {
 	                SymbolTable targetSymbolTable = AnalysisTools.getIRSymbolScope(redSym, region);
 	                if( isGangReduction && ((targetSymbolTable == null) || (targetSymbolTable == region)) ) {
 	                    ACCAnnotation cAnnot = region.getAnnotation(ACCAnnotation.class, cRegionKind);
-	                    Tools.exit("[ERROR in OpenCLTranslationTools.reductionTransformation()] gang-reduction variable should" +
+	                    Tools.exit("[ERROR in OpenCLTranslationTools.singleTaskReductionTransformation()] gang-reduction variable should" +
 	                            " be visible outside of the enclosing compute region, but the following reduction variable is not; exit!\n" +
 	                            "Gang-reduction variable: " + redSym.getSymbolName() + "\n" +
 								"Current reduction loop: " + pannot + "\n" +

@@ -89,6 +89,8 @@ public class acc2gpu extends CodeGenPass
 		/////////////////////////////////////////////////////////////////////////
 		if( showInternalAnnotations == 0) {
 			AnalysisTools.removePragmas(program, ACCAnnotation.class, null);
+		} 
+		if( showInternalAnnotations <= 1) {
 			AnalysisTools.removePragmas(program, ARCAnnotation.class, null);
 		} 
 		if( showInternalAnnotations < 3) {

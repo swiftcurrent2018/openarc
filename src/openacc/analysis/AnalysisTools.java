@@ -15,7 +15,7 @@ import java.util.TreeMap;
 import java.util.LinkedList;
 
 import openacc.hir.CUDASpecifier;
-import openacc.hir.CudaStdLibrary;
+import openacc.hir.CUDAStdLibrary;
 import cetus.exec.Driver;
 import cetus.hir.*;
 import openacc.hir.*;
@@ -445,7 +445,7 @@ public abstract class AnalysisTools {
 			for( FunctionCall fCall : fCalls ) {
 				if( StandardLibrary.contains(fCall) ) {
 					if( targetArch.equals("CUDA") ) {
-						if( !CudaStdLibrary.contains(fCall) ) {
+						if( !CUDAStdLibrary.contains(fCall) ) {
 							PrintTools.println("\n[WARNING] C standard library function ("+fCall.getName()+
 									") is called in a kernel function,"+kProc.getName()+
 									", but not supported by CUDA runtime system V4.0; " +
@@ -4317,6 +4317,75 @@ public abstract class AnalysisTools {
     		}
     	}
     	return pointerExp;
+    }
+
+
+    /**
+     * Find local gang-private symbols declared 
+     * in the child CompoundStatement of the input cStmt.
+     * @param cStmt
+     * @return set of local gang-private symbols
+     */
+    public static Set<Symbol> getLocalGangPrivateSymbols(CompoundStatement cStmt, boolean checkCalledFunctions, Set<Procedure> visitedProcedures) {
+    	Set<Symbol> localGangPrivSymSet = new HashSet<Symbol>();
+		DFIterator<CompoundStatement> iter = new DFIterator<CompoundStatement>(cStmt, CompoundStatement.class);
+		while(iter.hasNext())
+		{
+			CompoundStatement tStmt = iter.next();
+			Traversable tt = tStmt;
+			boolean foundWorkerLoop = false;
+			while ((tt != null)) {
+				if( tt instanceof Annotatable ) {
+					Annotatable at = (Annotatable)tt;
+					ACCAnnotation annot = at.getAnnotation(ACCAnnotation.class, "loop");
+					if( annot != null ) {
+						if( annot.containsKey("worker") ) {
+							foundWorkerLoop = true;
+							break;
+						}
+					}
+				}
+				tt = tt.getParent();
+			}
+			if( !foundWorkerLoop ) {
+				localGangPrivSymSet.addAll(tStmt.getSymbols());
+				localGangPrivSymSet.removeAll(getWorkSharingLoopIndexVarSet(tStmt));
+				if( checkCalledFunctions ) {
+					if( visitedProcedures == null ) {
+						visitedProcedures = new HashSet<Procedure>();
+					}
+					List<FunctionCall> fCallList = IRTools.getFunctionCalls(tStmt);
+					if( fCallList != null ) {
+						for( FunctionCall fCall : fCallList ) {
+							Procedure tProc = fCall.getProcedure();
+							if( (tProc != null) && !visitedProcedures.contains(tProc) ) {
+								visitedProcedures.add(tProc);
+								boolean tFoundWorkerLoop = false;
+								Traversable ttt = fCall.getParent();
+								while (ttt != null) {
+									if( ttt instanceof Annotatable ) {
+										Annotatable at = (Annotatable)ttt;
+										ACCAnnotation lAnnot = at.getAnnotation(ACCAnnotation.class, "loop");
+										if( (lAnnot != null) && (lAnnot.containsKey("worker")) ) {
+											tFoundWorkerLoop = true;
+											break;
+										}
+									}
+									ttt = ttt.getParent();
+								}
+								if( !tFoundWorkerLoop ) {
+									CompoundStatement tBody = tProc.getBody();
+									localGangPrivSymSet.addAll(tBody.getSymbols());
+									localGangPrivSymSet.removeAll(getWorkSharingLoopIndexVarSet(tBody));
+									localGangPrivSymSet.addAll(getLocalGangPrivateSymbols(tBody, checkCalledFunctions, visitedProcedures));
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+    	return localGangPrivSymSet;
     }
 
 

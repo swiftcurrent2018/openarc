@@ -20,6 +20,7 @@
         export AOCL_BOARD_PACKAGE_ROOT=${INTELFPGAOCLSDKROOT}/board/nalla_pcie
 		export PATH=$PATH:$INTELFPGAOCLSDKROOT/bin
 		export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$INTELFPGAOCLSDKROOT/host/linux64/lib:$AOCL_BOARD_PACKAGE_ROOT/linux64/lib
+	- License file:  I named them quartus_license_9july2019.dat and put them in /usr/local/flexlm/licenses on oswald03 and pcie. They expire Sept. 7. 
 
 3) Test compile and execution
 	- Go to $openarc/test/examples/openarc/altera

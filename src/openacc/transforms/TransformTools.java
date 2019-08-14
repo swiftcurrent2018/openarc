@@ -1192,8 +1192,9 @@ public abstract class TransformTools {
 		return gpu_decl;
 	}
 
-	public static ForLoop stripmining(ForLoop ploop, Expression stripSize, long suffix, CompoundStatement targetRegion) {
+	public static ForLoop stripmining(ForLoop ploop, Expression stripSize, long suffix, CompoundStatement targetRegion, boolean lexicallyIncluded) {
 		Procedure cProc = IRTools.getParentProcedure(ploop);
+		CompoundStatement cStmt = (CompoundStatement)ploop.getParent();
 		////////////////////////////////////////////////////////////////
 		// Original loop :                                            //
 		//     for( k = LB; k <= UB; k++ ) { }                        //
@@ -1219,10 +1220,14 @@ public abstract class TransformTools {
 		}
 		CompoundStatement forBody = new CompoundStatement();
 		Identifier index = null;
-		if( targetRegion != null ) {
-			index = TransformTools.getTempIndex(targetRegion, suffix);
+		if( lexicallyIncluded ) {
+			if( targetRegion != null ) {
+				index = TransformTools.getTempIndex(targetRegion, suffix);
+			} else {
+				index = TransformTools.getTempIndex(forBody, suffix);
+			}
 		} else {
-			index = TransformTools.getTempIndex(forBody, suffix);
+				index = TransformTools.getTempIndex(cStmt, suffix);
 		}
 		Expression expr1 = new AssignmentExpression(index, AssignmentOperator.NORMAL,
 				new IntegerLiteral(0));
@@ -2738,6 +2743,8 @@ public abstract class TransformTools {
 							swapTypecast = true;
 						}
 					} else if( pt instanceof FunctionCall ) {
+						swapTypecast = true;
+					} else if( pt instanceof ReturnStatement ) {
 						swapTypecast = true;
 					}
 					

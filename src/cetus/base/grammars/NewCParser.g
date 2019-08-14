@@ -109,6 +109,8 @@ import antlr.CommonAST;
 import antlr.DumpASTVisitor;
 import java.util.*;
 import cetus.hir.*;
+import openacc.hir.CUDASpecifier;
+import openacc.hir.OpenCLSpecifier;
 import static cetus.hir.AttributeSpecifier.Attribute;
 @SuppressWarnings({"unchecked", "cast"})
 }
@@ -683,6 +685,87 @@ boolean typedefold = false;
         |
         "_Imaginary"
 {types = Specifier.CIMAGINARY;}
+		|
+        "__thread"
+{types = Specifier.THREAD;}
+		|
+        "__nvl__"
+{types = Specifier.NVL;}
+		|
+        "__nvl_wp__"
+{types = Specifier.NVL_WP;}
+		|
+        "int8_t"
+{types = Specifier.INT8_T;}
+		|
+        "uint8_t"
+{types = Specifier.UINT8_T;}
+		|
+        "int16_t"
+{types = Specifier.INT16_T;}
+		|
+        "uint16_t"
+{types = Specifier.UINT16_T;}
+		|
+        "int32_t"
+{types = Specifier.INT32_T;}
+		|
+        "uint32_t"
+{types = Specifier.UINT32_T;}
+		|
+        "int64_t"
+{types = Specifier.INT64_T;}
+		|
+        "uint64_t"
+{types = Specifier.UINT64_T;}
+		|
+        "size_t"
+{types = Specifier.SIZE_T;}
+		|
+        "_Float128"
+{types = Specifier.FLOAT128;}
+		|
+        "__float128"
+{types = Specifier.__FLOAT128;}
+		|
+        "__float80"
+{types = Specifier.__FLOAT80;}
+		|
+        "__ibm128"
+{types = Specifier.__IBM128;}
+		|
+        "_Float16"
+{types = Specifier.FLOAT16;}
+		|
+        "__global__"
+{types = CUDASpecifier.CUDA_GLOBAL;}
+		|
+        "__shared__"
+{types = CUDASpecifier.CUDA_SHARED;}
+		|
+        "__host__"
+{types = CUDASpecifier.CUDA_HOST;}
+		|
+        "__device__"
+{types = CUDASpecifier.CUDA_DEVICE;}
+		|
+        "__constant__"
+{types = CUDASpecifier.CUDA_CONSTANT;}
+		|
+        "__noinline__"
+{types = CUDASpecifier.CUDA_NOINLINE;}
+		|
+        "__kernel"
+{types = OpenCLSpecifier.OPENCL_KERNEL;}
+		|
+        "__global"
+{types = OpenCLSpecifier.OPENCL_GLOBAL;}
+		|
+        "__local"
+{types = OpenCLSpecifier.OPENCL_LOCAL;}
+		|
+        "__constant"
+{types = OpenCLSpecifier.OPENCL_CONSTANT;}
         |
         types = structOrUnionSpecifier
         ( options{warnWhenFollowAmbig=false;}: attributeDecl )*
@@ -752,6 +835,87 @@ boolean typedefold = false;
         |
         "_Imaginary"
 {types = Specifier.CIMAGINARY;}
+		|
+        "__thread"
+{types = Specifier.THREAD;}
+		|
+        "__nvl__"
+{types = Specifier.NVL;}
+		|
+        "__nvl_wp__"
+{types = Specifier.NVL_WP;}
+		|
+        "int8_t"
+{types = Specifier.INT8_T;}
+		|
+        "uint8_t"
+{types = Specifier.UINT8_T;}
+		|
+        "int16_t"
+{types = Specifier.INT16_T;}
+		|
+        "uint16_t"
+{types = Specifier.UINT16_T;}
+		|
+        "int32_t"
+{types = Specifier.INT32_T;}
+		|
+        "uint32_t"
+{types = Specifier.UINT32_T;}
+		|
+        "int64_t"
+{types = Specifier.INT64_T;}
+		|
+        "uint64_t"
+{types = Specifier.UINT64_T;}
+		|
+        "size_t"
+{types = Specifier.SIZE_T;}
+		|
+        "_Float128"
+{types = Specifier.FLOAT128;}
+		|
+        "__float128"
+{types = Specifier.__FLOAT128;}
+		|
+        "__float80"
+{types = Specifier.__FLOAT80;}
+		|
+        "__ibm128"
+{types = Specifier.__IBM128;}
+		|
+        "_Float16"
+{types = Specifier.FLOAT16;}
+		|
+        "__global__"
+{types = CUDASpecifier.CUDA_GLOBAL;}
+		|
+        "__shared__"
+{types = CUDASpecifier.CUDA_SHARED;}
+		|
+        "__host__"
+{types = CUDASpecifier.CUDA_HOST;}
+		|
+        "__device__"
+{types = CUDASpecifier.CUDA_DEVICE;}
+		|
+        "__constant__"
+{types = CUDASpecifier.CUDA_CONSTANT;}
+		|
+        "__noinline__"
+{types = CUDASpecifier.CUDA_NOINLINE;}
+		|
+        "__kernel"
+{types = OpenCLSpecifier.OPENCL_KERNEL;}
+		|
+        "__global"
+{types = OpenCLSpecifier.OPENCL_GLOBAL;}
+		|
+        "__local"
+{types = OpenCLSpecifier.OPENCL_LOCAL;}
+		|
+        "__constant"
+{types = OpenCLSpecifier.OPENCL_CONSTANT;}
         |
         types = structOrUnionSpecifier
         ( options{warnWhenFollowAmbig=false;}: attributeDecl )*

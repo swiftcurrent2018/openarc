@@ -108,11 +108,15 @@ CETUS_OUTPUT = cetus_output
 # Set the target system                                                #
 ########################################################################
 # Example targets: LCUDA, Titan, Newark, MacBookPro, Beacon, Atlanta,  #
-#                  Cooley                                              #
+#                  Cooley, Leconte, XAVIER                             #
 # To target a general Linux system with NVIDIA GPUs, choose LCUDA and  #
 # adjust variables in the LCUDA section as necessary.                  # 
 ########################################################################
 # LCUDA: Linux system with NVIDIA GPUs                                 #
+# XAVIER: SoC consisting of ARM CPU, NVIDIA Volta GPU, PVA, and DLA    #
+# Leconte: Single-node Summit system in the Excl cluster               #
+# Summit: OLCF Summit system with 2 Power9 CPUs and 6 NVIDIA V100 GPUs #
+#     https://www.olcf.ornl.gov/olcf-resources/compute-systems/summit/ #
 # Titan: Cray XK7 system with NVIDIA GPUs                              #
 #        https://www.olcf.ornl.gov/computing-resources/titan-cray-xk7/ #
 # Beacon: Linux system with Intel Xeon Phi coprocessors (MICs)         #
@@ -152,8 +156,8 @@ GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
 GBACKEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -L$(OPENARCLIB) -lcuda
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -lcuda
 GFRONTEND_DEBUG = -g
 
 #MPI_FLAGS =
@@ -161,6 +165,184 @@ MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/i
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
 
 endif
+
+#########################
+# Target System: XAVIER #
+#########################
+ifeq ($(TARGET_SYSTEM),XAVIER)
+
+OPENARC_ARCH = 0
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = gcc
+CXX = g++
+CPP = $(CC) -E
+GMACROS = -D OPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D _OPENARC_PROFILE_=1
+ifeq ($(OPENARC_ARCH), 0)
+BACKENDCXX = nvcc
+CC_FLAGS_PREFIX = -Xcompiler
+GBACKEND_FLAGS = -O3 -Xcompiler -fPIC
+GBACKEND_INCLUDES = -I/usr/local/cuda-10.0/include
+GBACKEND_LIBS = -L/usr/lib/aarch64-linux-gnu/tegra -lcuda 
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -L/usr/lib/aarch64-linux-gnu/tegra -lcuda
+GFRONTEND_DEBUG = -g
+else
+BACKENDCXX = g++
+CC_FLAGS_PREFIX = 
+GBACKEND_FLAGS = -O3 -fPIC
+GBACKEND_INCLUDES = -I/usr/local/include
+GBACKEND_LIBS = -L/usr/local/lib -lOpenCL 
+GBACKEND_DEBUG = -g 
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -L/usr/local/lib -lOpenCL 
+GFRONTEND_DEBUG = -g
+endif
+
+endif
+
+##########################
+# Target System: Leconte #
+##########################
+ifeq ($(TARGET_SYSTEM),Leconte)
+
+OPENARC_ARCH = 0
+#option for IBM compiler (xl)
+#GOMP_FLAGS = -qsmp=omp
+#GOMP_LIBS =
+#CC = xl
+#CXX = xlc++
+#CPP = xl -E
+#option for PGI compiler (pgi)
+#GOMP_FLAGS = -mp
+#GOMP_LIBS =
+#CC = pgcc
+#CXX = pgc++
+#CPP = pgcc -E
+#option for GNU compiler (gcc)
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = gcc
+CXX = g++
+CPP = cpp -E
+GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D_OPENARC_PROFILE_=1
+ifeq ($(OPENARC_ARCH), 0)
+BACKENDCXX = nvcc
+CC_FLAGS_PREFIX = -Xcompiler
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I${CUDA_INCLUDE}
+GBACKEND_LIBS = -lcuda
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -lcuda
+GFRONTEND_DEBUG = -g
+else
+BACKENDCXX = g++
+CC_FLAGS_PREFIX =
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I${CUDA_INCLUDE}
+GBACKEND_LIBS = -lOpenCL 
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES =
+GFRONTEND_LIBS = -lOpenCL 
+GFRONTEND_DEBUG = -g
+endif
+
+#LLVM_TARGET_TRIPLE =
+#LLVM_TARGET_DATA_LAYOUT =
+#PERL = perl
+
+#MPI_FLAGS = -craympich-mt
+#MPI_INCLUDES = ${MPI_INCLUDE}
+#MPI_LIBDIR =
+#MPI_EXEC =
+#FC =
+#SPEC_CPU2006 =
+#SPEC_CFG =
+#JUNIT_CLASSPATH =
+#NVM_TESTDIR =
+
+#HAVE_PMEM_NVML =
+
+endif
+
+
+#########################
+# Target System: Summit #
+#########################
+ifeq ($(TARGET_SYSTEM),Summit)
+
+OPENARC_ARCH = 0
+#option for IBM compiler (xl)
+#GOMP_FLAGS = -qsmp=omp
+#GOMP_LIBS =
+#CC = xl
+#CXX = xlc++
+#CPP = xl -E
+#option for PGI compiler (pgi)
+#GOMP_FLAGS = -mp
+#GOMP_LIBS =
+#CC = pgcc
+#CXX = pgc++
+#CPP = pgcc -E
+#option for GNU compiler (gcc)
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = gcc
+CXX = g++
+CPP = cpp -E
+GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D_OPENARC_PROFILE_=1
+ifeq ($(OPENARC_ARCH), 0)
+BACKENDCXX = nvcc
+CC_FLAGS_PREFIX = -Xcompiler
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/sw/summit/cuda/9.2.148/include
+GBACKEND_LIBS = -L/sw/summit/cuda/9.2.148/lib64 -lcuda 
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I/sw/summit/cuda/9.2.148/include
+GFRONTEND_LIBS = -L/sw/summit/cuda/9.2.148/lib64 -lcuda
+GFRONTEND_DEBUG = -g
+else
+BACKENDCXX = g++
+CC_FLAGS_PREFIX =
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/sw/summit/cuda/9.2.148/include
+GBACKEND_LIBS = -L/sw/summit/cuda/9.2.148/lib64 -lOpenCL
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I/sw/summit/cuda/9.2.148/include
+GFRONTEND_LIBS = -L/sw/summit/cuda/9.2.148/lib64 -lOpenCL
+GFRONTEND_DEBUG = -g
+endif
+
+#LLVM_TARGET_TRIPLE =
+#LLVM_TARGET_DATA_LAYOUT =
+#PERL = perl
+
+#MPI_FLAGS = -craympich-mt
+#MPI_INCLUDES = ${MPI_INCLUDE}
+#MPI_LIBDIR =
+#MPI_EXEC =
+#FC =
+#SPEC_CPU2006 =
+#SPEC_CFG =
+#JUNIT_CLASSPATH =
+#NVM_TESTDIR =
+
+#HAVE_PMEM_NVML =
+
+endif
+
+
 
 ########################
 # Target System: Titan #
@@ -191,8 +373,8 @@ GBACKEND_INCLUDES = -I/opt/nvidia/cudatoolkit7.0/7.0.28-1.0502.10280.4.1/include
 GBACKEND_LIBS = 
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB)
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = 
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = CC
@@ -202,8 +384,8 @@ GBACKEND_INCLUDES = -I/opt/nvidia/cudatoolkit7.0/7.0.28-1.0502.10280.4.1/include
 GBACKEND_LIBS =
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB)
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = 
 GFRONTEND_DEBUG = -g
 endif
 
@@ -247,8 +429,8 @@ GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
 GBACKEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -L$(OPENARCLIB) -lcuda
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -lcuda
 GFRONTEND_DEBUG = -g
 else
 ifeq ($(OPENARC_ARCH), 3)
@@ -264,11 +446,11 @@ GBACKEND_INCLUDES = -I/opt/altera/16.1/standard/hld/host/include
 GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_INCLUDES = 
 # Altera OpenCL 15.0
-#GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+#GFRONTEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/15.0/hld/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
 # Altera OpenCL 16.1
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+GFRONTEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
@@ -280,9 +462,9 @@ GBACKEND_INCLUDES = -I/opt/altera/16.1/standard/hld/host/include
 GBACKEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-#GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -L$(OPENARCLIB) -lOpenCL
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
+GFRONTEND_INCLUDES = 
+#GFRONTEND_LIBS = -L/opt/cuda/7.5/cuda/lib64 -lOpenCL
+GFRONTEND_LIBS = -L/opt/altera/15.0/hld/board/nalla_pcie/linux64/lib -L/opt/altera/16.1/standard/hld/host/linux64/lib -lOpenCL -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++
 GFRONTEND_DEBUG = -g
 endif
 endif
@@ -322,13 +504,13 @@ GPROFILEMACROS = -D _OPENARC_PROFILE_=1
 ifeq ($(OPENARC_ARCH), 0)
 BACKENDCXX = nvcc
 CC_FLAGS_PREFIX = -Xcompiler
-GBACKEND_FLAGS = -arch sm_60 -O3
+GBACKEND_FLAGS = -arch sm_60 -O3 -Xcompiler -fPIC
 GBACKEND_INCLUDES = -I/usr/local/cuda/include
 GBACKEND_LIBS = -L/usr/local/cuda/lib64 -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/usr/local/cuda/lib64 -lcuda
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -L/usr/local/cuda/lib64 -lcuda
 GFRONTEND_DEBUG = -g
 else
 ifeq ($(OPENARC_ARCH), 3)
@@ -344,22 +526,22 @@ GBACKEND_INCLUDES = -I$(INTELFPGAOCLSDKROOT)/host/include
 GBACKEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lOpenCL -lalteracl
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-#GFRONTEND_LIBS = -L$(OPENARCLIB) -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lOpenCL
+GFRONTEND_INCLUDES = 
+#GFRONTEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/board/nalla_pcie/linux64/lib -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lalteracl -lacl_emulator_kernel_rt  -lalterahalmmd -lnalla_pcie_mmd -lelf -lrt -ldl -lstdc++ 
+GFRONTEND_LIBS = -L$(INTELFPGAOCLSDKROOT)/host/linux64/lib -lOpenCL
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
-#GBACKEND_FLAGS = -O3 -fPIC -mcmodel=large
-GBACKEND_FLAGS = -O3
+GBACKEND_FLAGS = -O3 -fPIC -mcmodel=large
+#GBACKEND_FLAGS = -O3
 GBACKEND_INCLUDES = -I/usr/local/cuda/include
 GBACKEND_LIBS = -L/usr/local/cuda/lib64 -lOpenCL
 GBACKEND_DEBUG = -g
-#GFRONTEND_FLAGS = -O3 -fPIC -mcmodel=large
-GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/usr/local/cuda/lib64 -lOpenCL
+GFRONTEND_FLAGS = -O3 -fPIC -mcmodel=large
+#GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES =
+GFRONTEND_LIBS = -L/usr/local/cuda/lib64 -lOpenCL
 GFRONTEND_DEBUG = -g
 endif
 endif
@@ -406,8 +588,8 @@ GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
 GBACKEND_LIBS = -lcuda -lOpenCL
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -lcuda
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -lcuda
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
@@ -417,8 +599,8 @@ GBACKEND_INCLUDES = -I/opt/cuda/7.5/cuda/include
 GBACKEND_LIBS = -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -lOpenCL
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -lOpenCL
 GFRONTEND_DEBUG = -g
 endif
 
@@ -460,8 +642,8 @@ GBACKEND_INCLUDES = -I/opt/AMDAPPSDK-3.0/include
 GBACKEND_LIBS = -L/opt/AMDAPPSDK-3.0/lib/x86_64 -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/AMDAPPSDK-3.0/lib/x86_64 -lOpenCL
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -L/opt/AMDAPPSDK-3.0/lib/x86_64 -lOpenCL
 GFRONTEND_DEBUG = -g
 
 LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
@@ -514,8 +696,8 @@ GBACKEND_INCLUDES =
 GBACKEND_LIBS = -framework OpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB) -arch x86_64
-GFRONTEND_LIBS = -L$(OPENARCLIB) -framework OpenCL
+GFRONTEND_INCLUDES = -arch x86_64
+GFRONTEND_LIBS = -framework OpenCL
 GFRONTEND_DEBUG = -g
 
 LLVM_TARGET_TRIPLE = x86_64-apple-macosx10.9.0
@@ -556,8 +738,8 @@ GBACKEND_INCLUDES =
 GBACKEND_LIBS = -framework OpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB) -arch x86_64
-GFRONTEND_LIBS = -L$(OPENARCLIB) -framework OpenCL
+GFRONTEND_INCLUDES = -arch x86_64
+GFRONTEND_LIBS = -framework OpenCL
 GFRONTEND_DEBUG = -g
 
 LLVM_TARGET_TRIPLE = x86_64-apple-macosx10.12.0
@@ -598,8 +780,8 @@ GBACKEND_INCLUDES = -I/opt/AMDAPPSDK-3.0/include
 GBACKEND_LIBS = -L/opt/AMDAPPSDK-3.0/lib/x86_64 -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB) -L/opt/AMDAPPSDK-3.0/lib/x86_64 -lOpenCL
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = -L/opt/AMDAPPSDK-3.0/lib/x86_64 -lOpenCL
 GFRONTEND_DEBUG = -g
 
 LLVM_TARGET_TRIPLE = x86_64-redhat-linux-gnu
@@ -641,8 +823,8 @@ GBACKEND_INCLUDES = -I/nics/d/home/lees2/local/icd/include
 GBACKEND_LIBS = -L/nics/d/home/lees2/local/icd/bin -lOpenCL
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB) -I/nics/d/home/lees2/local/icd/include
-GFRONTEND_LIBS = -L/nics/d/home/lees2/local/icd/bin -L$(OPENARCLIB) -lOpenCL
+GFRONTEND_INCLUDES = -I/nics/d/home/lees2/local/icd/include
+GFRONTEND_LIBS = -L/nics/d/home/lees2/local/icd/bin -lOpenCL
 GFRONTEND_DEBUG = -g
 
 #LLVM_TARGET_TRIPLE =
@@ -684,8 +866,8 @@ GBACKEND_INCLUDES = -I/soft/visualization/cuda-7.0.28/include
 GBACKEND_LIBS = 
 GBACKEND_DEBUG = -g -G
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB)
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = 
 GFRONTEND_DEBUG = -g
 else
 BACKENDCXX = g++
@@ -695,8 +877,8 @@ GBACKEND_INCLUDES = -I/soft/visualization/cuda-7.0.28/include
 GBACKEND_LIBS =
 GBACKEND_DEBUG = -g
 GFRONTEND_FLAGS = -O3
-GFRONTEND_INCLUDES = -I$(OPENARCLIB)
-GFRONTEND_LIBS = -L$(OPENARCLIB)
+GFRONTEND_INCLUDES = 
+GFRONTEND_LIBS = 
 GFRONTEND_DEBUG = -g
 endif
 

@@ -76,8 +76,15 @@ public class SubArrayWithConf implements Cloneable {
     	SubArrayWithConf clonedObj = new SubArrayWithConf(sArray.clone());
     	int tsize = listOfConfList.size();
     	if( tsize > 0 ) {
+    		ConfList tConf = null;
     		for(int i=0; i<tsize; i++) {
-    			clonedObj.addConfList(listOfConfList.get(i).clone());
+    			tConf = listOfConfList.get(i);
+    			if( tConf == null ) {
+    				clonedObj.addConfList(tConf);
+    			} else {
+    				clonedObj.addConfList(tConf.clone());
+    				
+    			}
     		}
     	}
     	return clonedObj;

@@ -121,37 +121,48 @@ public class KernelFunctionCall extends FunctionCall
 		  p.print("(");
 
 
-    //call.getName().print(p);
-    //p.print("<<<");
-    //List tmp = call.getConfArguments();
-    //PrintTools.printListWithComma(tmp, p);
-    //p.print(">>>");
-    //p.print("(");
-    Map<String, String> env = System.getenv();
-    if( targetArch == 4 ) {
-    	p.print("mcl_task_set_kernel(");
-		p.print(conflist.get(0)); //add MCL handle
-		p.print(",");
-		p.print(conflist.get(4)); //add src_code pointer
-		p.print(",");
+	  Map<String, String> env = System.getenv();
+	  if( targetArch == -1 ) {
+		  call.getName().print(p);
+		  p.print("<<<");
+		  p.print(conflist.get(0));
+		  p.print(",");
+		  p.print(conflist.get(1));
+		  p.print(",");
+		  p.print(conflist.get(2));
+		  if( conflist.get(3) != null ) {
+			  p.print(conflist.get(3));
+		  }
+		  p.print(">>>");
+		  p.print("(");
+	  } else {
+		  if( targetArch == 4 ) {
+			  p.print("mcl_task_set_kernel(");
+			  p.print(conflist.get(0)); //add MCL handle
+			  p.print(",");
+			  p.print(conflist.get(4)); //add src_code pointer
+			  p.print(",");
 
-    } else {
-    	p.print("HI_register_kernel_numargs(");
-    }
-	p.print("\"" + call.getName() + "\",");
-	p.println(call.getNumArguments() + ");");
+		  } else {
+			  p.print("HI_register_kernel_numargs(");
+		  }
+		  p.print("\"" + call.getName() + "\",");
+		  p.println(call.getNumArguments() + ");");
+	  }
 	for(int i = 0; i < call.getNumArguments(); i++)
 	{
-		if( targetArch == 4 ) {
-			p.print("mcl_task_set_arg(");
-			p.print(conflist.get(0)); //add MCL handle
-			p.print(",");
+		if( targetArch >= 0 ) {
+			if( targetArch == 4 ) {
+				p.print("mcl_task_set_arg(");
+				p.print(conflist.get(0)); //add MCL handle
+				p.print(",");
 
-		} else {
-			p.print("HI_register_kernel_arg(");
-			p.print("\"" + call.getName() + "\",");
+			} else {
+				p.print("HI_register_kernel_arg(");
+				p.print("\"" + call.getName() + "\",");
+			}
+			p.print(i + ",");
 		}
-		p.print(i + ",");
 
 		VariableDeclaration paramDecl = (VariableDeclaration)call.linkedProcedure.getParameter(i);
 		Declarator paramDeclarator = (Declarator)paramDecl.getChildren().get(0);
@@ -215,6 +226,11 @@ public class KernelFunctionCall extends FunctionCall
 				}
 				p.print(argTrait);
 			}
+		} else if (targetArch == -1) {
+			if( i > 0 ) {
+				p.print(",");
+			}
+			p.print(call.getArgument(i).clone());
 		} else {
 			//Special case for OpenCL
 			//If use OpenCL, the use of texture memory is not allowed
@@ -260,9 +276,13 @@ public class KernelFunctionCall extends FunctionCall
 				p.print(",0");
 			}
 		}
-		p.println(");");
+		if (targetArch >= 0) {
+			p.println(");");
+		}
 	}
-    //p.print(")");
+	if (targetArch == -1) {
+		p.print(")");
+	}
 
 	if( targetArch == 4 ) {
 		p.print("mcl_exec(");
@@ -286,7 +306,7 @@ public class KernelFunctionCall extends FunctionCall
 			p.print(conflist.get(0)); //add MCL handle
 			p.print(")");
 		}
-	} else {
+	} else if( targetArch >= 0) {
 		p.print("HI_kernel_call(");
 		p.print("\"" + call.getName() + "\",");
 		p.print(conflist.get(0));

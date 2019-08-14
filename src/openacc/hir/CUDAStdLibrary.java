@@ -13,10 +13,10 @@ import cetus.hir.*;
  *         Future TechnologiesGroup, Oak Ridge National Laboratory
  *
  */
-public class CudaStdLibrary
+public class CUDAStdLibrary
 {
   /** Only a single object is constructed. */
-  private static final CudaStdLibrary std = new CudaStdLibrary();
+  private static final CUDAStdLibrary std = new CUDAStdLibrary();
 
   /** Predefined properties for each library functions */
   private Map<String, Set<Property>> catalog;
@@ -56,7 +56,7 @@ public class CudaStdLibrary
   }
 
   /** Constructs a new repository */
-  private CudaStdLibrary()
+  private CUDAStdLibrary()
   {
     catalog = new HashMap<String, Set<Property>>();
     addEntries();

@@ -6,6 +6,8 @@ package openacc.transforms;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import cetus.hir.Annotatable;
 import cetus.hir.Annotation;
@@ -18,6 +20,7 @@ import cetus.hir.CommentAnnotation;
 import cetus.hir.CompoundStatement;
 import cetus.hir.ContinueStatement;
 import cetus.hir.DFIterator;
+import cetus.hir.DataFlowTools;
 import cetus.hir.DeclarationStatement;
 import cetus.hir.Default;
 import cetus.hir.DoLoop;
@@ -40,6 +43,7 @@ import cetus.hir.ReturnStatement;
 import cetus.hir.StandardLibrary;
 import cetus.hir.Statement;
 import cetus.hir.SwitchStatement;
+import cetus.hir.Symbol;
 import cetus.hir.SymbolTools;
 import cetus.hir.Tools;
 import cetus.hir.Traversable;
@@ -426,17 +430,34 @@ public class WorkerSingleModeTransformation extends TransformPass {
 						tParent.removeChild(tChild);
 						ifBody.addStatement((Statement)tChild);
 					}
+					Map<Expression, Set<Integer>> defExpMap = DataFlowTools.getDefMap(ifBody);
+					Map<Symbol, Set<Integer>> defSymMap = DataFlowTools.convertExprMap2SymbolMap(defExpMap);
+					Set<Symbol> defSymSet = defSymMap.keySet();
+					Statement bStmt = null;
+					if( !defSymSet.isEmpty() ) {
+						ACCAnnotation bAnnot = new ACCAnnotation("barrier", "_directive");
+						bStmt = new AnnotationStatement(bAnnot);
+					}
 					Expression condition = new BinaryExpression(threadID.clone(), BinaryOperator.COMPARE_EQ, new IntegerLiteral(0));
 					condition.setParens(false);
 					ifStmt = new IfStatement(condition, ifBody);
 					if( prevStmt == null ) {
 						if( tParent.countStatements() == 0 ) {
 							tParent.addStatement(ifStmt);
+							if( bStmt != null ) {
+								tParent.addStatement(bStmt);
+							}
 						} else {
 							prevStmt = (Statement)tParent.getChildren().get(0);
 							tParent.addStatementBefore(prevStmt, ifStmt);
+							if( bStmt != null ) {
+								tParent.addStatementBefore(prevStmt, bStmt);
+							}
 						}
 					} else {
+						if( bStmt != null ) {
+							tParent.addStatementAfter(prevStmt, bStmt);
+						}
 						tParent.addStatementAfter(prevStmt, ifStmt);
 					}
 				}
@@ -522,6 +543,7 @@ public class WorkerSingleModeTransformation extends TransformPass {
 	//WorkerSingleModeTransformation should be applied only to compute regions that will
 	//be converted into GPU kernels. If the compiler generate a CPU version of a compute
 	//region, the wrapper should be removed.
+	//This also remove acc barrier directives too.
 	public static void removeWorkerSingleModeWrapper(Statement region) {
 		DFIterator<IfStatement> iter =
 			new DFIterator<IfStatement>(region, IfStatement.class);
@@ -553,6 +575,25 @@ public class WorkerSingleModeTransformation extends TransformPass {
 						}
 					}
 				}
+			}
+		}
+		DFIterator<AnnotationStatement> iter2 =
+			new DFIterator<AnnotationStatement>(region, AnnotationStatement.class);
+		while (iter2.hasNext()) {
+			AnnotationStatement annotStmt = (AnnotationStatement)iter2.next();
+			if( annotStmt.containsAnnotation(ACCAnnotation.class, "barrier") ) {
+				cStmt = (CompoundStatement)annotStmt.getParent();
+				cStmt.removeStatement(annotStmt);
+			}
+		}
+		DFIterator<FunctionCall> iter3 =
+			new DFIterator<FunctionCall>(region, FunctionCall.class);
+		while (iter3.hasNext()) {
+			FunctionCall fCall = (FunctionCall)iter3.next();
+			Statement fCallStmt = fCall.getStatement();
+			if( fCallStmt.containsAnnotation(ACCAnnotation.class, "barrier") ) {
+				cStmt = (CompoundStatement)fCallStmt.getParent();
+				cStmt.removeStatement(fCallStmt);
 			}
 		}
 	}

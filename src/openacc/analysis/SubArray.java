@@ -138,9 +138,23 @@ public class SubArray implements Cloneable {
     	if( dimension > 0 ) {
     		List<Expression> clonedStarts = new ArrayList<Expression>();
     		List<Expression> clonedLengths = new ArrayList<Expression>();
+    		Expression tExp = null;
+    		Expression clonedExp = null;
     		for(int i=0; i<dimension; i++) {
-    			clonedStarts.add(startIndices.get(i).clone());
-    			clonedLengths.add(lengths.get(i).clone());
+    			tExp = startIndices.get(i);
+    			if( tExp == null ) {
+    				clonedExp = null;
+    			} else {
+    				clonedExp = tExp.clone();
+    			}
+    			clonedStarts.add(clonedExp);
+    			tExp = lengths.get(i);
+    			if( tExp == null ) {
+    				clonedExp = null;
+    			} else {
+    				clonedExp = tExp.clone();
+    			}
+    			clonedLengths.add(clonedExp);
     		}
     		clonedSubArray.setRange(clonedStarts, clonedLengths);
     	}

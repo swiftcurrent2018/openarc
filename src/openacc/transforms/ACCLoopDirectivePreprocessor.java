@@ -50,29 +50,78 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 		if( cRegionAnnots != null ) {
 			for( ACCAnnotation cAnnot : cRegionAnnots ) {
 				Annotatable at = cAnnot.getAnnotatable();
+				boolean isSingleTask = false;
 				boolean isParallelRegion = false; //is kernels region.
 				if( cAnnot.containsKey("parallel") ) {
 					isParallelRegion = true;
 				}
+				Expression tConfExp = cAnnot.get("num_gangs");
+				if( (tConfExp != null) && (tConfExp.toString().equals("1")) ) {
+					tConfExp = cAnnot.get("num_workers");
+					if( (tConfExp != null) && (tConfExp.toString().equals("1")) ) {
+						tConfExp = cAnnot.get("vector_length");
+						if( (tConfExp != null) && (tConfExp.toString().equals("1")) ) {
+							isSingleTask = true;
+						}
+					}
+				}
+				if( !isSingleTask && !isParallelRegion ) {
+					//If a kernels region does not have num_gangs, num_workers, and vector_length clauses set to 1 respectively,
+					//the only remaining way for user to enforce a single task is to get the arguments of gang, worker, and vector clauses
+					//to 1 respectively, which is possible only if the kernels region is a loop.
+					//Otherwise, the compiler should figure out implicitly.
+					//[FIXME] the below checking does not cover all possible ways for user to enforce a single task.
+					Object tObj = cAnnot.get("gang");
+					if( (tObj != null) && (tObj instanceof Expression) ) {
+						tConfExp = (Expression)tObj;
+						if( tConfExp.toString().equals("1") ) {
+							tObj = cAnnot.get("worker");
+							if( (tObj != null) && (tObj instanceof Expression) ) {
+								tConfExp = (Expression)tObj;
+								if( tConfExp.toString().equals("1") ) {
+									tObj = cAnnot.get("vector");
+									if( (tObj != null) && (tObj instanceof Expression) ) {
+										tConfExp = (Expression)tObj;
+										if( tConfExp.toString().equals("1") ) {
+											isSingleTask = true;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				//If a compute region is a single task, change all work-sharing clauses in the region to seq clause.
+				//Otherwise, apply the following rule.
+				//
         		//The independent clause is implied on all loop constructs without a seq or auto clause, if they are in a parallel region. 
 				//If a loop construct contains an auto clause, an independent clause will be added if a Cetus parallel annotation exists.
         		List<ACCAnnotation> cloopAnnots = AnalysisTools.ipCollectPragmas(at, ACCAnnotation.class, "loop", null); 
         		if( (cloopAnnots != null) && (!cloopAnnots.isEmpty()) ) {
         			for( ACCAnnotation lAnnot : cloopAnnots ) {
-        				//Do not modify user-provided information.
-        				if( lAnnot.containsKey("gang") || lAnnot.containsKey("worker") || 
-        						lAnnot.containsKey("vector") || lAnnot.containsKey("seq") || lAnnot.containsKey("independent") ) {
-        					continue;
+        				if( isSingleTask ) {
+        					lAnnot.remove("gang");
+        					lAnnot.remove("worker");
+        					lAnnot.remove("vector");
+        					lAnnot.remove("independent");
+        					lAnnot.remove("auto");
+        					lAnnot.put("seq", "_clause");
         				} else {
-        					if( isParallelRegion && !lAnnot.containsKey("auto") ) {
-        						lAnnot.put("independent", "_clause");
+        					//Do not modify user-provided information.
+        					if( lAnnot.containsKey("gang") || lAnnot.containsKey("worker") || 
+        							lAnnot.containsKey("vector") || lAnnot.containsKey("seq") || lAnnot.containsKey("independent") ) {
+        						continue;
         					} else {
-        						Annotatable lat = lAnnot.getAnnotatable();
-        						CetusAnnotation cetusAnnot = lat.getAnnotation(CetusAnnotation.class, "parallel");
-        						if( cetusAnnot != null ) {
+        						if( isParallelRegion && !lAnnot.containsKey("auto") ) {
         							lAnnot.put("independent", "_clause");
-        							if( lAnnot.containsKey("auto") ) {
-        								lAnnot.remove("auto");
+        						} else {
+        							Annotatable lat = lAnnot.getAnnotatable();
+        							CetusAnnotation cetusAnnot = lat.getAnnotation(CetusAnnotation.class, "parallel");
+        							if( cetusAnnot != null ) {
+        								lAnnot.put("independent", "_clause");
+        								if( lAnnot.containsKey("auto") ) {
+        									lAnnot.remove("auto");
+        								}
         							}
         						}
         					}
@@ -958,6 +1007,9 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 				if( workshareAnnots != null ) {
 					for( ACCAnnotation wsAn : workshareAnnots ) {
 						Annotatable wsAt = wsAn.getAnnotatable();
+						if( !(wsAt instanceof ForLoop) ) {
+							continue;
+						}
 						List<ForLoop> forLoops = new LinkedList<ForLoop>();
 						Traversable t = wsAt.getParent();
 						boolean isOuterMostLoop = true;
@@ -986,6 +1038,8 @@ public class ACCLoopDirectivePreprocessor extends TransformPass {
 	}
 	
 	/**
+	 * [Step0] If a compute region is a single task, change all work-sharing clauses in the region to seq clause,
+	 *   which is handled by baseComputeRegionPreprocessor().
 	 * [Step1]
 	 * If a pure independent loop construct is not enclosed by any gang/worker/vector clause, the compiler
 	 * 	add a gang clause to it.

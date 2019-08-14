@@ -453,7 +453,8 @@ void HostConf::HI_init(int devNum) {
 #endif
     int thread_id = get_thread_id();
     setTranslationType();
-    if( acc_device_type_var != acc_device_host ) {
+    //if( acc_device_type_var != acc_device_host ) {
+    if( acc_device_type_var != acc_device_none ) {
 		//printf("init start with dev %d\n", acc_device_type_var);
         devnummap_t numDevMap;
         int numDevices;
@@ -523,7 +524,8 @@ void HostConf::HI_init(int devNum) {
 		//printf("init done for type %d\n", acc_device_type_var);
         isOnAccDevice = 1;
         HI_init_done = 1;
-    } else if( acc_device_type_var == acc_device_host ) {
+    //} else if( acc_device_type_var == acc_device_host ) {
+    } else if( acc_device_type_var == acc_device_none ) {
         isOnAccDevice = 0;
         HI_init_done = 1;
         acc_num_devices = 1;
@@ -590,9 +592,24 @@ void HostConf::HI_reset() {
 	for( asyncfreetablemap_t::iterator it = device->postponedFreeTableMap.begin(); it != device->postponedFreeTableMap.end(); it++) {
 		(it->second)->clear();
 	} 
-	//[DEBUG] We disabled device-reset operation to reuse it.
+	
 	//device->destroy();
 	//device->init_done = 0;
+	//Reset HostConf variables.
+/*
+	HI_init_done = 0;
+	HI_kernels_registered = 0;
+	acc_device_type_var = acc_device_none;
+	user_set_device_type_var = acc_device_none;
+	acc_device_num_var = 0;
+	acc_num_devices = 0;
+	isOnAccDevice = 0;
+	//use_unifiedmemory = 1;
+	//prepin_host_memory = 1;
+	//asyncID_offset = 0;
+	//threadID = 0;
+	HI_kernelnames.clear();
+*/
 
 #ifdef _OPENARC_PROFILE_
     //totalFreeTime += HI_get_localtime() - ltime;

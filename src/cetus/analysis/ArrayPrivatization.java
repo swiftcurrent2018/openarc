@@ -1051,7 +1051,7 @@ public class ArrayPrivatization extends AnalysisPass {
                 continue;
             } else if (OpenCLStdLibrary.isSideEffectFree(fc)) {
                 continue;
-            } else if (CudaStdLibrary.isSideEffectFree(fc)) {
+            } else if (CUDAStdLibrary.isSideEffectFree(fc)) {
                 continue;
             }
             contains_unsafe_fcall = true;

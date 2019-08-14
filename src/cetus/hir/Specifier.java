@@ -22,7 +22,9 @@ public class Specifier implements Printable {
             "_Bool", "_Complex", "_Imaginary", "__thread",
             "__nvl__", "__nvl_wp__",
             "int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t",
-            "size_t"};
+            "size_t",
+            "_Float128", "__float128", "__float80", "__ibm128",
+            "_Float16"};
 
     public static final Specifier CHAR = new Specifier(0);
     public static final Specifier WCHAR_T = new Specifier(1);
@@ -117,6 +119,16 @@ public class Specifier implements Printable {
      * [Added by Seyong Lee]
      */
     public static final Specifier SIZE_T = new Specifier(51);
+
+    /**
+     * Additional floating types in GCC
+     * [Added by Seyong Lee]
+     */
+    public static final Specifier FLOAT128 = new Specifier(52);
+    public static final Specifier __FLOAT128 = new Specifier(53);
+    public static final Specifier __FLOAT80 = new Specifier(54);
+    public static final Specifier __IBM128 = new Specifier(55);
+    public static final Specifier FLOAT16 = new Specifier(56);
 
     /** Predefined integer value of each specifiers. */
     protected int value;

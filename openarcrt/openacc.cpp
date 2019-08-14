@@ -54,7 +54,12 @@ int acc_get_num_devices( acc_device_t devtype ) {
 		count = CudaDriver::HI_get_num_devices(devtype);
 #endif
     } else if( devtype == acc_device_host ) {
-        count = 1;
+        //count = 1;
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+        count = OpenCLDriver::HI_get_num_devices(devtype);
+#else
+		count = CudaDriver::HI_get_num_devices(devtype);
+#endif
     } else if( devtype == acc_device_xeonphi ) {
 #if defined(OPENARC_ARCH) && OPENARC_ARCH == 2
         count = OpenCLDriver::HI_get_num_devices(devtype);
@@ -118,12 +123,17 @@ void acc_set_device_type( acc_device_t devtype ) {
     } else if ( devtype == acc_device_xeonphi ) {
         tconf->acc_device_type_var = acc_device_xeonphi;
         tconf->isOnAccDevice = 1;
-    } else if ( devtype == acc_device_host || devtype == acc_device_none ) {
+    } else if ( devtype == acc_device_host ) {
+        tconf->acc_device_type_var = acc_device_host;
+        tconf->isOnAccDevice = 1;
+    } else if ( devtype == acc_device_none ) {
         tconf->acc_device_type_var = devtype;
         tconf->isOnAccDevice = 0;
     } else if ( devtype == acc_device_current ) {
         tconf->user_set_device_type_var = tconf->acc_device_type_var;
-		if( tconf->acc_device_type_var == acc_device_host || tconf->acc_device_type_var == acc_device_none ) {
+		if( tconf->acc_device_type_var == acc_device_host ) {
+        	tconf->isOnAccDevice = 1;
+		} else if( tconf->acc_device_type_var == acc_device_none ) {
         	tconf->isOnAccDevice = 0;
 		} else {
         	tconf->isOnAccDevice = 1;
@@ -320,6 +330,7 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
         	}
 		}
     } else if( devtype == acc_device_host ) {
+/*
         //tconf->device = tconf->devMap.at(devtype).at(devnum);
         tconf->device = NULL;
         tconf->acc_device_num_var = devnum;
@@ -327,6 +338,30 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
 #ifdef _OPENARC_PROFILE_
 		fprintf(stderr, "Host Thread %d uses host device %d\n",get_thread_id(), devnum);
 #endif
+*/
+		int numDevs = HostConf::devMap.at(devtype).size();
+		if( numDevs <= devnum ) {
+			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
+			exit(1);
+		} else {
+#ifdef _OPENARC_PROFILE_
+			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, devtype);
+#endif
+		}
+        tconf->device = HostConf::devMap.at(devtype).at(devnum);
+        tconf->acc_device_type_var = acc_device_host;
+        tconf->acc_device_num_var = devnum;
+        //printf("devType %d\n",devtype );
+#ifdef _OPENMP
+		#pragma omp critical(acc_set_device_num_critical)
+#endif
+		{
+        	if(tconf->device->init_done != 1) {
+            	tconf->device->init();
+        	} else {
+            	tconf->device->createKernelArgMap();
+        	}
+		}
     } else {
         fprintf(stderr, "[ERROR in acc_set_device_num()] Not supported device type %d; exit!\n", devtype);
         exit(1);
@@ -601,7 +636,7 @@ void acc_shutdown( acc_device_t devtype ) {
     if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
             (devtype == acc_device_default) || (devtype == acc_device_radeon) 
             || (devtype == acc_device_xeonphi) || (devtype == acc_device_gpu) 
-			|| (devtype == acc_device_altera) ) {
+			|| (devtype == acc_device_altera) || (devtype == acc_device_host) ) {
         if( tconf->device->init_done == 1 ) {
             fflush(stdout);
             fflush(stderr);
@@ -1305,7 +1340,7 @@ void* acc_copyin_async(h_void* hostPtr, size_t size, int async) {
 	void* devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyin_async_wait()\n");
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyin_async()\n");
 	}
 #endif
 	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
@@ -1316,7 +1351,7 @@ void* acc_copyin_async(h_void* hostPtr, size_t size, int async) {
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO] exit acc_copyin_async_wait()\n");
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_copyin_async()\n");
 	}
 #endif
 	return devPtr;
@@ -1380,13 +1415,13 @@ void* acc_create_async(h_void* hostPtr, size_t size, int async) {
 	void* devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO] enter acc_create_async_wait()\n");
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_create_async()\n");
 	}
 #endif
 	HI_malloc1D(hostPtr, &devPtr, size, DEFAULT_QUEUE, HI_MEM_READ_WRITE);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO] exit acc_create_async_wait()\n");
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_create_async()\n");
 	}
 #endif
 	return devPtr;
@@ -1443,11 +1478,11 @@ void acc_copyout_async(h_void* hostPtr, size_t size, int async) {
 	void* devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyout_async_wait()\n");
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_copyout_async()\n");
 	}
 #endif
 	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
-		fprintf(stderr, "[OPENARCRT-ERROR] the argument data of acc_copyout_async_wait() is not present on the device; exit!\n");
+		fprintf(stderr, "[OPENARCRT-ERROR] the argument data of acc_copyout_async() is not present on the device; exit!\n");
 		exit(1);
 	} else {
 		if( async == acc_async_sync ) {
@@ -1460,7 +1495,7 @@ void acc_copyout_async(h_void* hostPtr, size_t size, int async) {
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO] exit acc_copyout_async_wait()\n");
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_copyout_async()\n");
 	}
 #endif
 }
@@ -1502,11 +1537,11 @@ void acc_delete_async(h_void* hostPtr, size_t size, int async) {
 	void* devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO] enter acc_delete_async_wait()\n");
+		fprintf(stderr, "[OPENARCRT-INFO] enter acc_delete_async()\n");
 	}
 #endif
 	if ((HI_get_device_address(hostPtr, &devPtr, DEFAULT_QUEUE)!=HI_success)) {
-		fprintf(stderr, "[OPENARCRT-ERROR] the argument data of acc_delete_async_wait() is not present on the device; exit!\n");
+		fprintf(stderr, "[OPENARCRT-ERROR] the argument data of acc_delete_async() is not present on the device; exit!\n");
 		exit(1);
 	} else {
 		if( async == acc_async_sync ) {
@@ -1517,7 +1552,7 @@ void acc_delete_async(h_void* hostPtr, size_t size, int async) {
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO] exit acc_delete_async_wait()\n");
+		fprintf(stderr, "[OPENARCRT-INFO] exit acc_delete_async()\n");
 	}
 #endif
 }

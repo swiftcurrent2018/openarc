@@ -4663,6 +4663,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			region.swapWith(ifStmt);
 			dummyStmt.swapWith(region);
 			WorkerSingleModeTransformation.removeWorkerSingleModeWrapper(clonedRegion);
+			removeBackendSpecificSpecifiers(clonedRegion, null);
 			if( asyncID != null ) {
 				//If reduction is asynchronous, post-reduction statements will not 
 				//be in the true-clause of the if statement.
@@ -5036,16 +5037,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 
 		List<Statement> preList = new LinkedList<Statement>(); 
 		List<Statement> postList = new LinkedList<Statement>(); 
-		//////////////////////////////////////////
-		// Handle private/firstprivate clauses. //
-		//////////////////////////////////////////
-		CUDATranslationTools.privateTransformation(cProc, region, cRegionKind, ifCond, asyncID, confRefStmt, prefixStmts, 
-				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
-				opt_addSafetyCheckingCode, arrayElmtCacheSymbols, isSingleTask);
-		if( SkipGPUTranslation == 3 ) {
-			return;
-		}
-		
+
 		//////////////////////////////////////
 		// Perform reduction transformation //
 		//////////////////////////////////////
@@ -5053,9 +5045,20 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
 				opt_addSafetyCheckingCode, opt_UnrollingOnReduction, maxBlockSize, totalnumgangs.clone(), kernelVerification,
 				memtrVerification, marginOfError, warpSize, minCheckValue, localRedVarConf, isSingleTask);
+		if( SkipGPUTranslation == 3 ) {
+			return;
+		}
+
+		//////////////////////////////////////////
+		// Handle private/firstprivate clauses. //
+		//////////////////////////////////////////
+		CUDATranslationTools.privateTransformation(cProc, region, cRegionKind, ifCond, asyncID, confRefStmt, prefixStmts, 
+				postscriptStmts, preList, postList, call_to_new_proc, new_proc, main_TrUnt, OpenACCHeaderEndMap, IRSymbolOnly, 
+				opt_addSafetyCheckingCode, arrayElmtCacheSymbols, isSingleTask);
 		if( SkipGPUTranslation == 4 ) {
 			return;
 		}
+		
 		
 		///////////////////////////////////////////////////
 		// Handle kernels/parallel loop with seq clause. //
@@ -5947,6 +5950,28 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		}
 		copyUserSpecifierDeclarations(kernelsTranslationUnit, kernelCall_stmt, usedSymbols, accHeaderDecl);
 
+        //Add UserSpecifier declaration used in device functions too.
+        List<Traversable> kernelTrChildren = kernelsTranslationUnit.getChildren();
+        for( int m = kernelTrChildren.size()-1; m>=0; m--) {
+        	Traversable trChild = kernelTrChildren.get(m);
+        	if( trChild instanceof Procedure )  {
+        		Procedure devProc = (Procedure)trChild;
+        		if( !(devProc.getName().equals(new_proc.getName())) ) {
+        			usedSymbols = SymbolTools.getSymbols(devProc);
+        			usedSymbols.addAll(SymbolTools.getLocalSymbols(devProc.getBody()));
+        			//Add enum symbols.
+        			tAccessedSymbols = SymbolTools.getAccessedSymbols(devProc.getBody());
+        			for( Symbol tASym : tAccessedSymbols ) {
+        				Declaration tADecl = tASym.getDeclaration();
+        				if( tADecl instanceof Enumeration ) {
+        					usedSymbols.add(tASym);
+        				}
+        			}
+        			copyUserSpecifierDeclarations(kernelsTranslationUnit, kernelCall_stmt, usedSymbols, accHeaderDecl);
+        		}
+        	}
+        }
+
 		/* put new_proc before the calling proc (avoids prototypes) */
         //((TranslationUnit) cProc.getParent()).addDeclarationBefore(cProc,new_proc);
 		
@@ -6471,6 +6496,41 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 								new_fCall = new FunctionCall(new Identifier(new_proc));
 								fCall.swapWith(new_fCall);
 							}
+							///////////////////////////////////////////////////////////////////////////
+							// Undo the worker-single-mode transformation for the original procedure //
+							// since it can be called by the host.                                   //
+							///////////////////////////////////////////////////////////////////////////
+							if( !c_proc.getSymbolName().contains("dev__") ) {
+								WorkerSingleModeTransformation.removeWorkerSingleModeWrapper(c_proc.getBody()); 
+								removeBackendSpecificSpecifiers(c_proc.getBody(), null);
+							}
+							//////////////////////////////////////////
+							// Add _tid if used without definition. //
+							//////////////////////////////////////////
+							if( IRTools.containsExpression(body, new NameID("_tid")) ) {
+								//PrintTools.println("[DEBUG2] Found a body containing _tid in " + new_proc_name, 0);
+								Declaration tidDecl = SymbolTools.findSymbol(body, "_tid");
+								if( (tidDecl == null) || (tidDecl.getParent() != body) ) {
+									Expression biexp1 = new BinaryExpression(new NameID("threadIdx.y"), 
+											BinaryOperator.MULTIPLY, new NameID("blockDim.x"));
+									Expression biexp2 = new BinaryExpression(new NameID("threadIdx.x"),
+											BinaryOperator.ADD, biexp1);
+									biexp1 = new BinaryExpression(new BinaryExpression(new NameID("threadIdx.z"), BinaryOperator.MULTIPLY, 
+											new NameID("blockDim.x")), BinaryOperator.MULTIPLY, new NameID("blockDim.y"));
+									biexp1 = new BinaryExpression(new NameID("threadIdx.z"), BinaryOperator.MULTIPLY, 
+											new BinaryExpression(new NameID("blockDim.x"), BinaryOperator.MULTIPLY, new NameID("blockDim.y")));
+									biexp2 = new BinaryExpression(biexp2, BinaryOperator.ADD, biexp1);
+									VariableDeclarator tid_declarator = new VariableDeclarator(new NameID("_tid"));
+									//tid_declarator.setInitializer(new Initializer(biexp2));
+									Declaration tid_decl = new VariableDeclaration(Specifier.INT, tid_declarator);
+									body.addDeclaration(tid_decl);
+									IDExpression tid = new Identifier(tid_declarator);
+									Statement tidInitStmt = new ExpressionStatement(new AssignmentExpression(tid.clone(), AssignmentOperator.NORMAL, biexp2));
+									Statement last_decl_stmt = IRTools.getLastDeclarationStatement(body);
+									body.addStatementAfter(last_decl_stmt, tidInitStmt);
+									//IRTools.replaceAll(body, tid, tid);
+								}
+							}
 						} else {
 							body = c_proc.getBody();
 							new_proc_name = c_proc.getSymbolName();
@@ -6811,9 +6871,11 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 						returnTypes.addAll(ref_proc.getReturnType());
 					}
 					if( c_procDeclr == null ) {
-						//FIXME: how to handle this case where no function declaration exists even though it is not a standard library API.
-						PrintTools.println("\n[WARNING in ACC2CUDATranslator.devProcCloning()] cannot find a function declaration of the function, "
-								+ fCall.getName() + AnalysisTools.getEnclosingContext(fCall), 0); 
+						if( !CUDALibrary.contains(fCall) ) {
+							//FIXME: how to handle this case where no function declaration exists even though it is not a standard library API.
+							PrintTools.println("\n[WARNING in ACC2CUDATranslator.devProcCloning()] cannot find a function declaration of the function, "
+									+ fCall.getName() + AnalysisTools.getEnclosingContext(fCall), 0); 
+						}
 						continue;
 					} else {
 						int numParams = 0;
@@ -7066,11 +7128,24 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
                 if( region instanceof CompoundStatement ) {
                     targetRegion = (CompoundStatement)region;
                 }
+                boolean lexicallyIncluded = false;
                 boolean targetLoopChanged = false;
                 if( ploop == region ) {
                     targetLoopChanged = true;
+                    lexicallyIncluded = true;
                 }
-                ForLoop wLoop = TransformTools.stripmining(ploop, tItrSize, suffix, targetRegion);
+                Traversable tt = ploop.getParent();
+                while( tt != null ) {
+                	if( tt instanceof Procedure ) {
+                		break;
+                	} else if( tt.equals(region) ) {
+                		lexicallyIncluded = true;
+                		break;
+                	} else {
+                		tt = tt.getParent();
+                	}
+                }
+                ForLoop wLoop = TransformTools.stripmining(ploop, tItrSize, suffix, targetRegion, lexicallyIncluded);
                 if( targetLoopChanged ) {
                     newLoop = wLoop;
                 }
@@ -7078,8 +7153,13 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
         }
         loopAnnots = AnalysisTools.ipCollectPragmas(region, ACCAnnotation.class, "worker", null);
         if( loopAnnots != null ) {
-            for( ACCAnnotation lAnnot : loopAnnots ) {
-                ForLoop ploop = (ForLoop)lAnnot.getAnnotatable();
+        	for( ACCAnnotation lAnnot : loopAnnots ) {
+        		//ForLoop ploop = (ForLoop)lAnnot.getAnnotatable();
+        		Annotatable tAnnotObj = lAnnot.getAnnotatable();
+        		if( !(tAnnotObj instanceof ForLoop) ) {
+        			continue;
+        		}
+        		ForLoop ploop = (ForLoop)tAnnotObj;
                 boolean containsGangClause = false;
                 if( ploop.containsAnnotation(ACCAnnotation.class, "gang") ) {
                     containsGangClause = true;
@@ -7115,11 +7195,24 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
                 if( region instanceof CompoundStatement ) {
                     targetRegion = (CompoundStatement)region;
                 }
+                boolean lexicallyIncluded = false;
                 boolean targetLoopChanged = false;
                 if( ploop == region ) {
                     targetLoopChanged = true;
+                    lexicallyIncluded = true;
                 }
-                ForLoop wLoop = TransformTools.stripmining(ploop, num_workers, suffix, targetRegion);
+                Traversable tt = ploop.getParent();
+                while( tt != null ) {
+                	if( tt instanceof Procedure ) {
+                		break;
+                	} else if( tt.equals(region) ) {
+                		lexicallyIncluded = true;
+                		break;
+                	} else {
+                		tt = tt.getParent();
+                	}
+                }
+                ForLoop wLoop = TransformTools.stripmining(ploop, num_workers, suffix, targetRegion, lexicallyIncluded);
                 if( targetLoopChanged ) {
                     newLoop = wLoop;
                 }

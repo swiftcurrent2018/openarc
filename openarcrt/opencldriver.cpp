@@ -203,6 +203,8 @@ HI_error_t OpenCLDriver::init() {
 				search = "intel";
 			} else if(dev == acc_device_gpu) {
 				search = "nvidia";
+			} else {
+				search = "unknown";
 			}
 			if( name.find(search) != std::string::npos ) {
 				foundPlatform = true;
@@ -226,6 +228,8 @@ HI_error_t OpenCLDriver::init() {
 		err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
 	} else if(dev == acc_device_xeonphi) {
 		err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_ACCELERATOR, num_devices, devices, NULL);
+	} else if(dev == acc_device_host) {
+		err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_CPU, num_devices, devices, NULL);
 	} else  {
 		err = clGetDeviceIDs(clPlatform, CL_DEVICE_TYPE_GPU, num_devices, devices, NULL);
 	}
@@ -582,7 +586,7 @@ int OpenCLDriver::HI_get_num_devices(acc_device_t devType) {
 #endif
     cl_uint numDevices = 0;
     if(devType == acc_device_gpu || devType == acc_device_xeonphi ||
-		devType == acc_device_altera ) {
+		devType == acc_device_altera || devType == acc_device_host ) {
     	char *platformName;
         cl_platform_id platform;
         cl_int err = CL_SUCCESS;
@@ -643,6 +647,8 @@ int OpenCLDriver::HI_get_num_devices(acc_device_t devType) {
 					search = "intel";
 				} else if(devType == acc_device_gpu) {
 					search = "nvidia";
+				} else {
+					search = "unknown";
 				}
 				if( name.find(search) != std::string::npos ) {
 					foundPlatform = true;
@@ -664,6 +670,8 @@ int OpenCLDriver::HI_get_num_devices(acc_device_t devType) {
 			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
         } else if(devType == acc_device_xeonphi) {
 			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ACCELERATOR, 0, NULL, &numDevices);
+        } else if(devType == acc_device_host) {
+			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 0, NULL, &numDevices);
 		} else if(devType == acc_device_gpu) {
 			err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		} else {

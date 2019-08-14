@@ -86,7 +86,7 @@ omp_helper.o: omp_helper.cpp
 	$(CXX) $(DEFSET) -o omp_helper.o omp_helper.cpp -c
 
 mcl_accext.o: mcl_accext.cpp
-	$(CXX) $(DEFSET) $(COMMONCINCLUDE) -I${mclinstallroot}/include -o mcl_accext.o mcl_accext.cpp -c
+	$(CXX) $(DEFSET) $(COMMONCINCLUDE) -I${mclinstallroot}/include -fPIC -o mcl_accext.o mcl_accext.cpp -c
 	
 binUtil: binBuilder.cpp
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o ./binBuilder_$(OPENARCLIB_SUFFIX) binBuilder.cpp $(CLIBS)

@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------
 RELEASE
 -------------------------------------------------------------------------------
-OpenARC V0.14 (April 17, 2019)
+OpenARC V0.16 (August 14, 2019)
 
 Open Accelerator Research Compiler (OpenARC) is a framework built on top of 
 the Cetus compiler infrastructure (http://cetus.ecn.purdue.edu), which is 
@@ -83,11 +83,13 @@ for which OpenARC translates the input OpenACC program.
 
   - Set OPENARC_ARCH = 0 for CUDA (default)
 
-                       1 for OpenCL (e.g., AMD GPUs)
+                       1 for general OpenCL (e.g., AMD GPUs)
 
-                       2 for OpenCL for Xeon Phi
+                       2 for Xeon Phi with OpenCL 
 
-                       3 for OpenCL for Altera FPGA
+                       3 for Altera FPGA with OpenCL
+
+                       4 for MCL with OpenCL
 
   - For example in BASH, 
 
@@ -100,7 +102,7 @@ ACC_DEVICE_TYPE, should be set to the target device type.
         export ACC_DEVICE_TYPE=RADEON 
 
 * OpenMP environment variable, OMP_NUM_THREADS, shoud be set to the maximum
-number of OpenMP threads that the input program uses, if OpenMP is used in
+number of OpenMP threads that the input program uses, which is necessary only if OpenMP is used in
 the input OpenACC program.
 
 * Environment variable, OPENARC_JITOPTION, may be optinally used to pass
@@ -154,6 +156,8 @@ for OpenARC users; if [openarc-path]/bin/openarc exists, the above command can b
 
 * Use either macro option or "#pragma openarc #define" directive to apply macro definitions to OpenACC/OpenARC annotations; see the LIMITATIONS section.
 
+* When compiled by OpenARC, two macro names (_OPENACC and _OPENARC_) are implicitly defined, which can be used for conditional compiliation.
+
 * Available OpenARC commandline options can be found either in [openarc-path]/test/openarcConf.sample or by running the following command:
 
 	$ [openarc-path]/bin/openarc -dump-options
@@ -204,6 +208,10 @@ FEATURES/UPDATES
     - Update CUDA runtime to allow intermixing of both OpenACC and CUDA. (See example in [openarc-path]/test/examples/openarc/matmul_openacc_cuda)
 
 * Bug fixes and improvements
+	- Update the OpenARC C parser to support additional types in C99/C11 and CUDA/OpenCL.
+
+	- Fixed bugs in the gang-private variable transformation and workshing-loop transformation.
+
 	- Fixed bugs in the OpenCL backend to correctly handle multiple platforms.
 
 	- Fixed bugs in privatization and reduction transformation passes.
@@ -265,7 +273,7 @@ C program, the program may contain unsuppported C99 features.
 in the memory. This means that double/triple pointers (e.g., float \*\*p) are not
 allowed. One way to allocate 2D array in a contiguous way is the following:
 
-		float (\*a)[N] = (float (\*)[N])malloc(sizeof(float) \* M \* N);
+		float (*a)[N] = (float (*)[N])malloc(sizeof(float) * M * N);
 			
 		//Where N should be compile-time constant.
 		
