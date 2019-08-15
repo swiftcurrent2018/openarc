@@ -41,22 +41,28 @@ int acc_get_num_devices( acc_device_t devtype ) {
     }
     if( (devtype == acc_device_not_host) || (devtype == acc_device_default) ) {
 		tconf->setDefaultDevice();
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
         count = OpenCLDriver::HI_get_num_devices(tconf->acc_device_type_var);
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+        count = HipDriver::HI_get_num_devices(tconf->acc_device_type_var);
 #else
 		count = CudaDriver::HI_get_num_devices(tconf->acc_device_type_var);
 #endif
     } else if( (devtype == acc_device_nvidia) || (devtype == acc_device_radeon)) {
         devtype = acc_device_gpu;
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
         count = OpenCLDriver::HI_get_num_devices(devtype);
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+        count = HipDriver::HI_get_num_devices(devtype);
 #else
 		count = CudaDriver::HI_get_num_devices(devtype);
 #endif
     } else if( devtype == acc_device_host ) {
         //count = 1;
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
         count = OpenCLDriver::HI_get_num_devices(devtype);
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+        count = HipDriver::HI_get_num_devices(devtype);
 #else
 		count = CudaDriver::HI_get_num_devices(devtype);
 #endif
@@ -568,6 +574,7 @@ void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[], con
 	} else {
 	//} else if( tconf->HI_kernels_registered == 0 ) {
 		//acc_init() can be called multiple times.
+        printf("[%s:%d]\n", __FILE__, __LINE__);
     	tconf->addKernelNames(kernels, kernelNames);
 		tconf->HI_kernels_registered = 1;
 		tconf->device->HI_register_kernels(tconf->kernelnames);

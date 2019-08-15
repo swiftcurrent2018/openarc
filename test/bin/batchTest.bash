@@ -102,7 +102,7 @@ do
 				for example in ${benchmarks[@]}
 				do
 					if [ -f "$targetDir/$example/Makefile" ]; then
-						echo $example | grep -e "_tuning" -e "_task" -e "_cash" > /dev/null
+						echo $example | grep -e "_tuning" -e "_task" -e "_cash" -e "_manualdeepcopy" > /dev/null
 						if [ $? -eq 0 ]; then
 							echo "" | tee -a $translog
 							echo "====> Skip ${targetDir}/${example}!" | tee -a $translog

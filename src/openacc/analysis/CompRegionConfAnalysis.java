@@ -62,7 +62,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 			maxNumWorkers = Integer.valueOf(value).intValue();
 		}
 		value = Driver.getOptionValue("CUDACompCapability");
-		if( OPENARC_ARCH == 0 ) {
+		if( OPENARC_ARCH <= 0 ) {
 			double CUDACompCapability = 1.1;
 			if( value != null ) {
 				CUDACompCapability = Double.valueOf(value).doubleValue();
@@ -410,7 +410,7 @@ public class CompRegionConfAnalysis extends AnalysisPass {
 								long tNumWorkers = ((IntegerLiteral)totalNumWorkers).getValue();
 								if( tNumWorkers > maxNumWorkers ) {
 									Procedure pProc = IRTools.getParentProcedure(at);
-									if( (OPENARC_ARCH == 0) && (maxNumWorkers == 512) && (tNumWorkers <= 1024) ) {
+									if( (OPENARC_ARCH <= 0) && (maxNumWorkers == 512) && (tNumWorkers <= 1024) ) {
 										PrintTools.println("\n[WARNING in CompRegionConfAnalsys()] total number of workers (" + tNumWorkers
 												+ ") in the following worker loop seems to be bigger than the allowed limit (" + maxNumWorkers
 												+ ")\nEnclosing Procedure: " + pProc.getSymbolName() + "\nEnclosing ACCAnnotation: " + cAnnot + "\n", 0);

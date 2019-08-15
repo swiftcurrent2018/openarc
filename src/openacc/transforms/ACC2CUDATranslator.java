@@ -78,8 +78,13 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 	public ACC2CUDATranslator(Program prog) {
 		super(prog);
 		pass_name = "[ACC2CUDATranslator]";
-		targetModel = 0; //0 for CUDA
-		kernelsTranslationUnit = new TranslationUnit(kernelFileNameBase+".cu");
+		if( targetArch == 5 ) {
+			targetModel = 5; //0 for HIP
+			kernelsTranslationUnit = new TranslationUnit(kernelFileNameBase+".hip.cpp");
+		} else {
+			targetModel = 0; //0 for CUDA
+			kernelsTranslationUnit = new TranslationUnit(kernelFileNameBase+".cu");
+		}
 
 		//Add kernel translation unit to the program
         program.addTranslationUnit(kernelsTranslationUnit);
@@ -337,6 +342,9 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
         // Insert macro for kernel file
             /* Insert CUDA-related header files and macros */
         StringBuilder kernelStr = new StringBuilder(2048);
+		if( targetArch == 5 ) {
+			kernelStr.append("#include <hip/hip_runtime.h>\n");
+		}
 		kernelStr.append("#ifndef __CUDA_KERNELHEADER__ \n");
 		kernelStr.append("#define __CUDA_KERNELHEADER__ \n");
         kernelStr.append("/********************************************/\n");
@@ -5513,47 +5521,58 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 		//Set GPU kernel configuration parameters partII. //
 		///////////////////////////////////////////////////
 
-		//Dim3Specifier dim3Spec = new Dim3Specifier(num_gangs.get(0), num_gangs.get(1), num_gangs.get(2));
-		//VariableDeclarator dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), dim3Spec);
-		//Identifier dimGrid = new Identifier(dimGrid_declarator);
-		//Declaration dimGrid_decl = new VariableDeclaration(CUDASpecifier.CUDA_DIM3, dimGrid_declarator);
-		//TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimGrid_decl));
+		VariableDeclarator dimGrid_declarator = null;
+		Identifier dimGrid = null;
+		Declaration dimGrid_decl = null;
+		if( targetArch == -1 ) {
+			Dim3Specifier dim3Spec = new Dim3Specifier(num_gangs.get(0), num_gangs.get(1), num_gangs.get(2));
+			dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), dim3Spec);
+			dimGrid = new Identifier(dimGrid_declarator);
+			dimGrid_decl = new VariableDeclaration(CUDASpecifier.CUDA_DIM3, dimGrid_declarator);
+			TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimGrid_decl));
+		} else {
+			dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
+			dimGrid = new Identifier(dimGrid_declarator);
+			dimGrid_decl = new VariableDeclaration(CUDASpecifier.SIZE_T, dimGrid_declarator);
+			DeclarationStatement dimGrid_stmt = new DeclarationStatement(dimGrid_decl);
+			TransformTools.addStatementBefore(confRefParent, confRefStmt, dimGrid_stmt);
+			for(int j = 2; j >= 0; j--)
+			{
+				AssignmentExpression assignmentExpression = new AssignmentExpression(
+						new ArrayAccess(new NameID("dimGrid_"+new_func_name), new IntegerLiteral(j)),
+						AssignmentOperator.NORMAL,
+						num_gangs.get(j).clone()
+						);
+				TransformTools.addStatementAfter(confRefParent, dimGrid_stmt, new ExpressionStatement(assignmentExpression));
+			}
+		}
 
-		VariableDeclarator dimGrid_declarator = new VariableDeclarator(new NameID("dimGrid_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
-		Identifier dimGrid = new Identifier(dimGrid_declarator);
-		Declaration dimGrid_decl = new VariableDeclaration(CUDASpecifier.SIZE_T, dimGrid_declarator);
-		DeclarationStatement dimGrid_stmt = new DeclarationStatement(dimGrid_decl);
-		TransformTools.addStatementBefore(confRefParent, confRefStmt, dimGrid_stmt);
-        for(int j = 2; j >= 0; j--)
-        {
-            AssignmentExpression assignmentExpression = new AssignmentExpression(
-                    new ArrayAccess(new NameID("dimGrid_"+new_func_name), new IntegerLiteral(j)),
-                    AssignmentOperator.NORMAL,
-                    num_gangs.get(j).clone()
-            );
-            TransformTools.addStatementAfter(confRefParent, dimGrid_stmt, new ExpressionStatement(assignmentExpression));
-        }
+		VariableDeclarator dimBlock_declarator = null;
+		Identifier dimBlock = null;
+		Declaration dimBlock_decl = null;
+		if( targetArch == -1 ) {
+			Dim3Specifier dim3Spec = new Dim3Specifier(num_workers.get(0), num_workers.get(1), num_workers.get(2));
+			dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), dim3Spec);
+			dimBlock = new Identifier(dimBlock_declarator);
+			dimBlock_decl = new VariableDeclaration(CUDASpecifier.CUDA_DIM3, dimBlock_declarator);
+			TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimBlock_decl));
+		} else {
 
-		//Dim3Specifier dim3Spec = new Dim3Specifier(num_workers.get(0), num_workers.get(1), num_workers.get(2));
-		//VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), dim3Spec);
-		//Identifier dimBlock = new Identifier(dimBlock_declarator);
-		//Declaration dimBlock_decl = new VariableDeclaration(CUDASpecifier.CUDA_DIM3, dimBlock_declarator);
-		//TransformTools.addStatementBefore(confRefParent, confRefStmt, new DeclarationStatement(dimBlock_decl));
-
-		VariableDeclarator dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
-		Identifier dimBlock = new Identifier(dimBlock_declarator);
-		Declaration dimBlock_decl = new VariableDeclaration(CUDASpecifier.SIZE_T, dimBlock_declarator);
-		DeclarationStatement dimBlock_stmt = new DeclarationStatement(dimBlock_decl);
-		TransformTools.addStatementBefore(confRefParent, confRefStmt, dimBlock_stmt);
-        for(int j = 2; j >= 0; j--)
-        {
-            AssignmentExpression assignmentExpression = new AssignmentExpression(
-                    new ArrayAccess(new NameID("dimBlock_"+new_func_name), new IntegerLiteral(j)),
-                    AssignmentOperator.NORMAL,
-                    num_workers.get(j).clone()
-            );
-            TransformTools.addStatementAfter(confRefParent, dimBlock_stmt, new ExpressionStatement(assignmentExpression));
-        }
+			dimBlock_declarator = new VariableDeclarator(new NameID("dimBlock_"+new_func_name), new ArraySpecifier(new IntegerLiteral(3)));
+			dimBlock = new Identifier(dimBlock_declarator);
+			dimBlock_decl = new VariableDeclaration(CUDASpecifier.SIZE_T, dimBlock_declarator);
+			DeclarationStatement dimBlock_stmt = new DeclarationStatement(dimBlock_decl);
+			TransformTools.addStatementBefore(confRefParent, confRefStmt, dimBlock_stmt);
+			for(int j = 2; j >= 0; j--)
+			{
+				AssignmentExpression assignmentExpression = new AssignmentExpression(
+						new ArrayAccess(new NameID("dimBlock_"+new_func_name), new IntegerLiteral(j)),
+						AssignmentOperator.NORMAL,
+						num_workers.get(j).clone()
+						);
+				TransformTools.addStatementAfter(confRefParent, dimBlock_stmt, new ExpressionStatement(assignmentExpression));
+			}
+		}
 
 		AssignmentExpression assignExp = new AssignmentExpression(numBlocks.clone(), AssignmentOperator.NORMAL, totalnumgangs);
 		ExpressionStatement estmt = new ExpressionStatement(assignExp);
@@ -5924,6 +5943,7 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
 			region.swapWith(kernelRegion);
 			kernelRegion = (CompoundStatement)region;
 		}
+        TransformTools.correctLoopIndexVariableDeclarations(kernelRegion);
 		while ( !devProcStack.isEmpty() ) {
 			Procedure tProc = devProcStack.pop();
 			parentTrUnt.removeChild(tProc);
@@ -7194,6 +7214,8 @@ public class ACC2CUDATranslator extends ACC2GPUTranslator {
                 CompoundStatement targetRegion = null;
                 if( region instanceof CompoundStatement ) {
                     targetRegion = (CompoundStatement)region;
+                } else {
+            		targetRegion = (CompoundStatement)ploop.getParent();
                 }
                 boolean lexicallyIncluded = false;
                 boolean targetLoopChanged = false;

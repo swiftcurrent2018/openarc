@@ -716,7 +716,7 @@ public class acc2gpu extends CodeGenPass
 		///////////////////////////////////////////////////////
 		// Do the actual OpenACC-to-Accelerator translation. //
 		///////////////////////////////////////////////////////
-        if( OPENARC_ARCH == 0 )
+        if( (OPENARC_ARCH <= 0) || (OPENARC_ARCH == 5) )
         {
             PrintTools.println("[ACC2CUDATranslator] begin", 0);
             ACC2CUDATranslator a2cpass = new ACC2CUDATranslator(program);
@@ -782,7 +782,7 @@ public class acc2gpu extends CodeGenPass
 		// If so, CUDA compiler will fail if they are not inlinable.                //
 		//////////////////////////////////////////////////////////////////////////////
 		PrintTools.println("[CheckKernelFunctions] begin", 0);
-        if( OPENARC_ARCH == 0 ) {
+        if( (OPENARC_ARCH <= 0) || (OPENARC_ARCH == 5) ) {
         	AnalysisTools.checkKernelFunctions(program, "CUDA");
         } else {
         	AnalysisTools.checkKernelFunctions(program, "OPENCL");

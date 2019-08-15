@@ -167,6 +167,37 @@ MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
 endif
 
 #########################
+# Target System: AMDHIP #
+#########################
+ifeq ($(TARGET_SYSTEM),AMDHIP)
+
+OPENARC_ARCH = 5
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = hipcc
+CXX = hipcc
+CPP = cpp -E
+GMACROS = -DOPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D_OPENARC_PROFILE_=1
+BACKENDCXX = hipcc
+CC_FLAGS_PREFIX =
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES =
+GBACKEND_LIBS =
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES = -I$(OPENARCLIB)
+GFRONTEND_LIBS = 
+GFRONTEND_DEBUG = -g
+
+#MPI_FLAGS =
+#MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
+#MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+
+endif
+
+
+#########################
 # Target System: XAVIER #
 #########################
 ifeq ($(TARGET_SYSTEM),XAVIER)

@@ -169,6 +169,11 @@ ifeq ($(OPENARC_ARCH),0)
 OPENARCLIB_SUFFIX = cuda
 KERNEL_FILE = openarc_kernel.cu
 RESILIENCE_FILE = resilience.cu
+else ifeq ($(OPENARC_ARCH),5)
+# HIP target
+OPENARCLIB_SUFFIX = hip
+KERNEL_FILE = openarc_kernel.hip.cpp
+RESILIENCE_FILE = resilience.cu
 else
 # OpenCL target
 OPENARCLIB_SUFFIX = opencl
@@ -224,7 +229,7 @@ CLIBS1_BASE = $(GOMP_LIBS)
 CLIBS2_BASE = -L$(OPENARCLIB) -l$(ACCRTLIB) -lomphelper $(COMMONCLIBS) $(GOMP_LIBS)
 else
 CLIBS1_BASE = 
-CLIBS2_BASE = -L$(OPENARCLIB) -l$(ACCRTLIB) -lomphelper $(COMMONCLIBS)
+CLIBS2_BASE = -L$(OPENARCLIB) -l$(ACCRTLIB) $(COMMONCLIBS)
 endif
 CLIBS1_LLVM += -L$(OPENARCLIB) 
 CLIBS1 += $(CLIBS1_BASE) -L$(OPENARCLIB) 

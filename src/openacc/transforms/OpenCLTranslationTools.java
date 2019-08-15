@@ -590,6 +590,27 @@ public abstract class OpenCLTranslationTools {
 				Statement thrmapstmt = new ExpressionStatement(assgn);
 				CompoundStatement pParent = (CompoundStatement)ploop.getParent();
 				pParent.addStatementBefore(ploop, thrmapstmt);
+				Symbol ivarSym = SymbolTools.getSymbolOf(ivar);
+				if( ivarSym != null ) {
+					Declaration ivarSymDecl = ivarSym.getDeclaration(); 
+					Traversable tivar = ivarSymDecl.getParent();
+					boolean declaredInLoopBody = false;
+					while( tivar != null ) {
+						if( tivar.equals(ploop) ) {
+							declaredInLoopBody = true;
+							break;
+						} else {
+							tivar = tivar.getParent();
+						}
+					}
+					if( declaredInLoopBody ) {
+						Statement ivarSymStmt = (Statement)ivarSymDecl.getParent();
+						CompoundStatement ivarPStmt = (CompoundStatement)ivarSymStmt.getParent();
+						ivarPStmt.removeStatement(ivarSymStmt);
+						ivarSymDecl.setParent(null);
+						pParent.addDeclaration(ivarSymDecl);
+					}
+				}
 			
 				boolean addBoundaryCheck = true;
 				if( opt_skipKernelLoopBoundChecking ) {
@@ -2938,6 +2959,14 @@ public abstract class OpenCLTranslationTools {
                                 arrayWorkerPrivCachingOnSM(redSym, localWRedSymNameOnShared, wTypeSpecs, startList,
                                         lengthList, scope, num_workersExp.clone());
                         lwred_var = new Identifier(arrayV_declarator);
+                        if( at != region ) {
+                        	VariableDeclaration arrayV_decl = (VariableDeclaration)arrayV_declarator.getDeclaration();
+                        	Statement arrayV_Stmt = (Statement)arrayV_decl.getParent();
+                        	scope.removeStatement(arrayV_Stmt);
+                        	arrayV_decl.setParent(null);
+                        	CompoundStatement atP = (CompoundStatement)at.getParent();
+                        	atP.addDeclaration(arrayV_decl);
+                        }
                     } else {
                         //////////////////////////////////////////////////////
                         //Create a worker-private variable on a global      //

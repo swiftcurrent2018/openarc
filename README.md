@@ -91,6 +91,8 @@ for which OpenARC translates the input OpenACC program.
 
                        4 for MCL with OpenCL
 
+                       5 for AMD HIP 
+
   - For example in BASH, 
 
         export OPENARC_ARCH=0

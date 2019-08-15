@@ -234,7 +234,7 @@ public class KernelFunctionCall extends FunctionCall
 		} else {
 			//Special case for OpenCL
 			//If use OpenCL, the use of texture memory is not allowed
-			if(targetArch != 0)
+			if((targetArch != 0) && (targetArch != 5))
 			{
 				if( isPointer ) {
 					p.print("sizeof(void*),");
@@ -281,7 +281,8 @@ public class KernelFunctionCall extends FunctionCall
 		}
 	}
 	if (targetArch == -1) {
-		p.print(")");
+		p.println(");");
+		p.print("cudaDeviceSynchronize()");
 	}
 
 	if( targetArch == 4 ) {

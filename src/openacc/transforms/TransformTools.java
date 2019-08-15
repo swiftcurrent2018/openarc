@@ -1253,6 +1253,33 @@ public abstract class TransformTools {
 				stripSize.clone());
 		ploop.getStep().swapWith(expr2);
 		forBody.addStatement(ploop);
+		Expression ivar = LoopTools.getIndexVariable(ploop);
+		if( ivar != null ) {
+			//System.out.println("Found index variable: " + ivar);
+			Symbol ivarSym = SymbolTools.getSymbolOf(ivar);
+			if( ivarSym != null ) {
+				//System.out.println("Found index symbol: " + ivarSym);
+				Declaration ivarSymDecl = ivarSym.getDeclaration(); 
+				Traversable tivar = ivarSymDecl.getParent();
+				boolean declaredInLoopBody = false;
+				while( tivar != null ) {
+					if( tivar.equals(ploop) ) {
+						declaredInLoopBody = true;
+						break;
+					} else {
+						tivar = tivar.getParent();
+					}
+				}
+				if( declaredInLoopBody ) {
+					//System.out.println("Index symbol declared inner body: " + ivarSym);
+					Statement ivarSymStmt = (Statement)ivarSymDecl.getParent();
+					CompoundStatement ivarPStmt = (CompoundStatement)ivarSymStmt.getParent();
+					ivarPStmt.removeStatement(ivarSymStmt);
+					ivarSymDecl.setParent(null);
+					forBody.addDeclaration(ivarSymDecl);
+				}
+			}
+		}
 		///////////////////////////////////////////////
 		// Move all Annotations of ploop into wLoop. //
 		///////////////////////////////////////////////
@@ -2966,6 +2993,49 @@ public abstract class TransformTools {
 			}
 		}
 		return decls;
+	}
+	
+	/**
+	 * Correct loop index varaible declaration, 
+	 * which may be moved to a wrong place during the compute region transformation.
+	 * @param compRegion
+	 */
+	public static void correctLoopIndexVariableDeclarations( Statement compRegion ) {
+		DFIterator<ForLoop> iter = new DFIterator<ForLoop>(compRegion, ForLoop.class);
+		while(iter.hasNext())
+		{
+			ForLoop cLoop = iter.next();
+			List<Expression> ivar_exprSet = AnalysisTools.getIndexVariables(cLoop);
+			for( Expression ivar_expr : ivar_exprSet ) {
+				if( ivar_expr != null ) {
+					Symbol ivarSym = SymbolTools.getSymbolOf(ivar_expr);
+					if( ivarSym != null ) {
+						//System.out.println("Found index symbol: " + ivarSym);
+						Declaration ivarSymDecl = ivarSym.getDeclaration(); 
+						Traversable tivar = ivarSymDecl.getParent();
+						boolean declaredInLoopBody = false;
+						while( tivar != null ) {
+							if( tivar.equals(cLoop) ) {
+								declaredInLoopBody = true;
+								break;
+							} else {
+								tivar = tivar.getParent();
+							}
+						}
+						if( declaredInLoopBody ) {
+							//System.out.println("Index symbol declared inner body: " + ivarSym);
+							Statement ivarSymStmt = (Statement)ivarSymDecl.getParent();
+							CompoundStatement ivarPStmt = (CompoundStatement)ivarSymStmt.getParent();
+							ivarPStmt.removeStatement(ivarSymStmt);
+							ivarSymDecl.setParent(null);
+							CompoundStatement cPStmt = (CompoundStatement)cLoop.getParent();
+							cPStmt.addDeclaration(ivarSymDecl);
+						}
+					}
+				}
+			}
+		}
+		
 	}
 
 }

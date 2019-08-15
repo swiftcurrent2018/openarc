@@ -119,6 +119,7 @@ public class ACC2GPUDriver extends Driver
         "        =2 for Xeon Phi with OpenCL \n" +
         "        =3 for Altera with OpenCL \n" +
         "        =4 for MCL with OpenCL \n" +
+        "        =5 for AMD HIP \n" +
         "If not set, the target is decided by OPENARC_ARCH env variable." );
 		optionsWithIntArgument.add("targetArch");
 

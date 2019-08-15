@@ -369,6 +369,9 @@ void HostConf::setTranslationType()
         if( genOCL < 0 ) {
             genOCL = 0;
         }
+        if( genOCL == 5 ) {
+            genOCL = 0;
+        }
     }
 
 }
@@ -469,7 +472,7 @@ void HostConf::HI_init(int devNum) {
 			}
 			if( numDevices == 0 ) {
         		if(genOCL) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH > 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH > 0 && OPENARC_ARCH != 5
             		numDevices = OpenCLDriver::HI_get_num_devices(acc_device_type_var);
 #else
 					fprintf(stderr, "[OPENARCRT-ERROR]To generate OpenCL program, the environment variable OPENARC_ARCH should be a positive integer.\n");
@@ -478,6 +481,8 @@ void HostConf::HI_init(int devNum) {
         		}	else {
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
             	numDevices = CudaDriver::HI_get_num_devices(acc_device_type_var);
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+            	numDevices = HipDriver::HI_get_num_devices(acc_device_type_var);
 #endif
         		}
 				acc_num_devices = numDevices;
@@ -496,7 +501,7 @@ void HostConf::HI_init(int devNum) {
         		for(int i=0 ; i < numDevices; i++) {
             		Accelerator *dev;
             		if(genOCL) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH > 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH > 0 && OPENARC_ARCH != 5
                 		dev = new OpenCLDriver_t(acc_device_type_var, i, kernelnames, this, numDevices, baseFileName.c_str());
 #else
 						fprintf(stderr, "[OPENARCRT-ERROR]To generate OpenCL program, the environment variable OPENARC_ARCH should be a positive integer.\n");
@@ -505,6 +510,8 @@ void HostConf::HI_init(int devNum) {
             		} else {
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
                 		dev = new CudaDriver_t(acc_device_type_var, i, kernelnames, this, numDevices, baseFileName.c_str());
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+                		dev = new HipDriver_t(acc_device_type_var, i, kernelnames, this, numDevices, baseFileName.c_str());
 #endif
             		}
             		//printf("Dev created %d\n", i);

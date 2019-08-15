@@ -5383,6 +5383,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
           region.swapWith(kernelRegion);
           kernelRegion = (CompoundStatement)region;
         }
+        TransformTools.correctLoopIndexVariableDeclarations(kernelRegion);
         while ( !devProcStack.isEmpty() ) {
           Procedure tProc = devProcStack.pop();
           parentTrUnt.removeChild(tProc);
@@ -6693,6 +6694,8 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
             CompoundStatement targetRegion = null;
             if( region instanceof CompoundStatement ) {
               targetRegion = (CompoundStatement)region;
+            } else {
+            	targetRegion = (CompoundStatement)ploop.getParent();
             }
             boolean lexicallyIncluded = false;
             boolean targetLoopChanged = false;
