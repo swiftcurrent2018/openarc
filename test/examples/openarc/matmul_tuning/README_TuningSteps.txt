@@ -39,7 +39,7 @@
 
 [Comment]
 - If tuning-configuration-setup file ("gpuTuning.config" in Step 3-1) exists or a user wants to use the default configuration set by the compiler, the following script will perform all of the above steps.
-	$ tBatchTuning.bash -t-tLevel -m=mode
+	$ tBatchTuning.bash -t=tLevel -m=tMode
 		#tLevel = 1 for program-level tuning (default)
 		#         2 for GPU-kernel-level tuning
 		#
