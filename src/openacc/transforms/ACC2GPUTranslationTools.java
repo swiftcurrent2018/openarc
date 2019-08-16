@@ -1402,7 +1402,7 @@ public abstract class ACC2GPUTranslationTools {
 									new NameID(localWPSymName));
 							VariableDeclaration kParam_decl = new VariableDeclaration(typeSpecs,
 									kParam_declarator);
-							if( (targetModel > 0) && (targetModel != 5) ) { //for OpenCL
+							if( targetModel > 0 ) { //for OpenCL
 								kParam_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);
 							}
 							lpriv_var = new Identifier(kParam_declarator);
@@ -1412,7 +1412,7 @@ public abstract class ACC2GPUTranslationTools {
 									new NameID(localRedSymName));
 							VariableDeclaration kParam_decl = new VariableDeclaration(typeSpecs,
 									kParam_declarator);
-							if( (targetModel > 0) && (targetModel !=5) ) { //for OpenCL
+							if( targetModel > 0 ) { //for OpenCL
 								kParam_decl.getSpecifiers().add(0, OpenCLSpecifier.OPENCL_GLOBAL);
 							}
 							lred_var = new Identifier(kParam_declarator);
@@ -1423,7 +1423,7 @@ public abstract class ACC2GPUTranslationTools {
 						call_to_new_proc.addArgument(gwpriv_var.clone());
 
 					} else {
-						if( (targetModel == 0) || (targetModel == 5) ) { //for CUDA
+						if( targetModel == 0 ) { //for CUDA
 							addSpecs = null;
 						} else {
 							addSpecs = new ArrayList<Specifier>(Arrays.asList(OpenCLSpecifier.OPENCL_GLOBAL));
@@ -1512,7 +1512,7 @@ public abstract class ACC2GPUTranslationTools {
 						//using array expansion.                            //
 						//////////////////////////////////////////////////////
 						addSpecs = new ArrayList<Specifier>(1);
-						if( (targetModel == 0) || (targetModel == 5) ) { //for CUDA
+						if( targetModel == 0 ) { //for CUDA
 							addSpecs.add(CUDASpecifier.CUDA_SHARED);
 						} else { //for OpenCL
 							addSpecs.add(OpenCLSpecifier.OPENCL_LOCAL);

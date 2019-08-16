@@ -7,9 +7,6 @@ COMMONCINCLUDE = $(GBACKEND_INCLUDES)
 ifeq ($(OPENARC_ARCH),0)
 # CUDA target
 OPENARCLIB_SUFFIX = cuda
-else ifeq ($(OPENARC_ARCH),5)
-# HIP target
-OPENARCLIB_SUFFIX = hip
 else
 # OpenCL target
 OPENARCLIB_SUFFIX = opencl
@@ -54,8 +51,6 @@ DEFSET ?= -DPRINT_LOG=$(PRINT_LOG) -DOMP=$(OMP)
 
 ifeq ($(OPENARC_ARCH),0)
 OBJS = openacc.o openaccrt.o cudadriver.o
-else ifeq ($(OPENARC_ARCH),5)
-OBJS = openacc.o openaccrt.o hipdriver.o
 else
 OBJS = openacc.o openaccrt.o opencldriver.o
 endif
@@ -83,9 +78,6 @@ opencldriver.o: opencldriver.cpp openacc.h openaccrt.h resilience.cpp omp_helper
 
 cudadriver.o: cudadriver.cpp openacc.h openaccrt.h resilience.cpp omp_helper.cpp
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o cudadriver.o cudadriver.cpp -c
-
-hipdriver.o: hipdriver.cpp openacc.h openaccrt.h resilience.cpp omp_helper.cpp
-	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(COMMONCFLAGS) $(CC_FLAGS) -o hipdriver.o hipdriver.cpp -c
 
 resilience.o: resilience.cpp
 	$(CXX) $(DEFSET) -o resilience.o resilience.cpp -c

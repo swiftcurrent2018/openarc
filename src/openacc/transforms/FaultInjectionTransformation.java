@@ -928,7 +928,7 @@ public class FaultInjectionTransformation extends TransformPass {
 								//[FIXME] if the target is OpenCL (OPENARC_ARCH > 0), OpenCL address space qualifier (__global,
 								//__constant, or __local) should be added too. However, in current implementation, only 
 								//__global is used, which may be changed later.
-								if( inCompRegion && (OPENARC_ARCH > 0) && (OPENARC_ARCH != 5) ) {
+								if( inCompRegion && OPENARC_ARCH > 0 ) {
 									types.add(OpenCLSpecifier.OPENCL_GLOBAL);
 								}
 								types.add(PointerSpecifier.UNQUALIFIED);
@@ -936,7 +936,7 @@ public class FaultInjectionTransformation extends TransformPass {
 							} else if( typeKind == 1 ) {
 								List<Specifier> types = new ArrayList<Specifier>(2);
 								types.add(Specifier.FLOAT);
-								if( inCompRegion && (OPENARC_ARCH > 0) && (OPENARC_ARCH != 5) ) {
+								if( inCompRegion && OPENARC_ARCH > 0 ) {
 									types.add(OpenCLSpecifier.OPENCL_GLOBAL);
 								}
 								types.add(PointerSpecifier.UNQUALIFIED);
@@ -944,7 +944,7 @@ public class FaultInjectionTransformation extends TransformPass {
 							} else {
 								List<Specifier> types = new ArrayList<Specifier>(2);
 								types.add(Specifier.DOUBLE);
-								if( inCompRegion && (OPENARC_ARCH > 0) && (OPENARC_ARCH != 5) ) {
+								if( inCompRegion && OPENARC_ARCH > 0 ) {
 									types.add(OpenCLSpecifier.OPENCL_GLOBAL);
 								}
 								types.add(PointerSpecifier.UNQUALIFIED);
@@ -1065,7 +1065,7 @@ public class FaultInjectionTransformation extends TransformPass {
 							if( typeKind == 0 ) {
 								List<Specifier> types = new ArrayList<Specifier>(2);
 								types.add(bitvType);
-								if( inCompRegion && (OPENARC_ARCH > 0) && (OPENARC_ARCH != 5) ) {
+								if( inCompRegion && OPENARC_ARCH > 0 ) {
 									types.add(OpenCLSpecifier.OPENCL_GLOBAL);
 								}
 								types.add(PointerSpecifier.UNQUALIFIED);
@@ -1073,7 +1073,7 @@ public class FaultInjectionTransformation extends TransformPass {
 							} else if( typeKind == 1 ) {
 								List<Specifier> types = new ArrayList<Specifier>(2);
 								types.add(Specifier.FLOAT);
-								if( inCompRegion && (OPENARC_ARCH > 0) && (OPENARC_ARCH != 5) ) {
+								if( inCompRegion && OPENARC_ARCH > 0 ) {
 									types.add(OpenCLSpecifier.OPENCL_GLOBAL);
 								}
 								types.add(PointerSpecifier.UNQUALIFIED);
@@ -1081,7 +1081,7 @@ public class FaultInjectionTransformation extends TransformPass {
 							} else {
 								List<Specifier> types = new ArrayList<Specifier>(2);
 								types.add(Specifier.DOUBLE);
-								if( inCompRegion && (OPENARC_ARCH > 0) && (OPENARC_ARCH != 5) ) {
+								if( inCompRegion && OPENARC_ARCH > 0 ) {
 									types.add(OpenCLSpecifier.OPENCL_GLOBAL);
 								}
 								types.add(PointerSpecifier.UNQUALIFIED);

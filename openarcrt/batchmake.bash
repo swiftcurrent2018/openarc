@@ -20,14 +20,12 @@ if [ "$mode" = "all" ] || [ "$mode" = "dist" ]; then
 	make clean
 fi
 if [ "$mode" = "all" ] || [ "$mode" = "util" ]; then
-	if [ "$OPENARC_ARCH" != "5" ]; then
-		make binUtil PRINT_LOG=1
-		if [ -d ../bin ]; then
-			cp -f binBuilder_* ../bin
-		fi
-		make clean
-		make res
+	make binUtil PRINT_LOG=1
+	if [ -d ../bin ]; then
+		cp -f binBuilder_* ../bin
 	fi
+	make clean
+	make res
 	make omphelp
 	gcc -o Timer Timer.c
 	make clean

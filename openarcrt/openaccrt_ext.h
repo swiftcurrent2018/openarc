@@ -2,16 +2,12 @@
 
 #define __OPENARC_EXT_HEADER__
 
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 5
-#include <hip/hip_runtime.h>
-#endif
-
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
 #include <cuda_runtime.h>
 #include <cuda.h>
 #endif
 
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
@@ -21,13 +17,13 @@
 
 #include "openaccrt.h"
 
-#if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0 
+#if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
 typedef std::map<int, cudaStream_t> asyncmap_t;
 typedef cudaStream_t HI_async_handle_t;
 typedef std::map<int, CUevent> eventmap_cuda_t;
 #endif
 
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
 typedef std::map<int, cl_event> eventmap_opencl_t;
 #endif
 typedef std::map<int, pointerset_t *> asyncfreemap_t;
@@ -53,74 +49,8 @@ typedef struct
 
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
 typedef std::map<Accelerator *, std::map<std::string, CUfunction> > kernelmapcuda_t;
-#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
-typedef std::map<Accelerator *, std::map<std::string, hipFunction_t> > kernelmaphip_t;
 #else
 typedef std::map<Accelerator *, std::map<std::string, cl_kernel> > kernelmapopencl_t;
-#endif
-
-#if defined(OPENARC_ARCH) && OPENARC_ARCH == 5
-typedef class HipDriver: public Accelerator
-{
-public:
-    std::set<std::string> kernelNameSet;
-    hipDevice_t hipDevice;
-    hipCtx_t hipContext;
-    hipModule_t hipModule;
-
-public:
-    HipDriver(acc_device_t devType, int devNum, std::set<std::string>kernelNames, HostConf_t *conf, int numDevices, const char *baseFileName);
-    HI_error_t init();
-    HI_error_t HI_register_kernels(std::set<std::string>kernelNames);
-    HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
-    HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
-    HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
-    HI_error_t HI_synchronize( int forcedSync = 0 );
-    HI_error_t destroy();
-    HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-    HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
-    HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-    HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-    HI_error_t HI_free( const void *hostPtr, int asyncID);
-    HI_error_t HI_pin_host_memory(const void* hostPtr, size_t size);
-    void HI_unpin_host_memory(const void* hostPtr);
-
-    HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
-    HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
-    HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind);
-    HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
-    HI_error_t HI_memcpy2D_asyncS(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
-
-    void HI_tempFree( void** tempPtr, acc_device_t devType);
-    void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-	
-	// Experimental API to support unified memory //
-    HI_error_t HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-    HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType);
-    HI_error_t HI_free_unified( const void *hostPtr, int asyncID);
-
-    static int HI_get_num_devices(acc_device_t devType);
-    void HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-    void HI_free(void *devPtr);
-    HI_error_t createKernelArgMap();
-    HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size);
-    HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
-    HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits=0, int *waits=NULL);
-    HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
-    void HI_set_async(int asyncId);
-    void HI_wait(int arg);
-    void HI_wait_ifpresent(int arg);
-    void HI_waitS1(int arg);
-    void HI_waitS2(int arg);
-    void HI_wait_all();
-    void HI_wait_async(int arg, int async);
-    void HI_wait_async_ifpresent(int arg, int async);
-    void HI_wait_all_async(int async);
-    int HI_async_test(int asyncId);
-    int HI_async_test_ifpresent(int asyncId);
-    int HI_async_test_all();
-    void HI_wait_for_events(int async, int num_waits, int* waits);
-} HipDriver_t;
 #endif
 
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
@@ -233,7 +163,7 @@ public:
 } CudaDriver_t;
 #endif
 
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
 typedef class OpenCLDriver: public Accelerator
 {
 private:
@@ -342,8 +272,6 @@ public:
     kernelargsmap_t kernelArgsMap;
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
     kernelmapcuda_t kernelsMap;
-#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
-    kernelmaphip_t kernelsMap;
 #else
     kernelmapopencl_t kernelsMap;
 #endif

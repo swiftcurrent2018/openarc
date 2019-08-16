@@ -1880,7 +1880,7 @@ public abstract class ACC2GPUTranslator {
 	
 	protected void addStandardHeadersToKernelsTranlationUnit () {
 		StringBuilder kernelStr = null;
-		if( (targetArch == 0) || (targetArch == 5) ) {
+		if( targetArch == 0 ) {
 			if( kernelContainsStdioCalls ) {
 				kernelStr = new StringBuilder(64);
 				kernelStr.append("#include <stdio.h>\n");
