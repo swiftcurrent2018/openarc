@@ -41,22 +41,28 @@ int acc_get_num_devices( acc_device_t devtype ) {
     }
     if( (devtype == acc_device_not_host) || (devtype == acc_device_default) ) {
 		tconf->setDefaultDevice();
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
         count = OpenCLDriver::HI_get_num_devices(tconf->acc_device_type_var);
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+        count = HipDriver::HI_get_num_devices(tconf->acc_device_type_var);
 #else
 		count = CudaDriver::HI_get_num_devices(tconf->acc_device_type_var);
 #endif
     } else if( (devtype == acc_device_nvidia) || (devtype == acc_device_radeon)) {
         devtype = acc_device_gpu;
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
         count = OpenCLDriver::HI_get_num_devices(devtype);
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+        count = HipDriver::HI_get_num_devices(devtype);
 #else
 		count = CudaDriver::HI_get_num_devices(devtype);
 #endif
     } else if( devtype == acc_device_host ) {
         //count = 1;
-#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH != 0 && OPENARC_ARCH != 5
         count = OpenCLDriver::HI_get_num_devices(devtype);
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+        count = HipDriver::HI_get_num_devices(devtype);
 #else
 		count = CudaDriver::HI_get_num_devices(devtype);
 #endif
@@ -104,8 +110,7 @@ void acc_set_device_type( acc_device_t devtype ) {
 #endif
     HostConf_t * tconf = getHostConf();
     tconf->user_set_device_type_var =  devtype;
-    if( devtype == acc_device_nvidia || devtype == acc_device_radeon ) {
-        //tconf->user_set_device_type_var = acc_device_gpu;
+    if( devtype == acc_device_nvidia || devtype == acc_device_radeon || devtype == acc_device_gpu ) {
         tconf->acc_device_type_var = acc_device_gpu;
         tconf->isOnAccDevice = 1;
     } else if ( (devtype == acc_device_not_host) || (devtype == acc_device_default) ) {
@@ -211,161 +216,73 @@ void acc_set_device_num( int devnum, acc_device_t devtype ) {
 	}
     HostConf_t * tconf = setNGetHostConf(devnum);
     tconf->user_set_device_type_var = devtype;
+    tconf->acc_device_num_var = devnum;
     if( devtype == acc_device_nvidia ||  devtype == acc_device_radeon ||  devtype == acc_device_gpu ) {
-        //tconf->acc_device_num_var = devnum;
         devtype = acc_device_gpu;
-		int numDevs = HostConf::devMap.at(devtype).size();
-		if( numDevs <= devnum ) {
-			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
-			exit(1);
-		} else {
-#ifdef _OPENARC_PROFILE_
-			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, devtype);
-#endif
-		}
-        tconf->device = HostConf::devMap.at(devtype).at(devnum);
         tconf->acc_device_type_var = acc_device_gpu;
-        tconf->acc_device_num_var = devnum;
-        //printf("devType %d\n",devtype );
-#ifdef _OPENMP
-		#pragma omp critical(acc_set_device_num_critical)
-#endif
-		{
-        	if(tconf->device->init_done != 1) {
-            	tconf->device->init();
-        	} else {
-            	tconf->device->createKernelArgMap();
-        	}
-		}
     } else if( (devtype == acc_device_xeonphi) || (devtype == acc_device_altera) ) {
-		int numDevs = HostConf::devMap.at(devtype).size();
-		if( numDevs <= devnum ) {
-			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
-			exit(1);
-		} else {
-#ifdef _OPENARC_PROFILE_
-			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, devtype);
-#endif
-		}
-        tconf->device = HostConf::devMap.at(devtype).at(devnum);
         tconf->acc_device_type_var = devtype;
-        tconf->acc_device_num_var = devnum;
-#ifdef _OPENMP
-		#pragma omp critical(acc_set_device_num_critical)
-#endif
-		{
-        	if(tconf->device->init_done != 1) {
-            	tconf->device->init();
-        	} else {
-            	tconf->device->createKernelArgMap();
-        	}
-		}
     } else if (devtype == acc_device_not_host) {
-        tconf->setDefaultDevice();
+        tconf->setDefaultDevice(); 
+		//setDefaultDevice() will change user_set_device_type_var.
     	tconf->user_set_device_type_var = devtype;
-		int numDevs = HostConf::devMap.at(tconf->acc_device_type_var).size();
-		if( numDevs <= devnum ) {
-			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
-			exit(1);
-		} else {
-#ifdef _OPENARC_PROFILE_
-			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, devtype);
-#endif
-		}
-        tconf->device = HostConf::devMap.at(tconf->acc_device_type_var).at(devnum);
-        tconf->acc_device_num_var = devnum;
-#ifdef _OPENMP
-		#pragma omp critical(acc_set_device_num_critical)
-#endif
-		{
-        	if(tconf->device->init_done != 1) {
-            	tconf->device->init();
-        	} else {
-            	tconf->device->createKernelArgMap();
-        	}
-		}
+		devtype = tconf->acc_device_type_var;
     } else if (devtype == acc_device_default) {
         tconf->setDefaultDevice();
-		int numDevs = HostConf::devMap.at(tconf->acc_device_type_var).size();
-		if( numDevs <= devnum ) {
-			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
-			exit(1);
-		} else {
-#ifdef _OPENARC_PROFILE_
-			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, devtype);
-#endif
-		}
-        tconf->device = HostConf::devMap.at(tconf->acc_device_type_var).at(devnum);
-        tconf->acc_device_num_var = devnum;
-#ifdef _OPENMP
-		#pragma omp critical(acc_set_device_num_critical)
-#endif
-		{
-        	if(tconf->device->init_done != 1) {
-            	tconf->device->init();
-        	} else {
-            	tconf->device->createKernelArgMap();
-        	}
-		}
+		//setDefaultDevice() will change user_set_device_type_var.
+		devtype = tconf->acc_device_type_var;
     } else if (devtype == acc_device_current) {
-		int numDevs = HostConf::devMap.at(tconf->acc_device_type_var).size();
-		if( numDevs <= devnum ) {
-			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
-			exit(1);
-		} else {
-#ifdef _OPENARC_PROFILE_
-			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, tconf->acc_device_type_var);
-#endif
-		}
-        tconf->device = HostConf::devMap.at(tconf->acc_device_type_var).at(devnum);
-        tconf->acc_device_num_var = devnum;
-#ifdef _OPENMP
-		#pragma omp critical(acc_set_device_num_critical)
-#endif
-		{
-        	if(tconf->device->init_done != 1) {
-            	tconf->device->init();
-        	} else {
-            	tconf->device->createKernelArgMap();
-        	}
-		}
+		devtype = tconf->acc_device_type_var;
     } else if( devtype == acc_device_host ) {
-/*
-        //tconf->device = tconf->devMap.at(devtype).at(devnum);
-        tconf->device = NULL;
-        tconf->acc_device_num_var = devnum;
-        tconf->acc_device_type_var = devtype;
-#ifdef _OPENARC_PROFILE_
-		fprintf(stderr, "Host Thread %d uses host device %d\n",get_thread_id(), devnum);
-#endif
-*/
-		int numDevs = HostConf::devMap.at(devtype).size();
-		if( numDevs <= devnum ) {
-			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
-			exit(1);
-		} else {
-#ifdef _OPENARC_PROFILE_
-			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, devtype);
-#endif
-		}
-        tconf->device = HostConf::devMap.at(devtype).at(devnum);
         tconf->acc_device_type_var = acc_device_host;
-        tconf->acc_device_num_var = devnum;
-        //printf("devType %d\n",devtype );
-#ifdef _OPENMP
-		#pragma omp critical(acc_set_device_num_critical)
-#endif
-		{
-        	if(tconf->device->init_done != 1) {
-            	tconf->device->init();
-        	} else {
-            	tconf->device->createKernelArgMap();
-        	}
-		}
     } else {
         fprintf(stderr, "[ERROR in acc_set_device_num()] Not supported device type %d; exit!\n", devtype);
         exit(1);
     }
+
+	if( HostConf::devMap.count(devtype) == 0 ) {
+		//Current implementation allows only one type of devices per program, and thus changing device type
+		//from the configured accelerator type to another is NOT allowed, except between the accelerator and
+		//the host. However, the host is not supported yet.
+		//Below call may cause infinite recursion!
+    	//tconf->HI_init(devnum);
+		if( devtype == acc_device_host ) {
+			int numDevs = 1;
+			tconf->acc_num_devices = numDevs;
+			if( numDevs <= devnum ) {
+				fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
+				exit(1);
+			}
+        	tconf->device = NULL;
+		} else {
+        	fprintf(stderr, "[ERROR in acc_set_device_num()] the current configuration does not support device type %d; exit!\n", devtype);
+        	exit(1);
+		}
+	}
+
+	if( HostConf::devMap.count(devtype) > 0 ) {
+		int numDevs = HostConf::devMap.at(devtype).size();
+		if( numDevs <= devnum ) {
+			fprintf(stderr, "[ERROR in acc_set_device_num()] device number (%d) should be smaller than the number of devices attached (%d); exit!\n", devnum, numDevs);
+			exit(1);
+		} else {
+#ifdef _OPENARC_PROFILE_
+			fprintf(stderr, "Host Thread %d uses device %d of type %d\n",get_thread_id(), devnum, devtype);
+#endif
+		}
+        tconf->device = HostConf::devMap.at(devtype).at(devnum);
+        //printf("devType %d\n",devtype );
+#ifdef _OPENMP
+		#pragma omp critical(acc_set_device_num_critical)
+#endif
+		{
+        	if(tconf->device->init_done != 1) {
+            	tconf->device->init();
+        	} else {
+            	tconf->device->createKernelArgMap();
+        	}
+		}
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO] exit acc_set_device_num(%d, %d)\n", devnum, devtype);
@@ -456,6 +373,10 @@ int acc_async_test_all() {
         fprintf(stderr, "[ERROR in acc_async_test_all()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
 	}
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in acc_async_test_all()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_data = tconf->device->HI_async_test_all();
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
@@ -511,6 +432,10 @@ void acc_wait_all() {
 	if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in acc_wait_all()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
+	}
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in acc_wait_all()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
 	}
     tconf->device->HI_wait_all();
 #ifdef _OPENARC_PROFILE_
@@ -568,8 +493,13 @@ void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[], con
 	} else {
 	//} else if( tconf->HI_kernels_registered == 0 ) {
 		//acc_init() can be called multiple times.
+        printf("[%s:%d]\n", __FILE__, __LINE__);
     	tconf->addKernelNames(kernels, kernelNames);
 		tconf->HI_kernels_registered = 1;
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in acc_init()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
 		tconf->device->HI_register_kernels(tconf->kernelnames);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -630,7 +560,7 @@ void acc_shutdown( acc_device_t devtype ) {
 	}
 #endif
     HostConf_t * tconf = getHostConf();
-    if( tconf == NULL ) {
+    if( (tconf == NULL) || (tconf->device == NULL) ) {
         return;
     }
     if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
@@ -704,6 +634,10 @@ d_void* acc_malloc(size_t size) {
     HostConf_t * tconf = getHostConf();
     void *devPtr;
     if( tconf->isOnAccDevice ) {
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in acc_malloc()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
         tconf->device->HI_malloc(&devPtr, size, HI_MEM_READ_WRITE);
     } else {
         fprintf(stderr, "[ERROR in acc_malloc()] target accelerator device has not been set; exit!\n");
@@ -727,6 +661,10 @@ void acc_free(void* devPtr) {
 #endif
     HostConf_t * tconf = getHostConf();
     if( tconf->isOnAccDevice ) {
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in acc_free()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
         tconf->device->HI_free(devPtr);
     } else {
         fprintf(stderr, "[ERROR in acc_free()] target accelerator device has not been set; exit!\n");
@@ -783,6 +721,10 @@ void acc_wait_all_async(int async) {
 	if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in acc_wait_all_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
+	}
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in acc_wait_all_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
 	}
     tconf->device->HI_wait_all_async(async+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
@@ -999,6 +941,10 @@ void acc_unmap_data(h_void* hostPtr) {
 	}
 	HI_remove_device_address((const void *)hostPtr, DEFAULT_QUEUE);
 	//Unpin host data if they were implicitly pinned for asynchronous transfers.
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in acc_unmap_data()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     tconf->device->HI_unpin_host_memory((const void *)hostPtr);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
