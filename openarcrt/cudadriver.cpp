@@ -10,6 +10,11 @@
 #define SHOW_ERROR_CODE
 
 //#define INIT_DEBUG
+#ifdef INIT_DEBUG
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#endif
 
 //[DEBUG] commented out since they are no more static.
 //std::map<std::string, CUfunction> CudaDriver::kernelMap;
@@ -98,6 +103,7 @@ CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::set<std::string>ke
     device_num = devNum;
 	num_devices = numDevices;
 	fileNameBase = std::string(baseFileName);
+	cuContext = NULL;
 
     for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
         kernelNameSet.insert(*it);
@@ -142,6 +148,7 @@ HI_error_t CudaDriver::init() {
 #endif
 #ifdef INIT_DEBUG
     fprintf(stderr, "[DEBUG] Compute capability: %d.%d\n", compute_capability_major, compute_capability_minor);
+	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
 	if( compute_capability_major > 2 ) {
 		maxGridX = 2147483647; maxGridY = 65535; maxGridZ = 65535;
@@ -203,6 +210,7 @@ HI_error_t CudaDriver::init() {
 	}
 #ifdef INIT_DEBUG
     fprintf(stderr, "[DEBUG] A CUDA context is created or loaded.\n");
+	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
 
 /*
@@ -256,6 +264,7 @@ HI_error_t CudaDriver::init() {
     }
 #ifdef INIT_DEBUG
     fprintf(stderr, "[DEBUG] CUDA Module is loaded.\n");
+	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
     CUstream s0, s1;
     CUevent e0, e1;
@@ -300,6 +309,7 @@ HI_error_t CudaDriver::init() {
     	queueMap[1+i*MAX_NUM_QUEUES_PER_THREAD] = s1;
 #ifdef INIT_DEBUG
     	fprintf(stderr, "[DEBUG] CUDA Streams are created.\n");
+	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
     	err = cuEventCreate(&e0, CU_EVENT_DEFAULT);
 #ifdef _OPENARC_PROFILE_
@@ -326,6 +336,7 @@ HI_error_t CudaDriver::init() {
 		tempMallocSizeMap[i] = new sizemap_t();
 #ifdef INIT_DEBUG
     	fprintf(stderr, "[DEBUG] CUDA events are created.\n");
+	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
 	}
 
@@ -800,6 +811,10 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
 	}
+#endif
+#ifdef INIT_DEBUG
+    	fprintf(stderr, "[DEBUG] call HI_malloc1D().\n");
+	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
     HostConf_t * tconf = getHostConf();
     if( tconf == NULL ) {
@@ -2320,11 +2335,11 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3
 	}
 #endif
 	if( (gridSize[0] > maxGridX) || (gridSize[1] > maxGridY) || (gridSize[2] > maxGridZ) ) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL due to too large Grid configuration (%d, %d, %d); exit!\n", kernel_name.c_str(), gridSize[2], gridSize[1], gridSize[0]);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL due to too large Grid configuration (%lu, %lu, %lu); exit!\n", kernel_name.c_str(), gridSize[2], gridSize[1], gridSize[0]);
 		exit(1);
 	}
 	if( (blockSize[0] > maxBlockX) || (blockSize[1] > maxBlockY) || (blockSize[2] > maxBlockZ) || (blockSize[0]*blockSize[1]*blockSize[2] > maxNumThreadsPerBlock) ) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL due to too large threadBlock configuration (%d, %d, %d); exit!\n",kernel_name.c_str(), blockSize[2], blockSize[1], blockSize[0]);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL due to too large threadBlock configuration (%lu, %lu, %lu); exit!\n",kernel_name.c_str(), blockSize[2], blockSize[1], blockSize[0]);
 		exit(1);
 	}
     HostConf_t *tconf = getHostConf();
@@ -2569,6 +2584,33 @@ void CudaDriver::HI_set_async(int asyncId) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_set_async(%d)\n", asyncId-2);
+	}
+#endif
+}
+
+void CudaDriver::HI_set_context() {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_set_context()\n");
+	}
+#endif
+    HostConf_t * tconf = getHostConf();
+	CUcontext tContext;
+	//Check whether the current host thread has a CUDA context.
+    CUresult err = cuCtxGetCurrent(&tContext);
+    if((err == CUDA_SUCCESS) && (tContext != NULL)) {
+		//If existing, use the current CUDA context.
+		cuCtxSetCurrent(tContext);
+	} else if( cuContext != NULL) {
+		cuCtxSetCurrent(cuContext);
+	} else {
+        fprintf(stderr, "[ERROR in CudaDriver::HI_set_context()] cannot find a valid CUDA context; exit!\n");
+		exit(1);
+	}
+
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_set_context()\n");
 	}
 #endif
 }

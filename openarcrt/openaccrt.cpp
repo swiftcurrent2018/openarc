@@ -820,8 +820,8 @@ HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t bl
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_kernel_call(%d): %s\n", async, kernelName);
-		fprintf(stderr, "                \t\tGang configuration: %d, %d, %d\n", gridSize[2], gridSize[1], gridSize[0]);
-		fprintf(stderr, "                \t\tWorker configuration: %d, %d, %d\n", blockSize[2], blockSize[1], blockSize[0]);
+		fprintf(stderr, "                \t\tGang configuration: %lu, %lu, %lu\n", gridSize[2], gridSize[1], gridSize[0]);
+		fprintf(stderr, "                \t\tWorker configuration: %lu, %lu, %lu\n", blockSize[2], blockSize[1], blockSize[0]);
 	}
 #endif
 	//if( (gridSize[0] == 0) && (gridSize[1] == 0) && (gridSize[2] == 0) ) {
@@ -2199,4 +2199,26 @@ const char* HI_get_device_type_string( acc_device_t devtype ) {
 		default: { str = "UNKNOWN TYPE"; break; }
 	}
 	return str.c_str();	
+}
+
+//This call ensures that the current host thread has correct device context.
+void HI_set_context() {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_context()\n");
+	}
+	double ltime = HI_get_localtime();
+#endif
+    HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_set_context()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
+    tconf->device->HI_set_context();
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_context()\n");
+	}
+	tconf->totalKernelSyncTime += (HI_get_localtime() - ltime);
+#endif
 }

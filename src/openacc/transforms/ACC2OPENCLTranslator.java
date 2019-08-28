@@ -279,6 +279,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
       }
     }
 
+	Procedure mainEntryFuncIR = null;
     boolean found_main = false;
     for ( Traversable tt : program.getChildren() )
     {
@@ -302,6 +303,9 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         while( iter.hasNext() ) {
           Procedure proc = iter.next();
           String name = proc.getName().toString();
+          if ( ((mainEntryFunc != null) && name.equals(mainEntryFunc)) ) {
+        	  mainEntryFuncIR = proc;
+          }
 
           /* f2c code uses MAIN__ */
           if ( ((mainEntryFunc != null) && name.equals(mainEntryFunc)) || 
@@ -351,6 +355,38 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
           "the translator can not find the main entry function; exit. " +
           "To specify the main entry function, either put the acc_init() call explicitly in the main function " +
           "or use \"SetAccEntryFunction\" option.\n");
+    }
+    if( (mainEntryFuncIR == null) && (mainEntryFunc != null) ) {
+    	List<Procedure> procList = IRTools.getProcedureList(program);
+    	for(Procedure ttProc : procList) {
+    		if(ttProc.getName().toString().equals(mainEntryFunc)) {
+    			boolean containAccInit = false;
+    			List<FunctionCall> ttCallList = IRTools.getFunctionCalls(ttProc.getBody());
+    			if( ttCallList != null ) {
+    				for( FunctionCall ttCall : ttCallList ) {
+    					if( ttCall.getName().toString().equals("acc_init") ) {
+    						containAccInit = true;
+    						break;
+    					}
+    				}
+    			}
+    			if( !containAccInit ) {
+    				mainEntryFuncIR = ttProc;
+    			}
+    			break;
+    		}
+    	}
+    }
+    if( mainEntryFuncIR != null ) {
+    	FunctionCall setContextCall = new FunctionCall(new NameID("HI_set_context"));
+    	Statement setContextCallStmt = new ExpressionStatement(setContextCall);
+    	CompoundStatement procBody = mainEntryFuncIR.getBody();
+    	Statement firstExpStatement = IRTools.getFirstNonDeclarationStatement(procBody);
+    	if( firstExpStatement == null ) {
+    		procBody.addStatement(setContextCallStmt);
+    	} else {
+    		procBody.addStatementBefore(firstExpStatement, setContextCallStmt);
+    	}
     }
 
     // Insert macro for kernel file

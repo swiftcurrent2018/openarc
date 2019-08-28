@@ -108,6 +108,7 @@ public:
     HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits=0, int *waits=NULL);
     HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
     void HI_set_async(int asyncId);
+    void HI_set_context();
     void HI_wait(int arg);
     void HI_wait_ifpresent(int arg);
     void HI_waitS1(int arg);
@@ -192,6 +193,7 @@ public:
     HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits=0, int *waits=NULL);
     HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
     void HI_set_async(int asyncId);
+    void HI_set_context();
     void HI_wait(int arg);
     void HI_wait_ifpresent(int arg);
     void HI_waitS1(int arg);
@@ -284,6 +286,7 @@ public:
     HI_error_t createKernelArgMap();
 
     void HI_set_async(int asyncId);
+    void HI_set_context();
     void HI_wait(int arg);
     void HI_wait_ifpresent(int arg);
     void HI_waitS1(int arg);
