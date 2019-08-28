@@ -20,12 +20,12 @@ function usage()
 	echo -e "tLevel = 2 #kernel-level tuning"
 }
 
-if [ $# -eq 0 ]; then
-	echo "==> Commandline inputs are missing!"
-	echo "==> Usage:"
-	usage
-	exit 1
-fi
+#if [ $# -eq 0 ]; then
+#	echo "==> Commandline inputs are missing!"
+#	echo "==> Usage:"
+#	usage
+#	exit 1
+#fi
 
 ###############################
 # Tuning Level                #
