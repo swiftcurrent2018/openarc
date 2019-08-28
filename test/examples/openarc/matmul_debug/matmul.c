@@ -7,6 +7,7 @@
 #define _N_ 512
 #endif
 
+//#define PRINT_RESULT
 
 int N = _N_;
 int M = _N_;
@@ -43,6 +44,11 @@ MatrixMultiplication_openacc(float * a,float * b, float * c)
         }
     }
   }
+#ifdef PRINT_RESULT
+  for (i=0; i<4; i++){
+  	printf("a[%d] = %f\n", i, a[i]);
+  }
+#endif
 }
 
 

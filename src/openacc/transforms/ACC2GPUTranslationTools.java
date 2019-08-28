@@ -1136,7 +1136,7 @@ public abstract class ACC2GPUTranslationTools {
 			Statement asyncConfRefStmt = null;
 			CompoundStatement asyncConfRefPStmt = null;
 			boolean asyncConfRefChanged = false;
-			if( asyncID != null ) {
+			if( (asyncID != null) && (!redOpMap.isEmpty()) ) {
 				CompoundStatement tCStmt = regionParent;
 				Traversable tKernel = seqLoop;
 				while ( (waitStmt == null ) && (tCStmt != null) ) {
@@ -1204,7 +1204,7 @@ public abstract class ACC2GPUTranslationTools {
 				}
 				if( waitStmt == null ) {
 					ACCAnnotation cAnnot = seqLoop.getAnnotation(ACCAnnotation.class, cRegionKind);
-					Tools.exit("[ERROR in CUDATranslationTools.reductionTransformation()] the final " +
+					Tools.exit("[ERROR in ACC2GPUTranslationTools.seqKernelLoopTransforamtion()] the final " +
 							"reduction codes for the following asynchronous " +
 							"kernel should be inserted after the matching synchronization statement, " +
 							"but the compiler can not find the statement; exit.\n" +

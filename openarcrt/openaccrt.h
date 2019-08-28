@@ -218,6 +218,7 @@ public:
         return HI_success;
     }
     virtual void HI_set_async(int asyncId)=0;
+    virtual void HI_set_context(){}
     virtual void HI_wait(int arg) {}
     virtual void HI_wait_ifpresent(int arg) {}
     virtual void HI_wait_async(int arg, int async) {}
@@ -1262,6 +1263,7 @@ extern int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncI
 //extern int HI_contain_async_handle( int async );
 //extern HI_error_t HI_delete_async_handle( int async );
 extern void HI_set_async(int asyncId);
+extern void HI_set_context();
 ////////////////////////////////
 //Memory management functions //
 ////////////////////////////////

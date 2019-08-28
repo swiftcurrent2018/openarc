@@ -169,6 +169,11 @@ ifeq ($(OPENARC_ARCH),0)
 OPENARCLIB_SUFFIX = cuda
 KERNEL_FILE = openarc_kernel.cu
 RESILIENCE_FILE = resilience.cu
+else ifeq ($(OPENARC_ARCH),5)
+# HIP target
+OPENARCLIB_SUFFIX = hip
+KERNEL_FILE = openarc_kernel.hip.cpp
+RESILIENCE_FILE = resilience.cu
 else
 # OpenCL target
 OPENARCLIB_SUFFIX = opencl

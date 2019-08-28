@@ -369,6 +369,9 @@ void HostConf::setTranslationType()
         if( genOCL < 0 ) {
             genOCL = 0;
         }
+        if( genOCL == 5 ) {
+            genOCL = 0;
+        }
     }
 
 }
@@ -453,8 +456,23 @@ void HostConf::HI_init(int devNum) {
 #endif
     int thread_id = get_thread_id();
     setTranslationType();
-    //if( acc_device_type_var != acc_device_host ) {
-    if( acc_device_type_var != acc_device_none ) {
+    if( acc_device_type_var == acc_device_host ) {
+		acc_num_devices = 1;
+/*
+        devnummap_t numDevMap;
+        Accelerator *dev = NULL;
+        numDevMap[0] = dev;
+#ifdef _OPENMP
+        #pragma omp critical (HI_init_critical)
+#endif
+		{ //starts critical section.
+			//The current implementation does not support host as a target device.
+			HostConf::devMap[acc_device_type_var] = numDevMap;
+		} //ends critical section.
+*/
+        isOnAccDevice = 1;
+        HI_init_done = 1;
+    } else if( acc_device_type_var != acc_device_none ) {
 		//printf("init start with dev %d\n", acc_device_type_var);
         devnummap_t numDevMap;
         int numDevices;
@@ -469,7 +487,7 @@ void HostConf::HI_init(int devNum) {
 			}
 			if( numDevices == 0 ) {
         		if(genOCL) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH > 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH > 0 && OPENARC_ARCH != 5
             		numDevices = OpenCLDriver::HI_get_num_devices(acc_device_type_var);
 #else
 					fprintf(stderr, "[OPENARCRT-ERROR]To generate OpenCL program, the environment variable OPENARC_ARCH should be a positive integer.\n");
@@ -478,6 +496,8 @@ void HostConf::HI_init(int devNum) {
         		}	else {
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
             	numDevices = CudaDriver::HI_get_num_devices(acc_device_type_var);
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+            	numDevices = HipDriver::HI_get_num_devices(acc_device_type_var);
 #endif
         		}
 				acc_num_devices = numDevices;
@@ -496,7 +516,7 @@ void HostConf::HI_init(int devNum) {
         		for(int i=0 ; i < numDevices; i++) {
             		Accelerator *dev;
             		if(genOCL) {
-#if defined(OPENARC_ARCH) && OPENARC_ARCH > 0
+#if defined(OPENARC_ARCH) && OPENARC_ARCH > 0 && OPENARC_ARCH != 5
                 		dev = new OpenCLDriver_t(acc_device_type_var, i, kernelnames, this, numDevices, baseFileName.c_str());
 #else
 						fprintf(stderr, "[OPENARCRT-ERROR]To generate OpenCL program, the environment variable OPENARC_ARCH should be a positive integer.\n");
@@ -505,6 +525,8 @@ void HostConf::HI_init(int devNum) {
             		} else {
 #if !defined(OPENARC_ARCH) || OPENARC_ARCH == 0
                 		dev = new CudaDriver_t(acc_device_type_var, i, kernelnames, this, numDevices, baseFileName.c_str());
+#elif defined(OPENARC_ARCH) && OPENARC_ARCH == 5
+                		dev = new HipDriver_t(acc_device_type_var, i, kernelnames, this, numDevices, baseFileName.c_str());
 #endif
             		}
             		//printf("Dev created %d\n", i);
@@ -524,7 +546,6 @@ void HostConf::HI_init(int devNum) {
 		//printf("init done for type %d\n", acc_device_type_var);
         isOnAccDevice = 1;
         HI_init_done = 1;
-    //} else if( acc_device_type_var == acc_device_host ) {
     } else if( acc_device_type_var == acc_device_none ) {
         isOnAccDevice = 0;
         HI_init_done = 1;
@@ -799,8 +820,8 @@ HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t bl
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_kernel_call(%d): %s\n", async, kernelName);
-		fprintf(stderr, "                \t\tGang configuration: %d, %d, %d\n", gridSize[2], gridSize[1], gridSize[0]);
-		fprintf(stderr, "                \t\tWorker configuration: %d, %d, %d\n", blockSize[2], blockSize[1], blockSize[0]);
+		fprintf(stderr, "                \t\tGang configuration: %lu, %lu, %lu\n", gridSize[2], gridSize[1], gridSize[0]);
+		fprintf(stderr, "                \t\tWorker configuration: %lu, %lu, %lu\n", blockSize[2], blockSize[1], blockSize[0]);
 	}
 #endif
 	//if( (gridSize[0] == 0) && (gridSize[1] == 0) && (gridSize[2] == 0) ) {
@@ -816,6 +837,10 @@ HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t bl
 		for( int i=0; i<num_waits; i++ ) {
 			waitslist[i] = waits[i]+tconf->asyncID_offset;
 		}
+	}
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_kernel_call()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
 	}
     return_status = tconf->device->HI_kernel_call(kernel_name, gridSize, blockSize, async+tconf->asyncID_offset, num_waits, waitslist);
 #ifdef _OPENARC_PROFILE_
@@ -870,6 +895,10 @@ HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int as
         fprintf(stderr, "[ERROR in HI_malloc1D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_malloc1D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_malloc1D(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
 	tconf->DMallocCnt++;
@@ -897,6 +926,10 @@ HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count
         fprintf(stderr, "[ERROR in HI_malloc1D_unified()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_malloc1D_unified()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_malloc1D_unified(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
 	tconf->DMallocCnt++;
@@ -928,6 +961,10 @@ HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_
         fprintf(stderr, "[ERROR in HI_malloc2D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_malloc2D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_malloc2D( hostPtr, devPtr,pitch, widthInBytes, height, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
 	tconf->DMallocCnt++;
@@ -959,6 +996,10 @@ HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_
         fprintf(stderr, "[ERROR in HI_malloc3D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_malloc3D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_malloc3D( hostPtr, devPtr, pitch, widthInBytes, height, depth, asyncID+tconf->asyncID_offset, flags);
 #ifdef _OPENARC_PROFILE_
 	tconf->DMallocCnt++;
@@ -982,6 +1023,10 @@ HI_error_t HI_free( const void *hostPtr, int asyncID) {
         exit(1);
 	}
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_free()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_free(hostPtr, asyncID+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	tconf->DFreeCnt++;
@@ -1004,6 +1049,10 @@ HI_error_t HI_free_unified( const void *hostPtr, int asyncID) {
         exit(1);
 	}
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_free_unified()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_free_unified(hostPtr, asyncID+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	tconf->DFreeCnt++;
@@ -1029,6 +1078,10 @@ HI_error_t HI_free_async( const void *hostPtr, int asyncID ) {
         exit(1);
 	}
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_free_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_free_async(hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	tconf->DFreeCnt++;
@@ -1053,6 +1106,10 @@ void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_Mal
         exit(1);
 	}
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_tempMalloc1D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     tconf->device->HI_tempMalloc1D( tempPtr, count, devType, flags);
 #ifdef _OPENARC_PROFILE_
     if(  devType == acc_device_gpu || devType == acc_device_nvidia ||
@@ -1078,6 +1135,10 @@ void HI_tempFree( void** tempPtr, acc_device_t devType) {
 	}
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_tempFree()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     tconf->device->HI_tempFree( tempPtr, devType);
 #ifdef _OPENARC_PROFILE_
     if(  devType == acc_device_gpu || devType == acc_device_nvidia ||
@@ -1159,6 +1220,10 @@ HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
         	fprintf(stderr, "[ERROR in HI_memcpy()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
     	}    
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in HI_memcpy()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
     	return_status = tconf->device->HI_memcpy( dst, src, count, kind, trType);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -1193,6 +1258,10 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
         	fprintf(stderr, "[ERROR in HI_memcpy_unified()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
     	}    
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_unified()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
     	return_status = tconf->device->HI_memcpy_unified( dst, src, count, kind, trType);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -1234,6 +1303,10 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
 				waitslist[i] = waits[i]+tconf->asyncID_offset;
 			}
 		}
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
     	return_status = tconf->device->HI_memcpy_async(dst, src, count, kind, trType, async+tconf->asyncID_offset, num_waits, waitslist);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -1271,6 +1344,10 @@ HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
 				waitslist[i] = waits[i]+tconf->asyncID_offset;
 			}
 		}
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_asyncS()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
     	return_status = tconf->device->HI_memcpy_asyncS(dst, src, count, kind, trType, async+tconf->asyncID_offset, num_waits, waitslist);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -1290,6 +1367,10 @@ void HI_waitS1(int async) {
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_waitS1()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     tconf->device->HI_waitS1(async+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1308,6 +1389,10 @@ void  HI_waitS2(int async) {
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_waitS2()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     tconf->device->HI_waitS2(async+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1341,6 +1426,10 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
         	fprintf(stderr, "[ERROR in HI_memcpy2D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
     	}    
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in HI_memcpy2D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
     	return_status = tconf->device->HI_memcpy2D(dst, dpitch, src, spitch, widthInBytes, height, kind);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -1382,6 +1471,10 @@ HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
 				waitslist[i] = waits[i]+tconf->asyncID_offset;
 			}
 		}
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
     	return_status = tconf->device->HI_memcpy2D_async(dst, dpitch, src, spitch, widthInBytes, height, kind, async+tconf->asyncID_offset, num_waits, waitslist);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -1415,6 +1508,10 @@ HI_error_t HI_get_device_address(const void * hostPtr, void **devPtr, int asyncI
         fprintf(stderr, "[ERROR in HI_get_device_address()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_get_device_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_get_device_address(hostPtr, devPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1439,6 +1536,10 @@ HI_error_t HI_get_device_address(const void * hostPtr, void **devPtrBase, size_t
         fprintf(stderr, "[ERROR in HI_get_device_address()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_get_device_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_get_device_address(hostPtr, devPtrBase, offset, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1459,6 +1560,10 @@ HI_error_t HI_set_device_address(const void * hostPtr, void *devPtr, size_t size
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_set_device_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_set_device_address(hostPtr, devPtr, size, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1479,6 +1584,10 @@ HI_error_t HI_remove_device_address(const void * hostPtr, int asyncID) {
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_remove_device_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_remove_device_address(hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1500,6 +1609,10 @@ HI_error_t HI_get_host_address(const void * devPtr, void **hostPtr, int asyncID)
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_get_host_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_get_host_address(devPtr, hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1520,6 +1633,10 @@ HI_error_t HI_get_temphost_address(const void * hostPtr, void **temphostPtr, int
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_get_temphost_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_get_temphost_address(hostPtr, temphostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1547,6 +1664,10 @@ int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
 	void * hostPtrBase = (void *)hostPtr;
 	void *devPtrBase;
 	size_t offset;
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_getninc_prtcounter()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     if( tconf->device->HI_get_device_address(hostPtr, &devPtrBase, &offset, asyncID+tconf->asyncID_offset, tconf->threadID) == HI_success ) {
 		if( offset > 0 ) {
 			hostPtrBase = (void *)((size_t)hostPtrBase - offset);
@@ -1595,6 +1716,10 @@ int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
 	void * hostPtrBase = (void *)hostPtr;
 	void *devPtrBase;
 	size_t offset;
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_decnget_prtcounter()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     if( tconf->device->HI_get_device_address(hostPtr, &devPtrBase, &offset, asyncID+tconf->asyncID_offset, tconf->threadID) == HI_success) {
 		if( offset > 0 ) {
 			hostPtrBase = (void *)((size_t)hostPtrBase - offset);
@@ -1848,6 +1973,10 @@ void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t st
     //acc_device_t devType = acc_get_device_type();
     acc_device_t devType = tconf->acc_device_type_var;
     int devNum = acc_get_device_num(devType);
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_reset()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     if( dtype == acc_device_nvidia || (dtype == acc_device_radeon) || (dtype == acc_device_gpu) || (dtype == acc_device_xeonphi) || (dtype == acc_device_altera) ) {
         memstatusmap_t * devicememstatusmap = tconf->devicememstatusmaptable;
         //HI_memstatus_t devicestatus = (*devicememstatusmap)[hostPtr];
@@ -1914,6 +2043,10 @@ HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *dev
 	}
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_bind_tex()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_bind_tex(texName, type, devPtr, size);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -1942,6 +2075,10 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
         	fprintf(stderr, "[ERROR in HI_memcpy_const()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
     	}    
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_const()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
     	return_status = tconf->device->HI_memcpy_const(hostPtr, constName, kind, count);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -1978,6 +2115,10 @@ HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_Memcpy
 				waitslist[i] = waits[i]+tconf->asyncID_offset;
 			}
 		}
+		if(tconf->device == NULL) {
+        	fprintf(stderr, "[ERROR in HI_memcpy_const_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+			exit(1);
+		}
     	return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async+tconf->asyncID_offset, num_waits, waitslist);
 	}
 #ifdef _OPENARC_PROFILE_
@@ -2006,6 +2147,10 @@ HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_M
         fprintf(stderr, "[ERROR in HI_present_or_memcpy_const()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
     }    
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_present_or_memcpy_const()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     return_status = tconf->device->HI_present_or_memcpy_const(hostPtr, constName, kind, count);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -2025,6 +2170,10 @@ void HI_set_async(int asyncId) {
 	double ltime = HI_get_localtime();
 #endif
     HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_set_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
     tconf->device->HI_set_async(asyncId+tconf->asyncID_offset);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
@@ -2050,4 +2199,26 @@ const char* HI_get_device_type_string( acc_device_t devtype ) {
 		default: { str = "UNKNOWN TYPE"; break; }
 	}
 	return str.c_str();	
+}
+
+//This call ensures that the current host thread has correct device context.
+void HI_set_context() {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_context()\n");
+	}
+	double ltime = HI_get_localtime();
+#endif
+    HostConf_t * tconf = getHostConf();
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_set_context()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
+    tconf->device->HI_set_context();
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_context()\n");
+	}
+	tconf->totalKernelSyncTime += (HI_get_localtime() - ltime);
+#endif
 }

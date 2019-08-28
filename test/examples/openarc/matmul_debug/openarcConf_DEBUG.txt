@@ -390,6 +390,7 @@ programVerification=2
 ###############################
 #outdir=cetus_output
 macro=_N_=__inputSize__
+#macro=PRINT_RESULT
 #dump-options
 #dump-system-options
 #induction

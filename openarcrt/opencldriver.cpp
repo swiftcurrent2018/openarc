@@ -9,7 +9,7 @@
 //[DEBUG] commented out since it is no more static.
 //std::set<std::string> OpenCLDriver::kernelNameSet;
 
-cl_context OpenCLDriver_t::clContext;
+cl_context OpenCLDriver_t::clContext = NULL;
 
 const char * opencl_error_code(cl_int err) {
 	static std::string str = "";
@@ -2202,6 +2202,25 @@ void OpenCLDriver::HI_set_async(int asyncId) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_set_async(%d)\n", asyncId-2);
+	}
+#endif
+}
+
+void OpenCLDriver::HI_set_context() {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_set_context()\n");
+	}
+#endif
+    HostConf_t * tconf = getHostConf();
+	if( clContext == NULL) {
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_set_context()] cannot find a valid OpenCL context; exit!\n");
+		exit(1);
+	}
+
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_set_context()\n");
 	}
 #endif
 }
