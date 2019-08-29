@@ -309,7 +309,7 @@ HI_error_t CudaDriver::init() {
     	queueMap[1+i*MAX_NUM_QUEUES_PER_THREAD] = s1;
 #ifdef INIT_DEBUG
     	fprintf(stderr, "[DEBUG] CUDA Streams are created.\n");
-	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
+		fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
     	err = cuEventCreate(&e0, CU_EVENT_DEFAULT);
 #ifdef _OPENARC_PROFILE_
@@ -336,7 +336,7 @@ HI_error_t CudaDriver::init() {
 		tempMallocSizeMap[i] = new sizemap_t();
 #ifdef INIT_DEBUG
     	fprintf(stderr, "[DEBUG] CUDA events are created.\n");
-	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
+		fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
 	}
 
@@ -398,6 +398,10 @@ HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames) {
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_register_kernels()\n");
 	}
+#endif
+#ifdef INIT_DEBUG
+    fprintf(stderr, "[DEBUG] call HI_register_kernel().\n");
+	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
     HostConf_t * tconf = getHostConf();
     CUresult err;
@@ -813,7 +817,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 	}
 #endif
 #ifdef INIT_DEBUG
-    	fprintf(stderr, "[DEBUG] call HI_malloc1D().\n");
+    fprintf(stderr, "[DEBUG] call HI_malloc1D().\n");
 	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
     HostConf_t * tconf = getHostConf();
@@ -849,7 +853,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
         if (it != memPool->end()) {
 #ifdef _OPENARC_PROFILE_
 			if( HI_openarcrt_verbosity > 2 ) {
-				fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_malloc1D(%d, %lu) reuses memories in the memPool\n", asyncID, count);
+				fprintf(stderr, "[OPENARCRT-INFO]\t\tCudaDriver::HI_malloc1D(%d, %lu) reuses memories in the memPool\n", asyncID, count);
 			}
 #endif
 			*devPtr = it->second;
@@ -1414,7 +1418,7 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
         if (it != memPool->end()) {
 #ifdef _OPENARC_PROFILE_
             if( HI_openarcrt_verbosity > 2 ) {
-                fprintf(stderr, "[OPENARCRT-INFO]\t\tOpenCLDriver::HI_tempMalloc1D(%lu) reuses memories in the memPool\n", count);
+                fprintf(stderr, "[OPENARCRT-INFO]\t\tCudaDriver::HI_tempMalloc1D(%lu) reuses memories in the memPool\n", count);
             }
 #endif           
             *tempPtr = it->second;
