@@ -113,6 +113,7 @@ CETUS_OUTPUT = cetus_output
 # adjust variables in the LCUDA section as necessary.                  # 
 ########################################################################
 # LCUDA: Linux system with NVIDIA GPUs                                 #
+# NEURON: KISTI NEURON System with NVIDIA GPUs                         #
 # XAVIER: SoC consisting of ARM CPU, NVIDIA Volta GPU, PVA, and DLA    #
 # Leconte: Single-node Summit system in the Excl cluster               #
 # Summit: OLCF Summit system with 2 Power9 CPUs and 6 NVIDIA V100 GPUs #
@@ -163,6 +164,49 @@ GFRONTEND_DEBUG = -g
 #MPI_FLAGS =
 MPI_INCLUDES = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/include
 MPI_LIBDIR = /opt/shared/sw/x86_64-unknown-linux-gnu/openmpi/1.8.5-rhel6-gnu/lib
+
+endif
+
+#########################
+# Target System: NEURON #
+#########################
+ifeq ($(TARGET_SYSTEM),NEURON)
+
+OPENARC_ARCH = 0
+GOMP_FLAGS = -fopenmp
+GOMP_LIBS = -lgomp
+CC = gcc
+CXX = g++
+#CC = mpicc
+#CXX = mpicxx
+CPP = $(CC) -E
+GMACROS = -D OPENARC_ARCH=$(OPENARC_ARCH)
+GPROFILEMACROS = -D _OPENARC_PROFILE_=1
+
+ifeq ($(OPENARC_ARCH), 0)
+BACKENDCXX = nvcc
+CC_FLAGS_PREFIX = -Xcompiler
+GBACKEND_FLAGS = -arch sm_35 -O3
+GBACKEND_INCLUDES = -I/apps/cuda/10.0/include
+GBACKEND_LIBS = -L/apps/cuda/10.0/lib64 -lcuda
+GBACKEND_DEBUG = -g -G
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES =
+GFRONTEND_LIBS = -L/apps/cuda/10.0/lib64 -lcuda
+GFRONTEND_DEBUG = -g
+else
+BACKENDCXX = g++
+CC_FLAGS_PREFIX =
+GBACKEND_FLAGS = -O3
+GBACKEND_FLAGS = -O3
+GBACKEND_INCLUDES = -I/apps/cuda/10.0/include
+GBACKEND_LIBS = -L/apps/cuda/10.0/lib64 -lOpenCL
+GBACKEND_DEBUG = -g
+GFRONTEND_FLAGS = -O3
+GFRONTEND_INCLUDES =
+GFRONTEND_LIBS = -L/apps/cuda/10.0/lib64 -lOpenCL
+GFRONTEND_DEBUG = -g
+endif
 
 endif
 
