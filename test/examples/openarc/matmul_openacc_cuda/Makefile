@@ -37,10 +37,9 @@ $(BENCHMARK)_CUDA: ${OBJS_CU} ${OBJS_ACC}
 	mkdir -p bin
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(GMACROS) $(GBACKEND_FLAGS) $(CC_FLAGS) $(OMP_FLAGS) -o ./bin/$(BENCHMARK)_CUDA $(OBJS_CU) $(OBJS_ACC) $(CLIBS) -L$(OPENARCLIB) -l$(ACCRTLIB) -lomphelper
 	cp -f openarc_kernel.* ./bin/
-	cp -f gpu.sh ./bin/
 
 $(OBJS_ACC): acc_helper.cpp
-	$(CXX) $(DEFSET) $(COMMONCINCLUDE) $(GMACROS) $(GFRONTEND_FLAGS) $(CC_FLAGS) $(OMP_FLAGS) -c -o $(OBJS_ACC) acc_helper.cpp $(CLIBS)
+	$(CXX) $(DEFSET) $(COMMONCINCLUDE) $(GMACROS) $(GFRONTEND_FLAGS) $(CC_FLAGS) -c -o $(OBJS_ACC) acc_helper.cpp $(CLIBS)
 
 matmul.o: matmul.cu
 	$(BACKENDCXX) $(DEFSET) $(COMMONCINCLUDE) $(GMACROS) $(GBACKEND_FLAGS) $(CC_FLAGS) $(OMP_FLAGS) -c -o matmul.o matmul.cu $(CLIBS)
