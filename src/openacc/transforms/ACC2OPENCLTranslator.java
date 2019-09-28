@@ -377,15 +377,17 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     		}
     	}
     }
-    if( mainEntryFuncIR != null ) {
-    	FunctionCall setContextCall = new FunctionCall(new NameID("HI_set_context"));
-    	Statement setContextCallStmt = new ExpressionStatement(setContextCall);
-    	CompoundStatement procBody = mainEntryFuncIR.getBody();
-    	Statement firstExpStatement = IRTools.getFirstNonDeclarationStatement(procBody);
-    	if( firstExpStatement == null ) {
-    		procBody.addStatement(setContextCallStmt);
-    	} else {
-    		procBody.addStatementBefore(firstExpStatement, setContextCallStmt);
+    if(  targetArch < 4 ) {
+    	if( mainEntryFuncIR != null ) {
+    		FunctionCall setContextCall = new FunctionCall(new NameID("HI_set_context"));
+    		Statement setContextCallStmt = new ExpressionStatement(setContextCall);
+    		CompoundStatement procBody = mainEntryFuncIR.getBody();
+    		Statement firstExpStatement = IRTools.getFirstNonDeclarationStatement(procBody);
+    		if( firstExpStatement == null ) {
+    			procBody.addStatement(setContextCallStmt);
+    		} else {
+    			procBody.addStatementBefore(firstExpStatement, setContextCallStmt);
+    		}
     	}
     }
 

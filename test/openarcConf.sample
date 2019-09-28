@@ -840,7 +840,6 @@ AccPrivatization=1
 AccReduction=1
 #assumeNonZeroTripLoops
 #gpuMemTrOptLevel
-#prvtArryCachingOnSM
 #localRedVarConf=N
 #useLoopCollapse
 #useMallocPitch
@@ -860,6 +859,7 @@ shrdArryElmtCachingOnReg
 shrdSclrCachingOnConst
 shrdSclrCachingOnReg
 shrdSclrCachingOnSM
+#prvtArryCachingOnSM
 ######################
 # CUDA configuration #
 ######################

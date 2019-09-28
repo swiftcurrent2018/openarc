@@ -398,7 +398,7 @@ HI_error_t OpenCLDriver::init() {
             printf("[ERROR in OpenCLDriver::init()] Error in clBuildProgram, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
             printf("                                Current platform: %s\n",platformName);
             printf("                                Target device type: %s\n",HI_get_device_type_string(dev));
-            printf("                                Target device ID: %s\n",device_num);
+            printf("                                Target device ID: %d\n",device_num);
             if (err == CL_BUILD_PROGRAM_FAILURE)
             {
                 // Determine the size of the log
