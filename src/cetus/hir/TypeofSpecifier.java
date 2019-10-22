@@ -3,7 +3,11 @@ package cetus.hir;
 import java.io.PrintWriter;
 import java.util.List;
 
-/** This class is no longer supported. */
+/** 
+ * This class is no longer supported. 
+ * [Oct. 22, 2019 Seyong Lee] re-enabled this class.
+ */
+
 public class TypeofSpecifier extends Specifier {
 
     private Expression expr;

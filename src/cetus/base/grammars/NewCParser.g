@@ -644,6 +644,7 @@ types = null;
 String tname = null;
 Expression expr1 = null;
 List tyname = null;
+List attList = null;
 boolean typedefold = false;
 }
         :
@@ -774,13 +775,11 @@ boolean typedefold = false;
         |
         types = typedefName
         |
-        /* Maybe unused */
-        /*
         "typeof"^ LPAREN
-        ( ( typeName2 ) => tyname=typeName2 | expr1=expr )
+        ( ( typeName2 ) => tyname=typeName2 {types = new TypeofSpecifier(tyname);} ( options{warnWhenFollowAmbig=false;}: attList = attributeDecl )* 
+        	| expr1=expr {types = new TypeofSpecifier(expr1);}  )
         RPAREN
         |
-        */
         "__complex"
 {types = Specifier.DOUBLE;}
         )
@@ -794,6 +793,7 @@ types = null;
 String tname = null;
 Expression expr1 = null;
 List tyname = null;
+List attList = null;
 boolean typedefold = false;
 }
         :
@@ -922,13 +922,11 @@ boolean typedefold = false;
         |
         types = enumSpecifier
         |
-        /* Maybe unused */
-        /*
         "typeof"^ LPAREN
-        ( ( typeName2 ) => tyname=typeName2 | expr1=expr )
+        ( ( typeName2 ) => tyname=typeName2 {types = new TypeofSpecifier(tyname);} ( options{warnWhenFollowAmbig=false;}: attList = attributeDecl )* 
+        	| expr1=expr {types = new TypeofSpecifier(expr1);}  )
         RPAREN
         |
-        */
         "__complex"
 {types = Specifier.DOUBLE;}
         )
@@ -3502,12 +3500,10 @@ public void initialize()
       new Integer(LITERAL_signed));
   literals.put(new ANTLRHashString("__signed__", this),
       new Integer(LITERAL_signed));
-  /*
   literals.put(new ANTLRHashString("__typeof", this),
       new Integer(LITERAL_typeof));
   literals.put(new ANTLRHashString("__typeof__", this),
       new Integer(LITERAL_typeof));
-  */
   literals.put(new ANTLRHashString("__volatile", this),
       new Integer(LITERAL_volatile));
   literals.put(new ANTLRHashString("__volatile__", this),

@@ -246,7 +246,7 @@ endif
 #########################
 ifeq ($(TARGET_SYSTEM),XAVIER)
 
-OPENARC_ARCH = 0
+OPENARC_ARCH = 4
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
 CC = gcc
@@ -270,11 +270,11 @@ BACKENDCXX = g++
 CC_FLAGS_PREFIX = 
 GBACKEND_FLAGS = -O3 -fPIC
 GBACKEND_INCLUDES = -I/usr/local/include
-GBACKEND_LIBS = -L/usr/local/lib -lOpenCL 
+GBACKEND_LIBS = -L/usr/lib/aarch64-linux-gnu -lOpenCL 
 GBACKEND_DEBUG = -g 
 GFRONTEND_FLAGS = -O3
 GFRONTEND_INCLUDES = 
-GFRONTEND_LIBS = -L/usr/local/lib -lOpenCL 
+GFRONTEND_LIBS = -L/usr/lib/aarch64-linux-gnu -lOpenCL 
 GFRONTEND_DEBUG = -g
 endif
 
