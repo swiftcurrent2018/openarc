@@ -2188,11 +2188,32 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
       if( phost_sym != null ) {
         phostVar = new Identifier(phost_sym);
       } else {
-        // Create a new pinned-host variable.
+    	  List<Specifier> clonedspecs2 = new ChainedList<Specifier>();
+    	  clonedspecs2.addAll(clonedspecs);
+    	  for( Object tObj : typeSpecs ) {
+    		  if( tObj instanceof UserSpecifier ) {
+    			  IDExpression tExp = ((UserSpecifier)tObj).getIDExpression();
+    			  String tExpStr = tExp.getName();
+    			  if( !tExpStr.startsWith("struct") && !tExpStr.startsWith("enum") ) {
+    				  Declaration tDecl = SymbolTools.findSymbol(parentTrUnt, tExp);
+    				  if( tDecl != null ) {
+    					  if( tDecl instanceof VariableDeclaration ) {
+    						  if( ((VariableDeclaration)tDecl).getSpecifiers().contains(Specifier.TYPEDEF) ) {
+    							  clonedspecs2.clear();
+    							  clonedspecs2.addAll(((VariableDeclaration)tDecl).getSpecifiers());
+    							  clonedspecs2.remove(Specifier.TYPEDEF);
+    						  }
+    					  }
+    				  }
+    			  }
+    			  break;
+    		  }
+    	  }
+    	  // Create a new pinned-host variable.
         // The type of the pinned-host symbol should be a pointer type 
         VariableDeclarator phost_declarator = new VariableDeclarator(PointerSpecifier.UNQUALIFIED, 
             new NameID(str.toString()));
-        VariableDeclaration phost_decl = new VariableDeclaration(clonedspecs, 
+        VariableDeclaration phost_decl = new VariableDeclaration(clonedspecs2, 
             phost_declarator);
         phostVar = new Identifier(phost_declarator);
         if( targetSymbolTable instanceof TranslationUnit ) {
@@ -2458,7 +2479,11 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
         if( asyncExp == null ) {
           copyinCall = new FunctionCall(new NameID("HI_memcpy"));
         } else {
-          copyinCall = new FunctionCall(new NameID("HI_memcpy_async"));
+          if( kernelVerification ) {
+        	  copyinCall = new FunctionCall(new NameID("HI_memcpy_asyncS"));
+          } else {
+        	  copyinCall = new FunctionCall(new NameID("HI_memcpy_async"));
+          }
         }
         if( partialArrayPassing ) {
           copyinCall.addArgument(new BinaryExpression(gpuVar.clone(), BinaryOperator.ADD,
@@ -2512,6 +2537,10 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
               i++;
             }
           }
+          copyinCall.addArgument(new NameID("openarc_waits"));
+        } else if( asyncExp != null ) {
+        	copyinCall.addArgument(new IntegerLiteral(0));
+        	copyinCall.addArgument(new NameID("NULL"));
         }
         copyin_stmt = new ExpressionStatement(copyinCall);
         preambleList.add(copyin_stmt);
@@ -2602,13 +2631,17 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
             int i=0;
             for( Expression tWaitArg : (List<Expression>) waitslist ) {
               AssignmentExpression tAExp = new AssignmentExpression(
-                  new ArrayAccess(new NameID("openarc_waits"), new IntegerLiteral(i)),
-                  AssignmentOperator.NORMAL,
-                  tWaitArg.clone());
+            		  new ArrayAccess(new NameID("openarc_waits"), new IntegerLiteral(i)),
+            		  AssignmentOperator.NORMAL,
+            		  tWaitArg.clone());
               parentCStmt.addStatementBefore(AtStmt, new ExpressionStatement(tAExp));
               i++;
             }
+            copyoutCall.addArgument(new NameID("openarc_waits"));
           }
+        } else if( asyncExp != null ) {
+        	copyoutCall.addArgument(new IntegerLiteral(0));
+        	copyoutCall.addArgument(new NameID("NULL"));
         }
         copyout_stmt = new ExpressionStatement(copyoutCall);
         postscriptList.add(copyout_stmt);
@@ -3710,18 +3743,20 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
     //Find optimal point to insert GPU kernel configuration statements,
     //which is used both for privateTransformation and reductionTransformation.
     Statement confRefStmt = region;
-    String iKey = "kernelConfPt_" + new_func_name;
-    ACCAnnotation rAnnot = confRefStmt.getAnnotation(ACCAnnotation.class, iKey);
-    if( rAnnot == null ) {
-      rAnnot = AnalysisTools.ipFindFirstPragmaInParent(confRefStmt, ACCAnnotation.class, iKey, null, null);
-    }
-    if( rAnnot == null ) {
-      PrintTools.println("[WARNING for ACC2OPENCLTranslator.extractComputeRegion()] kernel configuraion insertion" +
-          " point is not found; original compute region will be used instead.\nEnclosing procedure: " + 
-          cProc.getSymbolName() + "\n", 0);
-      confRefStmt = region;
-    } else {
-      confRefStmt = (Statement)rAnnot.getAnnotatable();
+    if( !kernelVerification ) {
+    	String iKey = "kernelConfPt_" + new_func_name;
+    	ACCAnnotation rAnnot = confRefStmt.getAnnotation(ACCAnnotation.class, iKey);
+    	if( rAnnot == null ) {
+    		rAnnot = AnalysisTools.ipFindFirstPragmaInParent(confRefStmt, ACCAnnotation.class, iKey, null, null);
+    	}
+    	if( rAnnot == null ) {
+    		PrintTools.println("[WARNING for ACC2OPENCLTranslator.extractComputeRegion()] kernel configuraion insertion" +
+    				" point is not found; original compute region will be used instead.\nEnclosing procedure: " + 
+    				cProc.getSymbolName() + "\n", 0);
+    		confRefStmt = region;
+    	} else {
+    		confRefStmt = (Statement)rAnnot.getAnnotatable();
+    	}
     }
     CompoundStatement confRefParent = (CompoundStatement)confRefStmt.getParent();
     CompoundStatement prefixStmts = new CompoundStatement();
@@ -3732,6 +3767,7 @@ public class ACC2OPENCLTranslator extends ACC2GPUTranslator {
       AnalysisTools.removePragmas(clonedRegion, ACCAnnotation.class, null);
       AnalysisTools.removePragmas(clonedRegion, ARCAnnotation.class, null);
       AnalysisTools.removePragmas(clonedRegion, CetusAnnotation.class, null);
+      WorkerSingleModeTransformation.removeWorkerSingleModeWrapper(clonedRegion);
       if( enableFaultInjection ) {
         //Remove device function to inject faults.
         //FIXME: device functions called in the compute region should be removed too.

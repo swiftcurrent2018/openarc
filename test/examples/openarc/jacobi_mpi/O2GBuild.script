@@ -34,7 +34,7 @@ if [ "$mpiinclude" != "" ]; then
     cat "openarcConf.txt_tmp" | sed "s|__mpiinclude__|${mpiinclude}|g" > "openarcConf.txt"
     rm "openarcConf.txt_tmp"
 else
-	echo "Environment variable, mpiinclude should be properly set to the MPI Include directory; exit!"
+	echo "Environment variable, mpiinclude should be properly set to the MPI Include directory; exit on error!"
 	echo ""
 	exit
 fi

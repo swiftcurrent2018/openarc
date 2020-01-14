@@ -1,5 +1,6 @@
 #include "openacc.h"
 #include "openaccrt_ext.h"
+#include "string.h"
 #include <algorithm>
 
 #define MAX_SOURCE_SIZE (0x100000)
@@ -132,7 +133,7 @@ OpenCLDriver::OpenCLDriver(acc_device_t devType, int devNum, std::set<std::strin
 #endif
 }
 
-HI_error_t OpenCLDriver::init() {
+HI_error_t OpenCLDriver::init(int threadID) {
     FILE *fp;
     char *source_str;
     size_t source_size;
@@ -240,7 +241,7 @@ HI_error_t OpenCLDriver::init() {
 	}
 	delete [] platforms;
 
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if( tconf->use_unifiedmemory > 0 ) {
 		//[FIXME] Need to check whether unified memory is supported or not.
 		unifiedMemSupported = 0;
@@ -252,7 +253,7 @@ HI_error_t OpenCLDriver::init() {
     clDevice = devices[device_num];
     char cBuffer1[1024];
     clGetDeviceInfo(clDevice, CL_DEVICE_NAME, sizeof(cBuffer1), &cBuffer1, NULL);
-    int thread_id = get_thread_id();
+    int thread_id = tconf->threadID;
 #ifdef _OPENARC_PROFILE_
     fprintf(stderr, "OpenCL : Host Thread %d initializes device %d: %s\n", thread_id, device_num, cBuffer1);
 #endif
@@ -268,8 +269,12 @@ HI_error_t OpenCLDriver::init() {
     	fclose( fp );
 	}
 
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_clContext);
+#else
 #ifdef _OPENMP
 #pragma omp critical(clContext_critical)
+#endif
 #endif
     {
         if (clContext == NULL) {
@@ -285,6 +290,9 @@ HI_error_t OpenCLDriver::init() {
             }
         }
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_clContext);
+#endif
 
     char cBuffer[1024];
     char* cBufferN;
@@ -421,7 +429,7 @@ HI_error_t OpenCLDriver::init() {
 
     cl_command_queue s0, s1;
     cl_event e0, e1;
-	for ( int i=0; i<HI_num_hostthreads; i++ ) {
+	//for ( int i=0; i<HI_num_hostthreads; i++ ) {
     	s0 = clCreateCommandQueue(clContext, clDevice, 0, &err);
     	if(err != CL_SUCCESS) {
         	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
@@ -432,12 +440,12 @@ HI_error_t OpenCLDriver::init() {
         	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
 			exit(1);
     	}
-    	queueMap[0+i*MAX_NUM_QUEUES_PER_THREAD] = s0;
-    	queueMap[1+i*MAX_NUM_QUEUES_PER_THREAD] = s1;
-		if( i == get_thread_id() ) {
+    	queueMap[0+thread_id*MAX_NUM_QUEUES_PER_THREAD] = s0;
+    	queueMap[1+thread_id*MAX_NUM_QUEUES_PER_THREAD] = s1;
+		//if( i == get_thread_id() ) {
     		//make s0 the default queue
     		clQueue = s0;
-		}
+		//}
     	std::map<int, cl_event> eventMap;
     	e0 = clCreateUserEvent(clContext, &err);
     	if(err != CL_SUCCESS) {
@@ -453,18 +461,20 @@ HI_error_t OpenCLDriver::init() {
     	}
     	clSetUserEventStatus(e1, CL_COMPLETE);
 
-    	eventMap[0+i*MAX_NUM_QUEUES_PER_THREAD]= e0;
-    	eventMap[1+i*MAX_NUM_QUEUES_PER_THREAD]= e1;
-    	threadQueueEventMap[i] = eventMap;
-		masterAddressTableMap[i] = new addresstable_t();
-		masterHandleTable[i] = new addressmap_t();
-		postponedFreeTableMap[i] = new asyncfreetable_t();
-		memPoolMap[i] = new memPool_t();
-		tempMallocSizeMap[i] = new sizemap_t();
-	}
+    	eventMap[0+thread_id*MAX_NUM_QUEUES_PER_THREAD]= e0;
+    	eventMap[1+thread_id*MAX_NUM_QUEUES_PER_THREAD]= e1;
+    	threadQueueEventMap[thread_id] = eventMap;
+		masterAddressTableMap[thread_id] = new addresstable_t();
+		masterHandleTable[thread_id] = new addressmap_t();
+		postponedFreeTableMap[thread_id] = new asyncfreetable_t();
+		postponedTempFreeTableMap[thread_id] = new asynctempfreetable_t();
+		postponedTempFreeTableMap2[thread_id] = new asynctempfreetable2_t();
+		memPoolMap[thread_id] = new memPool_t();
+		tempMallocSizeMap[thread_id] = new sizemap_t();
+	//}
 
 
-    createKernelArgMap();
+    createKernelArgMap(thread_id);
     init_done = 1;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -474,7 +484,7 @@ HI_error_t OpenCLDriver::init() {
     return HI_success;
 }
 
-HI_error_t OpenCLDriver::HI_pin_host_memory(const void* hostPtr, size_t size) {
+HI_error_t OpenCLDriver::HI_pin_host_memory(const void* hostPtr, size_t size, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_pin_host_memory()\n");
@@ -488,7 +498,7 @@ HI_error_t OpenCLDriver::HI_pin_host_memory(const void* hostPtr, size_t size) {
 	return HI_success;
 }
 
-void OpenCLDriver::HI_unpin_host_memory(const void* hostPtr) {
+void OpenCLDriver::HI_unpin_host_memory(const void* hostPtr, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_unpin_host_memory()\n");
@@ -502,13 +512,13 @@ void OpenCLDriver::HI_unpin_host_memory(const void* hostPtr) {
 	return;
 }
 
-HI_error_t OpenCLDriver::createKernelArgMap() {
+HI_error_t OpenCLDriver::createKernelArgMap(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::createKernelArgMap()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     cl_int err;
     std::map<std::string, cl_kernel> kernelMap;
 	std::map<std::string, kernelParams_t*> kernelArgs;
@@ -532,6 +542,56 @@ HI_error_t OpenCLDriver::createKernelArgMap() {
 	tconf->kernelArgsMap[this] = kernelArgs;
     tconf->kernelsMap[this]=kernelMap;
 
+    int thread_id = tconf->threadID;
+    if( queueMap.count(0+thread_id*MAX_NUM_QUEUES_PER_THREAD) == 0 ) {
+    	cl_command_queue s0, s1;
+    	s0 = clCreateCommandQueue(clContext, clDevice, 0, &err);
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
+			exit(1);
+    	}
+    	s1 = clCreateCommandQueue(clContext, clDevice, 0, &err);
+    	if(err != CL_SUCCESS) {
+        	fprintf(stderr, "[ERROR in OpenCLDriver::init()] failed to create OPENCL queue with error %d (%s)\n", err, opencl_error_code(err));
+			exit(1);
+    	}
+    	queueMap[0+thread_id*MAX_NUM_QUEUES_PER_THREAD] = s0;
+    	queueMap[1+thread_id*MAX_NUM_QUEUES_PER_THREAD] = s1;
+		//if( i == get_thread_id() ) {
+    		//make s0 the default queue
+    		clQueue = s0;
+		//}
+	}
+
+    if( (threadQueueEventMap.count(thread_id) == 0) || (threadQueueEventMap.at(thread_id).count(thread_id*MAX_NUM_QUEUES_PER_THREAD) == 0) ) {
+    	cl_event e0, e1;
+    	std::map<int, cl_event> eventMap;
+    	e0 = clCreateUserEvent(clContext, &err);
+    	if(err != CL_SUCCESS) {
+        	printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
+			exit(1);
+    	}
+    	clSetUserEventStatus(e0, CL_COMPLETE);
+
+    	e1 = clCreateUserEvent(clContext, &err);
+    	if(err != CL_SUCCESS) {
+        	printf("[ERROR in OpenCLDriver::init()] Error in clCreateUserEvent, Line %u in file %s : %d (%s)!!!\n\n", __LINE__, __FILE__, err, opencl_error_code(err));
+			exit(1);
+    	}
+    	clSetUserEventStatus(e1, CL_COMPLETE);
+
+    	eventMap[0+thread_id*MAX_NUM_QUEUES_PER_THREAD]= e0;
+    	eventMap[1+thread_id*MAX_NUM_QUEUES_PER_THREAD]= e1;
+    	threadQueueEventMap[thread_id] = eventMap;
+		masterAddressTableMap[thread_id] = new addresstable_t();
+		masterHandleTable[thread_id] = new addressmap_t();
+		postponedFreeTableMap[thread_id] = new asyncfreetable_t();
+		postponedTempFreeTableMap[thread_id] = new asynctempfreetable_t();
+		postponedTempFreeTableMap2[thread_id] = new asynctempfreetable2_t();
+		memPoolMap[thread_id] = new memPool_t();
+		tempMallocSizeMap[thread_id] = new sizemap_t();
+	}
+
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::createKernelArgMap()\n");
@@ -540,18 +600,15 @@ HI_error_t OpenCLDriver::createKernelArgMap() {
     return HI_success;
 }
 
-HI_error_t OpenCLDriver::HI_register_kernels(std::set<std::string> kernelNames) {
+HI_error_t OpenCLDriver::HI_register_kernels(std::set<std::string> kernelNames, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_register_kernels()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
-		//fprintf(stderr, "[OpenCLDriver()] Kernel name = %s\n", kernelName);
 		if( kernelNameSet.count(*it) == 0 ) {
-			//Add a new kernel to add.
-        	kernelNameSet.insert(*it);
     		cl_int err;
         	cl_kernel clFunc;
         	const char *kernelName = (*it).c_str();
@@ -561,7 +618,6 @@ HI_error_t OpenCLDriver::HI_register_kernels(std::set<std::string> kernelNames) 
 				exit(1);
         	}
         	(tconf->kernelsMap[this])[*it] = clFunc;
-
         	// Create argument mapping for the kernel
 			// Below is not used for now.
 			kernelParams_t *kernelParams = new kernelParams_t;
@@ -569,7 +625,22 @@ HI_error_t OpenCLDriver::HI_register_kernels(std::set<std::string> kernelNames) 
 			(tconf->kernelArgsMap[this]).insert(std::pair<std::string, kernelParams_t*>(std::string(kernelName), kernelParams));
 		}
     }
-
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_set_device_num);
+#else
+#ifdef _OPENMP
+        #pragma omp critical(acc_set_device_num_critical)
+#endif
+#endif
+    for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
+		if( kernelNameSet.count(*it) == 0 ) {
+			//Add a new kernel nameto add..
+        	kernelNameSet.insert(*it);
+		}
+	}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_set_device_num);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_register_kernels()\n");
@@ -578,7 +649,7 @@ HI_error_t OpenCLDriver::HI_register_kernels(std::set<std::string> kernelNames) 
     return HI_success;
 }
 
-int OpenCLDriver::HI_get_num_devices(acc_device_t devType) {
+int OpenCLDriver::HI_get_num_devices(acc_device_t devType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_get_num_devices()\n");
@@ -694,14 +765,14 @@ int OpenCLDriver::HI_get_num_devices(acc_device_t devType) {
 }
 
 
-HI_error_t OpenCLDriver::destroy() {
+HI_error_t OpenCLDriver::destroy(int threadID) {
 
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::destroy()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     cl_int err;
 
 	for( std::map<int, cl_command_queue >::iterator it= queueMap.begin(); it != queueMap.end(); ++it ) {
@@ -742,8 +813,12 @@ HI_error_t OpenCLDriver::destroy() {
         	return HI_error;
     	}
 	}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_clContext);
+#else
 #ifdef _OPENMP
 #pragma omp critical(clContext_critical)
+#endif
 #endif
     {
         if (clContext != NULL) {
@@ -760,6 +835,9 @@ HI_error_t OpenCLDriver::destroy() {
             clContext = NULL;
         }
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_clContext);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::destroy()\n");
@@ -769,13 +847,13 @@ HI_error_t OpenCLDriver::destroy() {
 }
 
 
-HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
+HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D(%d, %lu, %d)\n", asyncID, count, flags);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D(hostPtr = %lx, asyncID = %d, size = %lu, flags = %d)\n",(long unsigned int)hostPtr, asyncID, count, flags);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     if( tconf->device->init_done == 0 ) {
         //fprintf(stderr, "[in HI_malloc1D()] : initing!\n");
@@ -793,7 +871,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 		if( unifiedMemSupported ) {
         	result = HI_success;
 		} else {
-			fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+			fprintf(stderr, "[ERROR in OpenCLDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data (%lx) by thread %d is not allowed; exit!\n",(long unsigned int)hostPtr, tconf->threadID);
 			exit(1);
 		}
     } else {
@@ -867,7 +945,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		HI_print_device_address_mapping_summary(tconf->threadID);
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc1D(%d, %lu, %d)\n", asyncID, count, flags);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_malloc1D(hostPtr = %lx, asyncID = %d, size = %lu, flags = %d)\n",(long unsigned int)hostPtr, asyncID, count, flags);
 	}
 #endif
     return result;
@@ -875,7 +953,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t
 }
 
 //[FIXME] Implement this!
-HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
+HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags, int threadID) {
 	fprintf(stderr, "[OPENARCRT-ERROR]OpenCLDriver::HI_malloc1D_unified() is not yet implemented!\n");
 	//exit(1);
 #ifdef _OPENARC_PROFILE_
@@ -883,7 +961,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc1D_unified(%d, %lu, %d)\n", asyncID, count, flags);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     if( tconf->device->init_done == 0 ) {
         //fprintf(stderr, "[in HI_malloc1D_unified()] : initing!\n");
@@ -950,7 +1028,7 @@ HI_error_t  OpenCLDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr
 
 //[FIXME] Implement this!
 //the ElementSizeBytes in cuMemAllocPitch is currently set to 16.
-HI_error_t OpenCLDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags) {
+HI_error_t OpenCLDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc2D(%d, %d)\n", asyncID, flags);
@@ -966,7 +1044,7 @@ HI_error_t OpenCLDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t
 }
 
 //[FIXME] Implement this!
-HI_error_t OpenCLDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags) {
+HI_error_t OpenCLDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_malloc3D(%d, %d)\n", asyncID, flags);
@@ -1005,13 +1083,13 @@ HI_error_t OpenCLDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t
 
 
 
-HI_error_t OpenCLDriver::HI_free( const void *hostPtr, int asyncID) {
+HI_error_t OpenCLDriver::HI_free( const void *hostPtr, int asyncID, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_free(%d)\n", asyncID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     if( tconf->device->init_done == 0 ) {
         tconf->HI_init(DEVICE_NUM_UNDEFINED);
@@ -1064,7 +1142,7 @@ HI_error_t OpenCLDriver::HI_free( const void *hostPtr, int asyncID) {
 }
 
 //[FIXME] Implement this!
-HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
+HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID, int threadID) {
 	fprintf(stderr, "[OPENARCRT-ERROR]OpenCLDriver::HI_free_unified() is not yet implemented!\n");
 	exit(1);
 #ifdef _OPENARC_PROFILE_
@@ -1072,7 +1150,7 @@ HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_free_unified(%d)\n", asyncID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     if( tconf->device->init_done == 0 ) {
         tconf->HI_init(DEVICE_NUM_UNDEFINED);
@@ -1123,13 +1201,13 @@ HI_error_t OpenCLDriver::HI_free_unified( const void *hostPtr, int asyncID) {
 //malloc used for allocating temporary data.
 //If the method is called for a pointer to existing memory, the existing memory
 //will be freed before allocating new memory.
-void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
+void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_tempMalloc1D()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
@@ -1199,13 +1277,13 @@ void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t d
 }
 
 //Used for de-allocating temporary data.
-void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
+void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_tempFree()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
@@ -1221,6 +1299,8 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 					free(*tempPtr);
 					HI_remove_device_mem_handle(*tempPtr, tconf->threadID);
         		} 
+			} else {
+				free(*tempPtr);
 			}
 #ifdef _OPENARC_PROFILE_
             tconf->IDFreeCnt++;
@@ -1254,13 +1334,13 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 ///////////////////////////
 
 //malloc used for allocating temporary data.
-void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
+void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_tempMalloc1D()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
@@ -1354,13 +1434,13 @@ void OpenCLDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t d
 }
 
 //Used for de-allocating temporary data.
-void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
+void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_tempFree()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
@@ -1374,6 +1454,9 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 			if( HI_get_device_mem_handle(*tempPtr, &tHandle, &size, tconf->threadID) == HI_success ) { 
         		memPool_t *memPool = memPoolMap[tconf->threadID];
         		memPool->insert(std::pair<size_t, void *>(size, *tempPtr));
+			} else if( tempMallocSet.count(*tempPtr) > 0 ) {
+				tempMallocSet.erase(*tempPtr);
+            	free(*tempPtr);
 			}
 		}
     } else {
@@ -1406,20 +1489,20 @@ void OpenCLDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 
 
 //In the driver API, copying into a constant memory (symbol) does not require a different API call
-HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType) {
+HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_memcpy(%lu)\n", count);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     cl_int  err = CL_SUCCESS;
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
     //err = cudaMemcpy(dst, src, count, toCudaMemcpyKind(kind));
-    cl_command_queue queue = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset);
+    cl_command_queue queue = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID);
     //cl_command_queue queue = queueMap.at(0);
     if( dst != src ) {
     	switch( kind ) {
@@ -1588,7 +1671,7 @@ HI_error_t  OpenCLDriver::HI_memcpy(void *dst, const void *src, size_t count, HI
 }
 
 //[FIXME] Implement this!
-HI_error_t  OpenCLDriver::HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType) {
+HI_error_t  OpenCLDriver::HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int threadID) {
 	fprintf(stderr, "[OPENARCRT-ERROR]OpenCLDriver::HI_memcpy_unified() is not yet implemented!\n");
 	exit(1);
 #ifdef _OPENARC_PROFILE_
@@ -1596,14 +1679,14 @@ HI_error_t  OpenCLDriver::HI_memcpy_unified(void *dst, const void *src, size_t c
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_memcpy_unified(%lu)\n", count);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     cl_int  err = CL_SUCCESS;
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
     //err = cudaMemcpy(dst, src, count, toCudaMemcpyKind(kind));
-    cl_command_queue queue = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset);
+    cl_command_queue queue = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID);
     //cl_command_queue queue = queueMap.at(0);
     if( dst != src ) {
     	switch( kind ) {
@@ -1704,22 +1787,22 @@ HI_error_t  OpenCLDriver::HI_memcpy_unified(void *dst, const void *src, size_t c
 
 
 HI_error_t OpenCLDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
-        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
+        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_memcpy_async(%d, %lu)\n", async, count);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
-    HI_wait_for_events(async, num_waits, waits);
+    HI_wait_for_events(async, num_waits, waits, tconf->threadID);
 
     //err = cudaMemcpy(dst, src, count, toCudaMemcpyKind(kind));
     cl_int  err = CL_SUCCESS;
-    cl_command_queue queue = getQueue(async);
-    cl_event *event = getEvent(async);
+    cl_command_queue queue = getQueue(async, tconf->threadID);
+    cl_event *event = getEvent(async, tconf->threadID);
 	if( dst != src ) {
     	switch( kind ) {
     	case HI_MemcpyHostToHost: {
@@ -1818,22 +1901,22 @@ HI_error_t OpenCLDriver::HI_memcpy_async(void *dst, const void *src, size_t coun
 }
 
 HI_error_t OpenCLDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count,
-        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
+        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_memcpy_asyncS(%d)\n", async);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
-    HI_wait_for_events(async, num_waits, waits);
+    HI_wait_for_events(async, num_waits, waits, tconf->threadID);
 
     //err = cudaMemcpy(dst, src, count, toCudaMemcpyKind(kind));
     cl_int  err;
-    cl_command_queue queue = getQueue(async);
-    cl_event *event = getEvent(async);
+    cl_command_queue queue = getQueue(async, tconf->threadID);
+    cl_event *event = getEvent(async, tconf->threadID);
     switch( kind ) {
     case HI_MemcpyHostToHost: {
         fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_asyncS()] Host to Host transfers not supported\n");
@@ -1841,9 +1924,12 @@ HI_error_t OpenCLDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t cou
         break;
     }
     case HI_MemcpyHostToDevice: {
+		void *tSrc;
+		HI_tempMalloc1D(&tSrc, count, acc_device_host, HI_MEM_READ_WRITE);
+		memcpy(tSrc, src, count);
 		HI_device_mem_handle_t tHandle;
 		if( HI_get_device_mem_handle(dst, &tHandle, tconf->threadID) == HI_success ) {
-        	err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_FALSE, tHandle.offset, count, src, 0, NULL, event);
+        	err = clEnqueueWriteBuffer(queue, (cl_mem)(tHandle.basePtr), CL_FALSE, tHandle.offset, count, tSrc, 0, NULL, event);
 		} else {
         	fprintf(stderr, "[ERROR in OpenCLDriver::HI_memcpy_asyncS()] Cannot find a device pointer (%lx) to memory handle mapping; exit!\n", (unsigned long)dst);
 #ifdef _OPENARC_PROFILE_
@@ -1912,7 +1998,7 @@ HI_error_t OpenCLDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t cou
 
 
 HI_error_t OpenCLDriver::HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
-        size_t widthInBytes, size_t height, HI_MemcpyKind_t kind) {
+        size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_memcpy2D()\n");
@@ -1950,7 +2036,7 @@ HI_error_t OpenCLDriver::HI_memcpy2D(void *dst, size_t dpitch, const void *src, 
 }
 
 HI_error_t OpenCLDriver::HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
-        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits) {
+        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits, int threadID) {
 
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1965,7 +2051,7 @@ HI_error_t OpenCLDriver::HI_memcpy2D_async(void *dst, size_t dpitch, const void 
     return HI_success;
 }
 
-HI_error_t OpenCLDriver::HI_register_kernel_numargs(std::string kernel_name, int num_args)
+HI_error_t OpenCLDriver::HI_register_kernel_numargs(std::string kernel_name, int num_args, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -1973,7 +2059,7 @@ HI_error_t OpenCLDriver::HI_register_kernel_numargs(std::string kernel_name, int
 	}
 #endif
 	//[DEBUG] below code is not used now.
-    HostConf_t *tconf = getHostConf();
+    HostConf_t *tconf = getHostConf(threadID);
     //fprintf(stderr, "find kernelargs map for the current device\n");
     kernelParams_t *kernelParams = tconf->kernelArgsMap.at(this).at(kernel_name);
     if( kernelParams->num_args == 0 ) { 
@@ -1994,14 +2080,14 @@ HI_error_t OpenCLDriver::HI_register_kernel_numargs(std::string kernel_name, int
 }
 
 
-HI_error_t OpenCLDriver::HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type)
+HI_error_t OpenCLDriver::HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_register_kernel_arg()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     cl_int err;
 	if( arg_type == 0 ) { //scalar variable
     	err = clSetKernelArg((cl_kernel)(tconf->kernelsMap.at(this).at(kernel_name)), arg_index, arg_size, arg_value);
@@ -2031,18 +2117,19 @@ HI_error_t OpenCLDriver::HI_register_kernel_arg(std::string kernel_name, int arg
     return HI_success;
 }
 
-HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async, int num_waits, int *waits)
+HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async, int num_waits, int *waits, int threadID)
 {
+	const char* c_kernel_name = kernel_name.c_str();
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_kernel_call(%d)\n", async);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_kernel_call(%s, %d)\n",c_kernel_name, async);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
-    HI_wait_for_events(async, num_waits, waits);
+    HI_wait_for_events(async, num_waits, waits, tconf->threadID);
 
     size_t globalSize[3];
     globalSize[0] = gridSize[0]*blockSize[0];
@@ -2055,16 +2142,17 @@ HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, size_t gridSize
     localSize[2] = blockSize[2];
 
     cl_int err;
-    //fprintf(stderr, "[HI_kernel_call()] GRIDSIZE %d %d %d\n", globalSize[2], globalSize[1], globalSize[0]);
-    cl_command_queue queue = getQueue(async);
+    cl_command_queue queue = getQueue(async, tconf->threadID);
     if(async != (DEFAULT_QUEUE+tconf->asyncID_offset)) {
-        cl_event *event = getEvent(async);
+        cl_event *event = getEvent(async, tconf->threadID);
         err = clEnqueueNDRangeKernel(queue, (cl_kernel)(tconf->kernelsMap.at(this).at(kernel_name)), 3, NULL, globalSize, localSize, 0, NULL, event);
     } else {
         err = clEnqueueNDRangeKernel(queue, (cl_kernel)(tconf->kernelsMap.at(this).at(kernel_name)), 3, NULL, globalSize, localSize, 0, NULL, NULL);
     }
     if (err != CL_SUCCESS) {
-        fprintf(stderr, "[ERROR in OpenCLDriver::HI_kernel_call()] Kernel Launch FAIL with error = %d (%s)\n", err, opencl_error_code(err));
+        fprintf(stderr, "[ERROR in OpenCLDriver::HI_kernel_call(%s)] Kernel Launch FAIL with error = %d (%s)\n",c_kernel_name, err, opencl_error_code(err));
+    	fprintf(stderr, "\tglobal_work_size: %d %d %d\n", globalSize[2], globalSize[1], globalSize[0]);
+    	fprintf(stderr, "\tlocal_work_size: %d %d %d\n", localSize[2], localSize[1], localSize[0]);
 		exit(1);
         return HI_error;
     }
@@ -2081,13 +2169,13 @@ HI_error_t OpenCLDriver::HI_kernel_call(std::string kernel_name, size_t gridSize
 #endif   
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_kernel_call(%d)\n", async);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_kernel_call(%s, %d)\n",c_kernel_name, async);
 	}
 #endif
     return HI_success;
 }
 
-HI_error_t OpenCLDriver::HI_synchronize( int forcedSync )
+HI_error_t OpenCLDriver::HI_synchronize( int forcedSync, int threadID )
 {
     cl_int ciErr1;
 #ifdef _OPENARC_PROFILE_
@@ -2109,8 +2197,8 @@ HI_error_t OpenCLDriver::HI_synchronize( int forcedSync )
     	//cl_int ciErr1 = clEnqueueBarrierWithWaitList(clQueue, 0, NULL, NULL);
     	//cl_int ciErr1 = clEnqueueBarrier(clQueue);
     	//ciErr1 = clFinish(clQueue);
-    	HostConf_t * tconf = getHostConf();
-    	ciErr1 = clFinish(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
+    	HostConf_t * tconf = getHostConf(threadID);
+    	ciErr1 = clFinish(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID));
     	if (ciErr1 != CL_SUCCESS)
     	{
         	printf("Error in clFinish, Line %u in file %s : %d\n\n", __LINE__, __FILE__, ciErr1);
@@ -2131,14 +2219,20 @@ HI_error_t OpenCLDriver::HI_synchronize( int forcedSync )
 }
 
 
-void OpenCLDriver::HI_set_async(int asyncId) {
+void OpenCLDriver::HI_set_async(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_set_async(%d)\n", asyncId);
 	}
 #endif
+    HostConf_t * tconf = getHostConf(threadID);
+    int thread_id = tconf->threadID;
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_set_async);
+#else
 #ifdef _OPENMP
     #pragma omp critical (HI_set_async_critical)
+#endif
 #endif
     {
         cl_int err;
@@ -2155,7 +2249,6 @@ void OpenCLDriver::HI_set_async(int asyncId) {
             queueMap[asyncId] = queue;
         }
 
-        int thread_id = get_thread_id();
         std::map<int, std::map<int, cl_event> >::iterator threadIt;
         threadIt = threadQueueEventMap.find(thread_id);
 
@@ -2187,12 +2280,14 @@ void OpenCLDriver::HI_set_async(int asyncId) {
             }
         }
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_set_async);
+#endif
 	if( unifiedMemSupported == 0 ) {
 		//We need explicit synchronization here since HI_synchronize() does not
 		//explicitly synchronize if unified memory is not used.
     	//cl_int ciErr1 = clFinish(clQueue);
-    	HostConf_t * tconf = getHostConf();
-    	cl_int ciErr1 = clFinish(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
+    	cl_int ciErr1 = clFinish(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID));
     	if (ciErr1 != CL_SUCCESS)
     	{
         	printf("Error in clFinish, Line %u in file %s : %d\n\n", __LINE__, __FILE__, ciErr1);
@@ -2206,13 +2301,13 @@ void OpenCLDriver::HI_set_async(int asyncId) {
 #endif
 }
 
-void OpenCLDriver::HI_set_context() {
+void OpenCLDriver::HI_set_context(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_set_context()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if( clContext == NULL) {
         fprintf(stderr, "[ERROR in OpenCLDriver::HI_set_context()] cannot find a valid OpenCL context; exit!\n");
 		exit(1);
@@ -2225,15 +2320,15 @@ void OpenCLDriver::HI_set_context() {
 #endif
 }
 
-void OpenCLDriver::HI_wait(int arg) {
+void OpenCLDriver::HI_wait(int arg, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait(%d)\n", arg);
 	}
 #endif
-    cl_event *event = getEvent(arg);
+    HostConf_t * tconf = getHostConf(threadID);
+    cl_event *event = getEvent(arg, tconf->threadID);
     cl_int err ;
-    HostConf_t * tconf = getHostConf();
     //clGetEventInfo(*event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(err), &err, NULL);
     //fprintf(stderr, "[OpenCLDriver::HI_wait()] status is %d (NVIDIA CUDA GPU)\n", err);
 
@@ -2245,6 +2340,7 @@ void OpenCLDriver::HI_wait(int arg) {
     }
 
 	HI_postponed_free(arg, tconf->threadID);
+	HI_postponed_tempFree(arg, tconf->acc_device_type_var, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_wait(%d)\n", arg);
@@ -2252,16 +2348,16 @@ void OpenCLDriver::HI_wait(int arg) {
 #endif
 }
 
-void OpenCLDriver::HI_wait_ifpresent(int arg) {
+void OpenCLDriver::HI_wait_ifpresent(int arg, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_ifpresent(%d)\n", arg);
 	}
 #endif
-    cl_event *event = getEvent_ifpresent(arg);
+    HostConf_t * tconf = getHostConf(threadID);
+    cl_event *event = getEvent_ifpresent(arg, tconf->threadID);
 	if( event != NULL ) {
     	cl_int err ;
-    	HostConf_t * tconf = getHostConf();
     	err = clWaitForEvents(1, event);
 
     	if(err != CL_SUCCESS) {
@@ -2270,6 +2366,7 @@ void OpenCLDriver::HI_wait_ifpresent(int arg) {
     	}
 
 		HI_postponed_free(arg, tconf->threadID);
+		HI_postponed_tempFree(arg, tconf->acc_device_type_var, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -2278,16 +2375,16 @@ void OpenCLDriver::HI_wait_ifpresent(int arg) {
 #endif
 }
 
-void OpenCLDriver::HI_wait_async(int arg, int async) {
+void OpenCLDriver::HI_wait_async(int arg, int async, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_async(%d, %d)\n", arg, async);
 	}
 #endif
-    cl_event *event = getEvent(arg);
-    cl_event *event2 = getEvent(async);
+    HostConf_t * tconf = getHostConf(threadID);
+    cl_event *event = getEvent(arg, tconf->threadID);
+    cl_event *event2 = getEvent(async, tconf->threadID);
     cl_int err ;
-    HostConf_t * tconf = getHostConf();
 
     err = clWaitForEvents(1, event);
 
@@ -2297,6 +2394,7 @@ void OpenCLDriver::HI_wait_async(int arg, int async) {
     }
 
 	HI_postponed_free(arg, tconf->threadID);
+	HI_postponed_tempFree(arg, tconf->acc_device_type_var, tconf->threadID);
 
     err = clWaitForEvents(1, event2);
 
@@ -2312,17 +2410,17 @@ void OpenCLDriver::HI_wait_async(int arg, int async) {
 #endif
 }
 
-void OpenCLDriver::HI_wait_async_ifpresent(int arg, int async) {
+void OpenCLDriver::HI_wait_async_ifpresent(int arg, int async, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_async_ifpresent(%d, %d)\n", arg, async);
 	}
 #endif
-    cl_event *event = getEvent_ifpresent(arg);
-    cl_event *event2 = getEvent_ifpresent(async);
+    HostConf_t * tconf = getHostConf(threadID);
+    cl_event *event = getEvent_ifpresent(arg, tconf->threadID);
+    cl_event *event2 = getEvent_ifpresent(async, tconf->threadID);
 	if( (event != NULL) && (event2 != NULL) ) {
     	cl_int err ;
-    	HostConf_t * tconf = getHostConf();
 
     	err = clWaitForEvents(1, event);
 
@@ -2332,6 +2430,7 @@ void OpenCLDriver::HI_wait_async_ifpresent(int arg, int async) {
     	}
 
 		HI_postponed_free(arg, tconf->threadID);
+		HI_postponed_tempFree(arg, tconf->acc_device_type_var, tconf->threadID);
 
     	err = clWaitForEvents(1, event2);
 
@@ -2348,15 +2447,15 @@ void OpenCLDriver::HI_wait_async_ifpresent(int arg, int async) {
 #endif
 }
 
-void OpenCLDriver::HI_waitS1(int asyncId) {
+void OpenCLDriver::HI_waitS1(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_waitS1(%d)\n", asyncId);
 	}
 #endif
-    cl_event *event = getEvent(asyncId);
+    HostConf_t * tconf = getHostConf(threadID);
+    cl_event *event = getEvent(asyncId, tconf->threadID);
     cl_int err ;
-    HostConf_t * tconf = getHostConf();
     //clGetEventInfo(*event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(err), &err, NULL);
     //fprintf(stderr, "[OpenCLDriver::HI_wait()] status is %d (NVIDIA CUDA GPU)\n", err);
 
@@ -2374,14 +2473,16 @@ void OpenCLDriver::HI_waitS1(int asyncId) {
 #endif
 }
 
-void OpenCLDriver::HI_waitS2(int asyncId) {
+void OpenCLDriver::HI_waitS2(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_waitS2(%d)\n", asyncId);
 	}
 #endif
+    HostConf_t * tconf = getHostConf(threadID);
 	HI_free_temphosts(asyncId);
-	HI_postponed_free(asyncId, get_thread_id());
+	HI_postponed_free(asyncId, tconf->threadID);
+	HI_postponed_tempFree(asyncId, tconf->acc_device_type_var, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_waitS2(%d)\n", asyncId);
@@ -2389,13 +2490,13 @@ void OpenCLDriver::HI_waitS2(int asyncId) {
 #endif
 }
 
-void OpenCLDriver::HI_wait_all() {
+void OpenCLDriver::HI_wait_all(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_all()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     eventmap_opencl_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     cl_int err;
 
@@ -2408,6 +2509,7 @@ void OpenCLDriver::HI_wait_all() {
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);
+		HI_postponed_tempFree(it->first-2, tconf->acc_device_type_var, tconf->threadID);
     }
 
 #ifdef _OPENARC_PROFILE_
@@ -2417,13 +2519,13 @@ void OpenCLDriver::HI_wait_all() {
 #endif
 }
 
-void OpenCLDriver::HI_wait_all_async(int async) {
+void OpenCLDriver::HI_wait_all_async(int async, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_all_async(%d)\n", async);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     eventmap_opencl_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     cl_int err;
 
@@ -2436,9 +2538,10 @@ void OpenCLDriver::HI_wait_all_async(int async) {
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);
+		HI_postponed_tempFree(it->first-2, tconf->acc_device_type_var, tconf->threadID);
     }
 
-    cl_event *event2 = getEvent(async);
+    cl_event *event2 = getEvent(async, tconf->threadID);
     err = clWaitForEvents(1, event2);
 
     if(err != CL_SUCCESS) {
@@ -2453,15 +2556,15 @@ void OpenCLDriver::HI_wait_all_async(int async) {
 #endif
 }
 
-int OpenCLDriver::HI_async_test(int asyncId) {
+int OpenCLDriver::HI_async_test(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_async_test(%d)\n", asyncId);
 	}
 #endif
-    cl_event *event = getEvent(asyncId);
+    HostConf_t * tconf = getHostConf(threadID);
+    cl_event *event = getEvent(asyncId, tconf->threadID);
     cl_int err, status ;
-    HostConf_t * tconf = getHostConf();
 
     err = clGetEventInfo(*event,  CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &status, NULL);
     if(err != CL_SUCCESS) {
@@ -2478,6 +2581,7 @@ int OpenCLDriver::HI_async_test(int asyncId) {
         return 0;
     }
     HI_postponed_free(asyncId, tconf->threadID);
+	HI_postponed_tempFree(asyncId, tconf->acc_device_type_var, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit OpenCLDriver::HI_async_test(%d)\n", asyncId);
@@ -2486,16 +2590,16 @@ int OpenCLDriver::HI_async_test(int asyncId) {
     return 1;
 }
 
-int OpenCLDriver::HI_async_test_ifpresent(int asyncId) {
+int OpenCLDriver::HI_async_test_ifpresent(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_async_test_ifpresent(%d)\n", asyncId);
 	}
 #endif
-    cl_event *event = getEvent_ifpresent(asyncId);
+    HostConf_t * tconf = getHostConf(threadID);
+    cl_event *event = getEvent_ifpresent(asyncId, tconf->threadID);
 	if( event != NULL ) {
     	cl_int err, status ;
-    	HostConf_t * tconf = getHostConf();
 
     	err = clGetEventInfo(*event,  CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &status, NULL);
     	if(err != CL_SUCCESS) {
@@ -2512,6 +2616,7 @@ int OpenCLDriver::HI_async_test_ifpresent(int asyncId) {
         	return 0;
     	}
     	HI_postponed_free(asyncId, tconf->threadID);
+		HI_postponed_tempFree(asyncId, tconf->acc_device_type_var, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -2521,13 +2626,13 @@ int OpenCLDriver::HI_async_test_ifpresent(int asyncId) {
     return 1;
 }
 
-int OpenCLDriver::HI_async_test_all() {
+int OpenCLDriver::HI_async_test_all(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_async_test_all()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     eventmap_opencl_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     cl_int err, status;
 
@@ -2550,6 +2655,7 @@ int OpenCLDriver::HI_async_test_all() {
     std::set<int>::iterator it;
     for (it=queuesChecked.begin(); it!=queuesChecked.end(); ++it) {
         HI_postponed_free(*it, tconf->threadID);
+		HI_postponed_tempFree(*it, tconf->acc_device_type_var, tconf->threadID);
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -2559,25 +2665,25 @@ int OpenCLDriver::HI_async_test_all() {
     return 1;
 }
 
-void OpenCLDriver::HI_wait_for_events(int async, int num_waits, int* waits) {
+void OpenCLDriver::HI_wait_for_events(int async, int num_waits, int* waits, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_wait_for_events()\n");
 	}
 #endif
     cl_int  err;
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if (num_waits > 0 && async != DEFAULT_QUEUE+tconf->asyncID_offset) {
 //#if defined(OPENARC_ARCH) && OPENARC_ARCH == 3
 //		fprintf(stderr, "[ERROR in OpenCLDriver::HI_wait_for_events()] :not supported on Altera FPGAs with Altera OpenCL SDK version 16.1 or less\n");
 //		exit(1);
 //#else
-        cl_command_queue queue = getQueue(async);
+        cl_command_queue queue = getQueue(async, tconf->threadID);
         cl_event* event_wait_list = new cl_event[num_waits];
         cl_uint num_events_in_wait_list = 0;
         for (int i = 0; i < num_waits; i++) {
             if (waits[i] == async) continue;
-            event_wait_list[num_events_in_wait_list++] = *getEvent(waits[i]);
+            event_wait_list[num_events_in_wait_list++] = *getEvent(waits[i], tconf->threadID);
         }
         if (num_events_in_wait_list > 0) {
 #ifdef CL_VERSION_1_2
@@ -2601,7 +2707,7 @@ void OpenCLDriver::HI_wait_for_events(int async, int num_waits, int* waits) {
 #endif
 }
 
-void OpenCLDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {
+void OpenCLDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags, int threadID) {
     cl_int  err;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -2611,7 +2717,7 @@ void OpenCLDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	void * memHandle;
 	cl_mem_flags mem_flags = convert2CLMemFlags(flags);
     memHandle = (void*) clCreateBuffer(clContext, mem_flags, size, NULL, &err);
@@ -2645,7 +2751,7 @@ void OpenCLDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) 
 
 }
 
-void OpenCLDriver::HI_free(void *devPtr) {
+void OpenCLDriver::HI_free(void *devPtr, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter OpenCLDriver::HI_free()\n");
@@ -2655,7 +2761,7 @@ void OpenCLDriver::HI_free(void *devPtr) {
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	void *devPtr2;
     if( (HI_get_device_address(devPtr, &devPtr2, DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID) == HI_error) ||
         (devPtr != devPtr2) ) {

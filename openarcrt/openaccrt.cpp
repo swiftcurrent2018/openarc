@@ -7,6 +7,16 @@
 ////////////////////////////////////////
 #include "resilience.cpp"
 
+pthread_mutex_t mutex_HI_init;
+pthread_mutex_t mutex_HI_hostinit;
+pthread_mutex_t mutex_HI_kernelnames;
+pthread_mutex_t mutex_pin_host_memory;
+pthread_mutex_t mutex_victim_cache;
+pthread_mutex_t mutex_tempMalloc;
+pthread_mutex_t mutex_set_async;
+pthread_mutex_t mutex_set_device_num;
+pthread_mutex_t mutex_clContext;
+
 static const char *omp_num_threads_env = "OMP_NUM_THREADS";
 static const char *acc_device_type_env = "ACC_DEVICE_TYPE";
 static const char *acc_device_num_env = "ACC_DEVICE_NUM";
@@ -21,6 +31,7 @@ static const char *XEONPHI = "XEONPHI";
 static const char *ALTERA = "ALTERA";
 
 devmap_t HostConf::devMap;
+//HI_kernelnames contain all the kernels used by any host thread, which does not distinguish target device types.
 std::set<std::string> HostConf::HI_kernelnames;
 
 int HI_hostinit_done = 0;
@@ -36,7 +47,8 @@ double HI_get_localtime () {
     return time.tv_sec + time.tv_usec / 1000000.0;
 }
 
-std::vector<HostConf_t *> hostConfList;
+//std::vector<HostConf_t *> hostConfList;
+std::map<int, HostConf_t *> hostConfMap;
 
 //DEBUG: for now, resilience test is enabled by default
 #define _OPENARC_RESILIENCE_
@@ -48,10 +60,8 @@ std::vector<HostConf_t *> hostConfList;
 //[FIXME] if default device type is different from the one passed to acc_init(),
 //the default device type should be updated to the passed value.
 //==> tconf->acc_device_type_var is updated in acc_init().
-void HI_hostinit(int numhostthreads) {
-    int thread_id = get_thread_id();
-    int currentListSize = hostConfList.size();
-    int newListSize = numhostthreads;
+//This function assumes that threadID argument has a valid value (>=0).
+void HI_hostinit(int threadID) {
 	int openarcrt_verbosity = 0;
     char * envVar;
     envVar = getenv(openarcrt_verbosity_env);
@@ -63,110 +73,101 @@ void HI_hostinit(int numhostthreads) {
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_hostinit(%d)\n", numhostthreads);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_hostinit(thread ID = %d)\n", threadID);
 	}
 #endif
-    envVar = getenv(openarcrt_unifiedmemory_env);
-	if( envVar != NULL ) {
-		HI_use_unifiedmemory = atoi(envVar);
-	} else {
-		HI_use_unifiedmemory = 0;
-	}
-    envVar = getenv(openarcrt_prepinhostmemory_env);
-	if( envVar != NULL ) {
-		HI_prepin_host_memory = atoi(envVar);
-	} else {
-		//Default behavior is changed to no-prepinning.
-		HI_prepin_host_memory = 0;
-	}
-	if( HI_prepin_host_memory == 1 ) {
+    if( HI_hostinit_done == 0 ) {
+#ifdef _THREAD_SAFETY
+		pthread_mutex_init(&mutex_HI_init, NULL);
+		pthread_mutex_init(&mutex_HI_hostinit, NULL);
+		pthread_mutex_init(&mutex_HI_kernelnames, NULL);
+		pthread_mutex_init(&mutex_pin_host_memory, NULL);
+		pthread_mutex_init(&mutex_victim_cache, NULL);
+		pthread_mutex_init(&mutex_tempMalloc, NULL);
+		pthread_mutex_init(&mutex_set_async, NULL);
+		pthread_mutex_init(&mutex_set_device_num, NULL);
+		pthread_mutex_init(&mutex_clContext, NULL);
+#endif
+    	envVar = getenv(openarcrt_unifiedmemory_env);
+		if( envVar != NULL ) {
+			HI_use_unifiedmemory = atoi(envVar);
+		} else {
+			HI_use_unifiedmemory = 0;
+		}
+    	envVar = getenv(openarcrt_prepinhostmemory_env);
+		if( envVar != NULL ) {
+			HI_prepin_host_memory = atoi(envVar);
+		} else {
+			//Default behavior is changed to no-prepinning.
+			HI_prepin_host_memory = 0;
+		}
+    	HI_hostinit_done = 1;
+		if( HI_prepin_host_memory == 1 ) {
 #ifdef _OPENARC_PROFILE_
-		fprintf(stderr, "[OPENARCRT-INFO] Host memory will be prepinned for fast memory transfers; to disable this, set environment variable %s to 0 (excessive prepinning may slow or crash the program.)\n", openarcrt_prepinhostmemory_env);
+			fprintf(stderr, "[OPENARCRT-INFO] Host memory will be prepinned for fast memory transfers; to disable this, set environment variable %s to 0 (excessive prepinning may slow or crash the program.)\n", openarcrt_prepinhostmemory_env);
 #endif
+		}
 	}
-    if( numhostthreads <= 0 ) {
-		envVar = NULL;
-        envVar = getenv(omp_num_threads_env);
-        if( envVar == NULL ) {
-#ifdef _OPENMP
-			fprintf(stderr, "[OPENARCRT-ERROR] To use OpenMP, environment variable, %s should be set to the maximum number of OpenMP threads that the program uses; exit!\n", omp_num_threads_env);
-			exit(1);
-#endif
-            newListSize = 1;
-        } else {
-            newListSize = atoi(envVar);
-            if( newListSize <= 0 ) {
-#ifdef _OPENMP
-				fprintf(stderr, "[OPENARCRT-ERROR] To use OpenMP, environment variable, %s should be set to the maximum number of OpenMP threads that the program uses; exit!\n", omp_num_threads_env);
-				exit(1);
-#endif
-                //[DEBUG] wrong value; use default value of 1.
-                newListSize = 1;
-            }
-        }
-    }
-    if( newListSize > currentListSize ) {
+    if( hostConfMap.count(threadID) == 0 ) {
+		HostConf_t * tconf = new HostConf_t;
+		tconf->threadID=threadID;
+		tconf->setDefaultDevNum();
+		tconf->setDefaultDevice();
+		tconf->createHostTables();
+		//tconf->initKernelNames();
+		tconf->use_unifiedmemory = HI_use_unifiedmemory;
+		tconf->prepin_host_memory = HI_prepin_host_memory;
+		//tconf->HI_init_done=1;
+		tconf->asyncID_offset=threadID*MAX_NUM_QUEUES_PER_THREAD;
+#ifdef _THREAD_SAFETY
+		pthread_mutex_lock(&mutex_HI_hostinit);
+#else
 #ifdef _OPENMP
         #pragma omp critical (HI_hostinit_critical)
 #endif
+#endif
         {
-            currentListSize = hostConfList.size();
-            for( int i=currentListSize; i<newListSize; i++ ) {
-                HostConf_t * tconf = new HostConf_t;
-				tconf->threadID=i;
-                tconf->setDefaultDevNum();
-                tconf->setDefaultDevice();
-                tconf->createHostTables();
-				tconf->initKernelNames();
-				tconf->use_unifiedmemory = HI_use_unifiedmemory;
-				tconf->prepin_host_memory = HI_prepin_host_memory;
-                //tconf->HI_init_done=1;
-                tconf->asyncID_offset=i*MAX_NUM_QUEUES_PER_THREAD;
-                hostConfList.push_back(tconf);
-            }
-			HI_num_hostthreads = newListSize;
-            HI_hostinit_done = 1;
+            hostConfMap[threadID] = tconf;
         }
-    } else {
-    	HI_hostinit_done = 1;
+		//HI_num_hostthreads = hostConfMap.size();
+#ifdef _THREAD_SAFETY
+		pthread_mutex_unlock(&mutex_HI_hostinit);
+#endif
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_hostinit(%d)\n", numhostthreads);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_hostinit(thread ID = %d)\n", threadID);
 	}
 #endif
 }
 
 //Get the initial host configuration, or create it if nox existing.
 //This function is called only in acc_init() function.
-HostConf_t * getInitHostConf() {
+HostConf_t * getInitHostConf(int threadID) {
     HostConf_t * tconf = NULL;
-    int thread_id = get_thread_id();
+	if( threadID == NO_THREAD_ID ) {
+    	threadID = get_thread_id();
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d enters getInitHostConf()\n", thread_id);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d enters getInitHostConf()\n", threadID);
 	}
 #endif
-    if( thread_id < hostConfList.size() ) {
-        tconf = hostConfList.at(thread_id);
+    if( hostConfMap.count(threadID) > 0 ) {
+        tconf = hostConfMap.at(threadID);
     }
 
     if( tconf == NULL ) {
-#ifdef _OPENMP
-        //HI_hostinit(omp_get_num_threads());
-        HI_hostinit(0);
-#else
-        HI_hostinit(1);
-#endif
-        tconf = hostConfList.at(thread_id);
+        HI_hostinit(threadID);
+        tconf = hostConfMap.at(threadID);
         if( tconf == NULL ) {
-            fprintf(stderr, "[ERROR in getInitHostConf] No host configuration exists for the current host thread (thread ID: %d);\n", thread_id);
+            fprintf(stderr, "[ERROR in getInitHostConf] No host configuration exists for the current host thread (thread ID: %d);\n", threadID);
             exit(1);
         }
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d exits getInitHostConf()\n", thread_id);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d exits getInitHostConf()\n", threadID);
 	}
 #endif
     return tconf;
@@ -174,28 +175,25 @@ HostConf_t * getInitHostConf() {
 
 //Similar to getInitHostConf(), but this also invokes HI_init() if not done.
 //This function is called in most of existing OpenARC runtime APIs.
-HostConf_t * getHostConf() {
+HostConf_t * getHostConf(int threadID) {
     HostConf_t * tconf = NULL;
-    int thread_id = get_thread_id();
+	if( threadID == NO_THREAD_ID ) {
+    	threadID = get_thread_id();
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d enters getHostConf()\n", thread_id);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d enters getHostConf()\n", threadID);
 	}
 #endif
-    if( thread_id < hostConfList.size() ) {
-        tconf = hostConfList.at(thread_id);
+    if( hostConfMap.count(threadID) > 0 ) {
+        tconf = hostConfMap.at(threadID);
     }
 
     if( tconf == NULL ) {
-#ifdef _OPENMP
-        //HI_hostinit(omp_get_num_threads());
-        HI_hostinit(0);
-#else
-        HI_hostinit(1);
-#endif
-        tconf = hostConfList.at(thread_id);
+        HI_hostinit(threadID);
+        tconf = hostConfMap.at(threadID);
         if( tconf == NULL ) {
-            fprintf(stderr, "[ERROR in getHostConf] No host configuration exists for the current host thread (thread ID: %d);\n", thread_id);
+            fprintf(stderr, "[ERROR in getHostConf] No host configuration exists for the current host thread (thread ID: %d);\n", threadID);
             exit(1);
         }
     }
@@ -205,7 +203,7 @@ HostConf_t * getHostConf() {
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d exits getHostConf()\n", thread_id);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d exits getHostConf()\n", threadID);
 	}
 #endif
     return tconf;
@@ -213,28 +211,25 @@ HostConf_t * getHostConf() {
 
 //Similar to getHostConf(), but this also sets device number.
 //This function is called only in acc_set_device_num() function.
-HostConf_t * setNGetHostConf(int devNum) {
+HostConf_t * setNGetHostConf(int devNum, int threadID) {
     HostConf_t * tconf = NULL;
-    int thread_id = get_thread_id();
+	if( threadID == NO_THREAD_ID ) {
+    	threadID = get_thread_id();
+	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d enters setNGetHostConf(%d)\n", thread_id, devNum);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d enters setNGetHostConf(devNum = %d)\n", threadID, devNum);
 	}
 #endif
-    if( thread_id < hostConfList.size() ) {
-        tconf = hostConfList.at(thread_id);
+    if( hostConfMap.count(threadID) > 0 ) {
+        tconf = hostConfMap.at(threadID);
     }
 
     if( tconf == NULL ) {
-#ifdef _OPENMP
-        //HI_hostinit(omp_get_num_threads());
-        HI_hostinit(0);
-#else
-        HI_hostinit(1);
-#endif
-        tconf = hostConfList.at(thread_id);
+        HI_hostinit(threadID);
+        tconf = hostConfMap.at(threadID);
         if( tconf == NULL ) {
-            fprintf(stderr, "[ERROR in setNGetHostConf] No host configuration exists for the current host thread (thread ID: %d);\n", thread_id);
+            fprintf(stderr, "[ERROR in setNGetHostConf] No host configuration exists for the current host thread (thread ID: %d);\n", threadID);
             exit(1);
         }
     }
@@ -244,7 +239,7 @@ HostConf_t * setNGetHostConf(int devNum) {
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d exits setNGetHostConf(%d)\n", thread_id, devNum);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tHost thread %d exits setNGetHostConf(devNum = %d)\n", threadID, devNum);
 	}
 #endif
     return tconf;
@@ -338,7 +333,8 @@ void HostConf::setDefaultDevNum() {
         }
     }
 #ifdef _PMAS_
-    dev = get_thread_id();
+    //dev = get_thread_id();
+	dev = threadID;
 #endif
     //acc_set_device_num(dev, devtype);
     if( (devtype == acc_device_nvidia) || (devtype == acc_device_not_host) ||
@@ -397,11 +393,11 @@ void HostConf::createHostTables() {
 void HostConf::HI_init(int devNum) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_init(%d)\n", acc_device_type_var);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_init(devNum = %d)\n", acc_device_type_var);
 	}
 #endif
     if( HI_hostinit_done == 0 ) {
-        HI_hostinit(0);
+        HI_hostinit(threadID);
     }
 #ifdef _OPENARC_PROFILE_
 	double ltime1 = HI_get_localtime();
@@ -454,7 +450,6 @@ void HostConf::HI_init(int devNum) {
 		KernelTimingMap[*it] = 0.0;
     }  
 #endif
-    int thread_id = get_thread_id();
     setTranslationType();
     if( acc_device_type_var == acc_device_host ) {
 		acc_num_devices = 1;
@@ -462,13 +457,20 @@ void HostConf::HI_init(int devNum) {
         devnummap_t numDevMap;
         Accelerator *dev = NULL;
         numDevMap[0] = dev;
+#ifdef _THREAD_SAFETY
+		pthread_mutex_lock(&mutex_HI_init);
+#else
 #ifdef _OPENMP
         #pragma omp critical (HI_init_critical)
+#endif
 #endif
 		{ //starts critical section.
 			//The current implementation does not support host as a target device.
 			HostConf::devMap[acc_device_type_var] = numDevMap;
 		} //ends critical section.
+#ifdef _THREAD_SAFETY
+		pthread_mutex_unlock(&mutex_HI_init);
+#endif
 */
         isOnAccDevice = 1;
         HI_init_done = 1;
@@ -476,8 +478,12 @@ void HostConf::HI_init(int devNum) {
 		//printf("init start with dev %d\n", acc_device_type_var);
         devnummap_t numDevMap;
         int numDevices;
+#ifdef _THREAD_SAFETY
+		pthread_mutex_lock(&mutex_HI_init);
+#else
 #ifdef _OPENMP
         #pragma omp critical (HI_init_critical)
+#endif
 #endif
 		{ //starts critical section.
 			if( HostConf::devMap.count(acc_device_type_var) > 0 ) {
@@ -537,11 +543,14 @@ void HostConf::HI_init(int devNum) {
         		HostConf::devMap[acc_device_type_var] = numDevMap;
 			}
 		} //ends critical section.
+#ifdef _THREAD_SAFETY
+		pthread_mutex_unlock(&mutex_HI_init);
+#endif
 		if( devNum == DEVICE_NUM_UNDEFINED ) {
 			//[DEBUG] if devNum != DEVICE_NUM_UNDEFINED, device number 
 			//will be set by a separate acc_set_device_num() call.
         	setDefaultDevNum();
-        	acc_set_device_num(acc_device_num_var, user_set_device_type_var);
+        	acc_set_device_num(acc_device_num_var, user_set_device_type_var, threadID);
 		}
 		//printf("init done for type %d\n", acc_device_type_var);
         isOnAccDevice = 1;
@@ -562,7 +571,7 @@ void HostConf::HI_init(int devNum) {
 
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_init(%d)\n", acc_device_type_var);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_init(devNum = %d)\n", acc_device_type_var);
 	}
 #endif
 }
@@ -578,7 +587,7 @@ void HostConf::HI_reset() {
 #endif
 
 	//Wait until all previous device activities are done.
-	device->HI_wait_all();
+	device->HI_wait_all(threadID);
 
     /*
     delete addressmaptable;
@@ -614,7 +623,7 @@ void HostConf::HI_reset() {
 		(it->second)->clear();
 	} 
 	
-	//device->destroy();
+	//device->destroy(threadID);
 	//device->init_done = 0;
 	//Reset HostConf variables.
 /*
@@ -636,7 +645,7 @@ void HostConf::HI_reset() {
     //totalFreeTime += HI_get_localtime() - ltime;
     totalShutdownTime = HI_get_localtime() - ltime;
     totalACCTime = HI_get_localtime() - totalACCTime;
-    int thread_id = get_thread_id();
+    int thread_id = threadID;
 	double tAvgTime;
     printf("\n/************************************/\n");
     printf("/* Profile Output for host thread %d */\n", thread_id);
@@ -772,54 +781,54 @@ void HostConf::HI_reset() {
 //////////////////////
 // Kernel Execution //
 //////////////////////
-HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args)
+HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args, int threadID)
 {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_register_kernel_numargs()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_register_kernel_numargs(%s, thread ID = %d)\n", kernel_name.c_str(), threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t* conf = getHostConf();
-    return_status = conf->device->HI_register_kernel_numargs(kernel_name, num_args);
+    HostConf_t* tconf = getHostConf(threadID);
+    return_status = tconf->device->HI_register_kernel_numargs(kernel_name, num_args, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_register_kernel_numargs()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_register_kernel_numargs(thread ID = %d)\n", threadID);
 	}
-	conf->RegKernelArgCnt++;
-	conf->totalRegKernelArgTime += (HI_get_localtime() - ltime);
+	tconf->RegKernelArgCnt++;
+	tconf->totalRegKernelArgTime += (HI_get_localtime() - ltime);
 #endif
 	return return_status;
 }
 
-HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type)
+HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type, int threadID)
 {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_register_kernel_arg()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_register_kernel_arg(thread ID = %d)\n", threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t* conf = getHostConf();
-    return_status = conf->device->HI_register_kernel_arg(kernel_name, arg_index, arg_size, arg_value, arg_type);
+    HostConf_t* tconf = getHostConf(threadID);
+    return_status = tconf->device->HI_register_kernel_arg(kernel_name, arg_index, arg_size, arg_value, arg_type, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_register_kernel_arg()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_register_kernel_arg(thread ID = %d)\n", threadID);
 	}
-	conf->RegKernelArgCnt++;
-	conf->totalRegKernelArgTime += (HI_get_localtime() - ltime);
+	tconf->RegKernelArgCnt++;
+	tconf->totalRegKernelArgTime += (HI_get_localtime() - ltime);
 #endif
 	return return_status;
 }
 
-HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async, int num_waits, int *waits) {
+HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async, int num_waits, int *waits, int threadID) {
 	HI_error_t return_status;
 	const char *kernelName = kernel_name.c_str();
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_kernel_call(%d): %s\n", async, kernelName);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_kernel_call(async = %d): %s, thread ID = %d\n", async, kernelName, threadID);
 		fprintf(stderr, "                \t\tGang configuration: %lu, %lu, %lu\n", gridSize[2], gridSize[1], gridSize[0]);
 		fprintf(stderr, "                \t\tWorker configuration: %lu, %lu, %lu\n", blockSize[2], blockSize[1], blockSize[0]);
 	}
@@ -830,7 +839,7 @@ HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t bl
     	std::cerr << "[WARNING in HI_kernel_call()] the kernel, " << kernel_name << " is called with 0 gangs; skip executing this kernel." << std::endl;
         return HI_success;
 	}
-    HostConf_t* tconf = getHostConf();
+    HostConf_t* tconf = getHostConf(threadID);
 	int *waitslist = NULL;
 	if( num_waits > 0 ) {
 		waitslist = (int *)malloc(num_waits*sizeof(int));
@@ -842,32 +851,32 @@ HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t bl
         fprintf(stderr, "[ERROR in HI_kernel_call()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    return_status = tconf->device->HI_kernel_call(kernel_name, gridSize, blockSize, async+tconf->asyncID_offset, num_waits, waitslist);
+    return_status = tconf->device->HI_kernel_call(kernel_name, gridSize, blockSize, async+tconf->asyncID_offset, num_waits, waitslist, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_kernel_call(%d): %s\n", async, kernelName);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_kernel_call(async = %d): %s, thread ID = %d\n", async, kernelName, threadID);
 	}
 #endif
 	return return_status;
 }
 
-HI_error_t HI_synchronize( int forcedSync )
+HI_error_t HI_synchronize( int forcedSync, int threadID )
 {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_synchronize(%d)\n", forcedSync);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_synchronize(sync = %d, thread ID = %d)\n", forcedSync, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t* conf = getHostConf();
-    return_status = conf->device->HI_synchronize(forcedSync);
+    HostConf_t* tconf = getHostConf(threadID);
+    return_status = tconf->device->HI_synchronize(forcedSync, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_synchronize(%d)\n", forcedSync);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_synchronize(sync = %d, thread ID = %d)\n", forcedSync, threadID);
 	}
-	conf->KernelSyncCnt++;
-	conf->totalKernelSyncTime += (HI_get_localtime() - ltime);
+	tconf->KernelSyncCnt++;
+	tconf->totalKernelSyncTime += (HI_get_localtime() - ltime);
 #endif
 	return return_status;
 }
@@ -875,11 +884,11 @@ HI_error_t HI_synchronize( int forcedSync )
 /////////////////////////////
 //Device Memory Allocation //
 /////////////////////////////
-HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
+HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_malloc1D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_malloc1D(hostPtr = %lx, asyncID = %d, thread ID = %d)\n",(long unsigned int)hostPtr, asyncID, threadID);
 	}
 #endif
 	if( count == 0 ) {
@@ -890,7 +899,7 @@ HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int as
     	fprintf(stderr, "[ERROR in HI_malloc1D()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in HI_malloc1D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
@@ -899,29 +908,29 @@ HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int as
         fprintf(stderr, "[ERROR in HI_malloc1D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    return_status = tconf->device->HI_malloc1D(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags);
+    return_status = tconf->device->HI_malloc1D(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	tconf->DMallocCnt++;
 	tconf->DMallocSize += count;
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc1D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc1D(hostPtr = %lx, asyncID = %d, thread ID = %d)\n",(long unsigned int)hostPtr, asyncID, threadID);
 	}
 #endif
 	return return_status;
 }
 
-HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
+HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_malloc1D_unified(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_malloc1D_unified(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	if( count == 0 ) {
     	fprintf(stderr, "[ERROR in HI_malloc1D_unified()] allocate 0 byte is not allowed; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in HI_malloc1D_unified()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
@@ -930,22 +939,22 @@ HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count
         fprintf(stderr, "[ERROR in HI_malloc1D_unified()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    return_status = tconf->device->HI_malloc1D_unified(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags);
+    return_status = tconf->device->HI_malloc1D_unified(hostPtr, devPtr, count, asyncID+tconf->asyncID_offset, flags, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	tconf->DMallocCnt++;
 	tconf->DMallocSize += count;
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc1D_unified(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc1D_unified(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	return return_status;
 }
 
-HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags) {
+HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_malloc2D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_malloc2D(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	if( (widthInBytes == 0) || (height == 0) ) {
@@ -956,7 +965,7 @@ HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_
     	fprintf(stderr, "[ERROR in HI_malloc2D()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in HI_malloc2D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
@@ -965,22 +974,22 @@ HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_
         fprintf(stderr, "[ERROR in HI_malloc2D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    return_status = tconf->device->HI_malloc2D( hostPtr, devPtr,pitch, widthInBytes, height, asyncID+tconf->asyncID_offset, flags);
+    return_status = tconf->device->HI_malloc2D( hostPtr, devPtr,pitch, widthInBytes, height, asyncID+tconf->asyncID_offset, flags, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	tconf->DMallocCnt++;
 	tconf->DMallocSize += widthInBytes*height;
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc2D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc2D(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	return return_status;
 }
 
-HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags) {
+HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_malloc3D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_malloc3D(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	if( (widthInBytes == 0) || (height == 0) || (depth == 0) ) {
@@ -991,7 +1000,7 @@ HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_
     	fprintf(stderr, "[ERROR in HI_malloc3D()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in HI_malloc3D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
@@ -1000,64 +1009,64 @@ HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_
         fprintf(stderr, "[ERROR in HI_malloc3D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    return_status = tconf->device->HI_malloc3D( hostPtr, devPtr, pitch, widthInBytes, height, depth, asyncID+tconf->asyncID_offset, flags);
+    return_status = tconf->device->HI_malloc3D( hostPtr, devPtr, pitch, widthInBytes, height, depth, asyncID+tconf->asyncID_offset, flags, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	tconf->DMallocCnt++;
 	tconf->DMallocSize += widthInBytes*height*depth;
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc3D(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_malloc3D(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	return return_status;
 }
 
-HI_error_t HI_free( const void *hostPtr, int asyncID) {
+HI_error_t HI_free( const void *hostPtr, int asyncID, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_free(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_free(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	if( hostPtr == NULL ) {
     	fprintf(stderr, "[ERROR in HI_free()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_free()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    return_status = tconf->device->HI_free(hostPtr, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_free(hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	tconf->DFreeCnt++;
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	return return_status;
 }
 
-HI_error_t HI_free_unified( const void *hostPtr, int asyncID) {
+HI_error_t HI_free_unified( const void *hostPtr, int asyncID, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_free_unified(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_free_unified(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	if( hostPtr == NULL ) {
     	fprintf(stderr, "[ERROR in HI_free_unified()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_free_unified()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    return_status = tconf->device->HI_free_unified(hostPtr, asyncID+tconf->asyncID_offset);
+    return_status = tconf->device->HI_free_unified(hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	tconf->DFreeCnt++;
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free_unified(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free_unified(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	return return_status;
@@ -1066,18 +1075,18 @@ HI_error_t HI_free_unified( const void *hostPtr, int asyncID) {
 //Unlike HI_free(), this method does not do actual memory deallocation;
 //instead, it tells that following synchronization calls (acc_wait,
 //acc_async_test, etc.) deallocate the device memory for the variable.
-HI_error_t HI_free_async( const void *hostPtr, int asyncID ) {
+HI_error_t HI_free_async( const void *hostPtr, int asyncID, int threadID ) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_free_async(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_free_async(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	if( hostPtr == NULL ) {
     	fprintf(stderr, "[ERROR in HI_free_async()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_free_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
@@ -1086,7 +1095,7 @@ HI_error_t HI_free_async( const void *hostPtr, int asyncID ) {
 #ifdef _OPENARC_PROFILE_
 	tconf->DFreeCnt++;
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free_async(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_free_async(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 	return return_status;
@@ -1095,22 +1104,22 @@ HI_error_t HI_free_async( const void *hostPtr, int asyncID ) {
 //malloc used for allocating temporary data.
 //If the method is called for a pointer to existing memory, the existing memory
 //will be freed before allocating new memory.
-void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
+void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_tempMalloc1D()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_tempMalloc1D(count = %ld, thread ID = %d)\n", count, threadID);
 	}
 #endif
 	if( count == 0 ) {
     	fprintf(stderr, "[ERROR in HI_tempMalloc1D()] allocate 0 byte is not allowed; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_tempMalloc1D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    tconf->device->HI_tempMalloc1D( tempPtr, count, devType, flags);
+    tconf->device->HI_tempMalloc1D( tempPtr, count, devType, flags, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
     if(  devType == acc_device_gpu || devType == acc_device_nvidia ||
     devType == acc_device_radeon || devType == acc_device_xeonphi || 
@@ -1122,24 +1131,24 @@ void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_Mal
 		tconf->HMallocSize += count;
 	}
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempMalloc1D()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempMalloc1D(count = %ld, thread ID = %d)\n", count, threadID);
 	}
 #endif
 }
 
 //Used for de-allocating temporary data.
-void HI_tempFree( void** tempPtr, acc_device_t devType) {
+void HI_tempFree( void** tempPtr, acc_device_t devType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_tempFree()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_tempFree(devType = %d, thread ID = %d)\n", devType, threadID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_tempFree()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    tconf->device->HI_tempFree( tempPtr, devType);
+    tconf->device->HI_tempFree( tempPtr, devType, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
     if(  devType == acc_device_gpu || devType == acc_device_nvidia ||
     devType == acc_device_radeon || devType == acc_device_xeonphi || 
@@ -1149,7 +1158,37 @@ void HI_tempFree( void** tempPtr, acc_device_t devType) {
 		tconf->HFreeCnt++;
 	}
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempFree()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempFree(devType = %d, thread ID = %d)\n", devType, threadID);
+	}
+#endif
+}
+
+//Unlike HI_tempFree(), this method does not do actual memory deallocation;
+//instead, it tells that following synchronization calls (acc_wait,
+//acc_async_test, etc.) deallocate the memory.
+
+void HI_tempFree_async( void** tempPtr, acc_device_t devType, int asyncID, int threadID) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_tempFree_async(devType = %d, asyncID = %d, thread ID = %d)\n", devType, asyncID, threadID);
+	}
+#endif
+    HostConf_t * tconf = getHostConf(threadID);
+	if(tconf->device == NULL) {
+        fprintf(stderr, "[ERROR in HI_tempFree_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
+		exit(1);
+	}
+    tconf->device->HI_tempFree_async( tempPtr, devType, asyncID, tconf->threadID);
+#ifdef _OPENARC_PROFILE_
+    if(  devType == acc_device_gpu || devType == acc_device_nvidia ||
+    devType == acc_device_radeon || devType == acc_device_xeonphi || 
+    devType == acc_device_altera || devType == acc_device_current) {
+		tconf->DFreeCnt++;
+	} else {
+		tconf->HFreeCnt++;
+	}
+	if( HI_openarcrt_verbosity > 1 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_tempFree_async(devType = %d, asyncID = %d, thread ID = %d)\n", devType, asyncID, threadID);
 	}
 #endif
 }
@@ -1198,11 +1237,11 @@ char const *HI_getMemcpyTypeString( HI_MemcpyKind_t kind ) {
 //         0: normal memcopy; for CUDA, this simply wraps cudaMemcpy().
 //         1: use cudaMemcpyToSymbol or cudaMemcpyFromSymbol
 HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
-                           HI_MemcpyKind_t kind, int trType) {
+                           HI_MemcpyKind_t kind, int trType, int threadID) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy(%ld)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy(count = %ld, thread ID = %d)\n", count, threadID);
 		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
@@ -1215,7 +1254,7 @@ HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
         exit(1);
 	}
 	if( count > 0 ) {
-    	HostConf_t * tconf = getHostConf();
+    	HostConf_t * tconf = getHostConf(threadID);
     	if( tconf->isOnAccDevice == 0 ) {
         	fprintf(stderr, "[ERROR in HI_memcpy()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
@@ -1224,11 +1263,11 @@ HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
         	fprintf(stderr, "[ERROR in HI_memcpy()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 			exit(1);
 		}
-    	return_status = tconf->device->HI_memcpy( dst, src, count, kind, trType);
+    	return_status = tconf->device->HI_memcpy( dst, src, count, kind, trType, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy(%ld)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy(count = %ld, thread ID = %d)\n", count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -1236,11 +1275,11 @@ HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
 }
 
 HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
-                           HI_MemcpyKind_t kind, int trType) {
+                           HI_MemcpyKind_t kind, int trType, int threadID) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_unified(%ld)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_unified(count = %ld, thread ID = %d)\n", count, threadID);
 		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
@@ -1253,7 +1292,7 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
 		return HI_success;
 	}
 	if( count > 0 ) {
-    	HostConf_t * tconf = getHostConf();
+    	HostConf_t * tconf = getHostConf(threadID);
     	if( tconf->isOnAccDevice == 0 ) {
         	fprintf(stderr, "[ERROR in HI_memcpy_unified()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
@@ -1262,11 +1301,11 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
         	fprintf(stderr, "[ERROR in HI_memcpy_unified()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 			exit(1);
 		}
-    	return_status = tconf->device->HI_memcpy_unified( dst, src, count, kind, trType);
+    	return_status = tconf->device->HI_memcpy_unified( dst, src, count, kind, trType, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_unified(%ld)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_unified(count = %ld, thread ID = %d)\n", count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -1274,11 +1313,11 @@ HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
 }
 
 HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
-                                 HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
+                                 HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_async(%d, %ld)\n", async, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_async(async = %d, count = %ld, thread ID = %d)\n", async, count, threadID);
 		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
@@ -1291,7 +1330,7 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
         exit(1);
 	}
 	if( count > 0 ) {
-    	HostConf_t * tconf = getHostConf();
+    	HostConf_t * tconf = getHostConf(threadID);
     	if( tconf->isOnAccDevice == 0 ) {
         	fprintf(stderr, "[ERROR in HI_memcpy_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
@@ -1307,11 +1346,11 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
         	fprintf(stderr, "[ERROR in HI_memcpy_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 			exit(1);
 		}
-    	return_status = tconf->device->HI_memcpy_async(dst, src, count, kind, trType, async+tconf->asyncID_offset, num_waits, waitslist);
+    	return_status = tconf->device->HI_memcpy_async(dst, src, count, kind, trType, async+tconf->asyncID_offset, num_waits, waitslist, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_async(%d, %ld)\n", async, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_async(async = %d, count = %ld, thread ID = %d)\n", async, count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -1319,11 +1358,11 @@ HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
 }
 
 HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
-                                 HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
+                                 HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_asyncS(%ld, %d)\n", count, async);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_asyncS(count = %ld, async = %d, thread ID = %d)\n", count, async, threadID);
 		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
@@ -1336,7 +1375,7 @@ HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
         exit(1);
 	}
 	if( count > 0 ) {
-    	HostConf_t * tconf = getHostConf();
+    	HostConf_t * tconf = getHostConf(threadID);
 		int *waitslist = NULL;
 		if( num_waits > 0 ) {
 			waitslist = (int *)malloc(num_waits*sizeof(int));
@@ -1348,55 +1387,55 @@ HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
         	fprintf(stderr, "[ERROR in HI_memcpy_asyncS()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 			exit(1);
 		}
-    	return_status = tconf->device->HI_memcpy_asyncS(dst, src, count, kind, trType, async+tconf->asyncID_offset, num_waits, waitslist);
+    	return_status = tconf->device->HI_memcpy_asyncS(dst, src, count, kind, trType, async+tconf->asyncID_offset, num_waits, waitslist, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_asyncS(%ld, %d)\n", count, async);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_asyncS(count = %ld, async = %d, thread ID = %d)\n", count, async, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
 }
 
-void HI_waitS1(int async) {
+void HI_waitS1(int async, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_waitS1(%d)\n", async);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_waitS1(async = %d, thread ID = %d)\n", async, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_waitS1()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    tconf->device->HI_waitS1(async+tconf->asyncID_offset);
+    tconf->device->HI_waitS1(async+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_waitS1(%d)\n", async);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_waitS1(async = %d, thread ID = %d)\n", async, threadID);
 	}
 	tconf->WaitCnt++;
 	tconf->totalWaitTime += (HI_get_localtime() - ltime);
 #endif
 }
 
-void  HI_waitS2(int async) {
+void  HI_waitS2(int async, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_waitS2(%d)\n", async);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_waitS2(async = %d, thread ID = %d)\n", async, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_waitS2()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    tconf->device->HI_waitS2(async+tconf->asyncID_offset);
+    tconf->device->HI_waitS2(async+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_waitS2(%d)\n", async);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_waitS2(async = %d, thread ID = %d)\n", async, threadID);
 	}
 	tconf->totalWaitTime += (HI_get_localtime() - ltime);
 #endif
@@ -1404,11 +1443,11 @@ void  HI_waitS2(int async) {
 }
 
 HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
-                             size_t widthInBytes, size_t height, HI_MemcpyKind_t kind) {
+                             size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int threadID) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D(%ld)\n", widthInBytes*height);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D(size = %ld, thread ID = %d)\n", widthInBytes*height, threadID);
 		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
@@ -1421,7 +1460,7 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
         exit(1);
 	}
 	if( widthInBytes*height > 0 ) {
-    	HostConf_t * tconf = getHostConf();
+    	HostConf_t * tconf = getHostConf(threadID);
     	if( tconf->isOnAccDevice == 0 ) {
         	fprintf(stderr, "[ERROR in HI_memcpy2D()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
@@ -1430,11 +1469,11 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
         	fprintf(stderr, "[ERROR in HI_memcpy2D()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 			exit(1);
 		}
-    	return_status = tconf->device->HI_memcpy2D(dst, dpitch, src, spitch, widthInBytes, height, kind);
+    	return_status = tconf->device->HI_memcpy2D(dst, dpitch, src, spitch, widthInBytes, height, kind, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D(%ld)\n", widthInBytes*height);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D(size = %ld, thread ID = %d)\n", widthInBytes*height, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -1442,11 +1481,11 @@ HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
 }
 
 HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
-                                   size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits) {
+                                   size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits, int threadID) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D_async(%ld, %d)\n", widthInBytes*height, async);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy2D_async(size = %ld, async = %d, thread ID = %d)\n", widthInBytes*height, async, threadID);
 		fprintf(stderr, "                \tdst = %lx\tsrc = %lx\n", (unsigned long)dst, (unsigned long)src);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
@@ -1459,7 +1498,7 @@ HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
         exit(1);
 	}
 	if( widthInBytes*height > 0 ) {
-    	HostConf_t * tconf = getHostConf();
+    	HostConf_t * tconf = getHostConf(threadID);
     	if( tconf->isOnAccDevice == 0 ) {
         	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
@@ -1475,11 +1514,11 @@ HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
         	fprintf(stderr, "[ERROR in HI_memcpy2D_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 			exit(1);
 		}
-    	return_status = tconf->device->HI_memcpy2D_async(dst, dpitch, src, spitch, widthInBytes, height, kind, async+tconf->asyncID_offset, num_waits, waitslist);
+    	return_status = tconf->device->HI_memcpy2D_async(dst, dpitch, src, spitch, widthInBytes, height, kind, async+tconf->asyncID_offset, num_waits, waitslist, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D_async(%ld, %d)\n", widthInBytes*height, async);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy2D_async(size = %ld, async = %d, thread ID = %d)\n", widthInBytes*height, async, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -1495,15 +1534,15 @@ HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
 ////////////////////////////
 //Internal mapping tables //
 ////////////////////////////
-HI_error_t HI_get_device_address(const void * hostPtr, void **devPtr, int asyncID) {
+HI_error_t HI_get_device_address(const void * hostPtr, void **devPtr, int asyncID, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_device_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_device_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in HI_get_device_address()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
@@ -1515,7 +1554,7 @@ HI_error_t HI_get_device_address(const void * hostPtr, void **devPtr, int asyncI
     return_status = tconf->device->HI_get_device_address(hostPtr, devPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_device_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_device_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	tconf->PresentTableCnt++;
 	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
@@ -1523,15 +1562,15 @@ HI_error_t HI_get_device_address(const void * hostPtr, void **devPtr, int asyncI
 	return return_status;
 }
 
-HI_error_t HI_get_device_address(const void * hostPtr, void **devPtrBase, size_t *offset, int asyncID) {
+HI_error_t HI_get_device_address(const void * hostPtr, void **devPtrBase, size_t *offset, int asyncID, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_device_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_device_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in HI_get_device_address()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
@@ -1543,7 +1582,7 @@ HI_error_t HI_get_device_address(const void * hostPtr, void **devPtrBase, size_t
     return_status = tconf->device->HI_get_device_address(hostPtr, devPtrBase, offset, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_device_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_device_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	tconf->PresentTableCnt++;
 	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
@@ -1551,15 +1590,15 @@ HI_error_t HI_get_device_address(const void * hostPtr, void **devPtrBase, size_t
 	return return_status;
 }
 
-HI_error_t HI_set_device_address(const void * hostPtr, void *devPtr, size_t size, int asyncID) {
+HI_error_t HI_set_device_address(const void * hostPtr, void *devPtr, size_t size, int asyncID, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_device_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_device_address(asyncID = %d , thread ID = %d)\n", asyncID, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_set_device_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
@@ -1567,7 +1606,7 @@ HI_error_t HI_set_device_address(const void * hostPtr, void *devPtr, size_t size
     return_status = tconf->device->HI_set_device_address(hostPtr, devPtr, size, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_device_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_device_address(asyncID = %d , thread ID = %d)\n", asyncID, threadID);
 	}
 	tconf->PresentTableCnt++;
 	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
@@ -1575,15 +1614,15 @@ HI_error_t HI_set_device_address(const void * hostPtr, void *devPtr, size_t size
 	return return_status;
 }
 
-HI_error_t HI_remove_device_address(const void * hostPtr, int asyncID) {
+HI_error_t HI_remove_device_address(const void * hostPtr, int asyncID, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_remove_device_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_remove_device_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_remove_device_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
@@ -1591,7 +1630,7 @@ HI_error_t HI_remove_device_address(const void * hostPtr, int asyncID) {
     return_status = tconf->device->HI_remove_device_address(hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_remove_device_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_remove_device_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	tconf->PresentTableCnt++;
 	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
@@ -1600,15 +1639,15 @@ HI_error_t HI_remove_device_address(const void * hostPtr, int asyncID) {
 }
 
 
-HI_error_t HI_get_host_address(const void * devPtr, void **hostPtr, int asyncID) {
+HI_error_t HI_get_host_address(const void * devPtr, void **hostPtr, int asyncID, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_host_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_host_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_get_host_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
@@ -1616,7 +1655,7 @@ HI_error_t HI_get_host_address(const void * devPtr, void **hostPtr, int asyncID)
     return_status = tconf->device->HI_get_host_address(devPtr, hostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_host_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_host_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	tconf->PresentTableCnt++;
 	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
@@ -1624,15 +1663,15 @@ HI_error_t HI_get_host_address(const void * devPtr, void **hostPtr, int asyncID)
 	return return_status;
 }
 
-HI_error_t HI_get_temphost_address(const void * hostPtr, void **temphostPtr, int asyncID) {
+HI_error_t HI_get_temphost_address(const void * hostPtr, void **temphostPtr, int asyncID, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_temphost_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_get_temphost_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_get_temphost_address()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
@@ -1640,7 +1679,7 @@ HI_error_t HI_get_temphost_address(const void * hostPtr, void **temphostPtr, int
     return_status = tconf->device->HI_get_temphost_address(hostPtr, temphostPtr, asyncID+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_temphost_address(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_get_temphost_address(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	tconf->PresentTableCnt++;
 	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
@@ -1648,18 +1687,18 @@ HI_error_t HI_get_temphost_address(const void * hostPtr, void **temphostPtr, int
 	return return_status;
 }
 
-int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
+int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_getninc_prtcounter(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_getninc_prtcounter(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     int result;
     acc_device_t devType = tconf->acc_device_type_var;
-    int devNum = acc_get_device_num(devType);
+    int devNum = acc_get_device_num(devType, tconf->threadID);
     countermap_t * prtcounter = tconf->prtcntmaptable;
 	void * hostPtrBase = (void *)hostPtr;
 	void *devPtrBase;
@@ -1694,24 +1733,24 @@ int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
 	tconf->PresentTableCnt++;
 	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_getninc_prtcounter(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_getninc_prtcounter(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
     return result;
 }
 
-int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
+int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_decnget_prtcounter(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_decnget_prtcounter(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     int result;
     acc_device_t devType = tconf->acc_device_type_var;
-    int devNum = acc_get_device_num(devType);
+    int devNum = acc_get_device_num(devType, tconf->threadID);
     countermap_t * prtcounter = tconf->prtcntmaptable;
 	void * hostPtrBase = (void *)hostPtr;
 	void *devPtrBase;
@@ -1746,7 +1785,7 @@ int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
 	tconf->PresentTableCnt++;
 	tconf->totalPresentTableTime += (HI_get_localtime() - ltime);
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_decnget_prtcounter(%d)\n", asyncID);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_decnget_prtcounter(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
     return result;
@@ -1760,16 +1799,36 @@ int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID) {
 
 
 void HostConf::initKernelNames(int kernels, std::string kernelNames[]) {
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HostConf::initKernelNames((num of kernels = %d)\n", kernels);
+	}
+#endif
     for(int i= 0 ; i< kernels; i++) {
         kernelnames.insert(kernelNames[i]);
-		if( threadID == 0 ) {
-			//Only the master thread updates the static kernelname set.
+#ifdef _THREAD_SAFETY
+		pthread_mutex_lock(&mutex_HI_kernelnames);
+#else
+#ifdef _OPENMP
+        #pragma omp critical (HI_kernelnames_critical)
+#endif
+#endif
+		{
 			HostConf::HI_kernelnames.insert(kernelNames[i]);
 		}
+#ifdef _THREAD_SAFETY
+		pthread_mutex_unlock(&mutex_HI_kernelnames);
+#endif
     }
+#ifdef _OPENARC_PROFILE_
+	if( HI_openarcrt_verbosity > 2 ) {
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HostConf::initKernelNames((num of kernels = %d)\n", kernels);
+	}
+#endif
 }
 
 //Non-master threads initialize kernelnames using the static kernelname set.
+//Not used for now.
 void HostConf::initKernelNames() {
     for (std::set<std::string>::iterator it = HostConf::HI_kernelnames.begin() ; it != HostConf::HI_kernelnames.end(); ++it) {
         kernelnames.insert(*it);
@@ -1781,10 +1840,19 @@ void HostConf::addKernelNames(int kernels, std::string kernelNames[]) {
 		std::string tName = kernelNames[i];
 		if( kernelnames.count(tName) == 0 ) {
         	kernelnames.insert(tName);
-			if( threadID == 0 ) {
-				//Only the master thread updates the static kernelname set.
+#ifdef _THREAD_SAFETY
+		pthread_mutex_lock(&mutex_HI_kernelnames);
+#else
+#ifdef _OPENMP
+        #pragma omp critical (HI_kernelnames_critical)
+#endif
+#endif
+			{
 				HostConf::HI_kernelnames.insert(kernelNames[i]);
 			}
+#ifdef _THREAD_SAFETY
+		pthread_mutex_unlock(&mutex_HI_kernelnames);
+#endif
 #ifdef _OPENARC_PROFILE_
 			KernelCNTMap[tName] = 0;
 			KernelTimingMap[tName] = 0.0;
@@ -1795,13 +1863,13 @@ void HostConf::addKernelNames(int kernels, std::string kernelNames[]) {
 
 
 //Compiler will insert this before the first read access of the variable.
-void HI_check_read(const void * hostPtr, acc_device_t dtype, const char * varName, const char *refName, int loopIndex) {
+void HI_check_read(const void * hostPtr, acc_device_t dtype, const char * varName, const char *refName, int loopIndex, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_check_read(%s, %s)\n", varName, refName);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_check_read(%s, %s, thread ID = %d)\n", varName, refName, threadID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     //acc_device_t devType = acc_get_device_type();
     acc_device_t devType = tconf->acc_device_type_var;
@@ -1832,23 +1900,23 @@ void HI_check_read(const void * hostPtr, acc_device_t dtype, const char * varNam
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_check_read(%s, %s)\n", varName, refName);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_check_read(%s, %s, thread ID = %d)\n", varName, refName, threadID);
 	}
 #endif
 }
 
 //Compiler will insert this before the first write access of the variable.
-void HI_check_write(const void * hostPtr, acc_device_t dtype, const char * varName, const char *refName, int loopIndex) {
+void HI_check_write(const void * hostPtr, acc_device_t dtype, const char * varName, const char *refName, int loopIndex, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_check_write(%s, %s)\n", varName, refName);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_check_write(%s, %s, thread ID = %d)\n", varName, refName, threadID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     //acc_device_t devType = acc_get_device_type();
     acc_device_t devType = tconf->acc_device_type_var;
-    int devNum = acc_get_device_num(devType);
+    int devNum = acc_get_device_num(devType, tconf->threadID);
     memstatusmap_t * devicememstatusmap = tconf->devicememstatusmaptable;
     memstatusmap_t * hostmemstatusmap = tconf->hostmemstatusmaptable;
     //Initialize status maps if not existing (HI_init_status).
@@ -1883,24 +1951,24 @@ void HI_check_write(const void * hostPtr, acc_device_t dtype, const char * varNa
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_check_write(%s, %s)\n", varName, refName);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_check_write(%s, %s, thread ID = %d)\n", varName, refName, threadID);
 	}
 #endif
 }
 
 //Compiler will insert this after each memory transfer call for the variable
 //or after GPU memory is freed.
-void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, const char * varName, const char *refName, int loopIndex) {
+void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, const char * varName, const char *refName, int loopIndex, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_status(%s, %s)\n", varName, refName);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_status(%s, %s, thread ID = %d)\n", varName, refName, threadID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     //acc_device_t devType = acc_get_device_type();
     acc_device_t devType = tconf->acc_device_type_var;
-    int devNum = acc_get_device_num(devType);
+    int devNum = acc_get_device_num(devType, tconf->threadID);
     memstatusmap_t * devicememstatusmap = tconf->devicememstatusmaptable;
     memstatusmap_t * hostmemstatusmap = tconf->hostmemstatusmaptable;
     //Initialize status maps if not existing (HI_init_status).
@@ -1949,7 +2017,7 @@ void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t stat
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_status(%s, %s)\n", varName, refName);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_status(%s, %s, thread ID = %d)\n", varName, refName, threadID);
 	}
 #endif
 }
@@ -1962,17 +2030,17 @@ void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t stat
 //(GPU status = stale) or if GPU variable is deallocated (GPU status = stale).
 //This method is similar to HI_set_status(), but this does not check any error
 //or redundancy.
-void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, int asyncID) {
+void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, int asyncID, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_reset_status()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_reset_status(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
-    //acc_device_t devType = acc_get_device_type();
+    //acc_device_t devType = acc_get_device_type(tconf->threadID);
     acc_device_t devType = tconf->acc_device_type_var;
-    int devNum = acc_get_device_num(devType);
+    int devNum = acc_get_device_num(devType, tconf->threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_reset()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
@@ -2030,19 +2098,19 @@ void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t st
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 0 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_reset_status()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_reset_status(asyncID = %d, thread ID = %d)\n", asyncID, threadID);
 	}
 #endif
 }
 
-HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size) {
+HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_bind_tex()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_bind_tex(thread ID = %d)\n", threadID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_bind_tex()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
@@ -2050,18 +2118,18 @@ HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *dev
     return_status = tconf->device->HI_bind_tex(texName, type, devPtr, size);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_bind_tex()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_bind_tex(thread ID = %d)\n", threadID);
 	}
 #endif
 	return return_status;
 }
 
 
-HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int threadID) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const(%ld)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const(count = %ld, thread ID = %d)\n", count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -2070,7 +2138,7 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
         exit(1);
 	}
 	if( count > 0 ) {
-    	HostConf_t * tconf = getHostConf();
+    	HostConf_t * tconf = getHostConf(threadID);
     	if( tconf->isOnAccDevice == 0 ) {
         	fprintf(stderr, "[ERROR in HI_memcpy_const()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
@@ -2079,22 +2147,22 @@ HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t
         	fprintf(stderr, "[ERROR in HI_memcpy_const()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 			exit(1);
 		}
-    	return_status = tconf->device->HI_memcpy_const(hostPtr, constName, kind, count);
+    	return_status = tconf->device->HI_memcpy_const(hostPtr, constName, kind, count, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const(%ld)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const(count = %ld, thread ID = %d)\n", count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
 }
 
-HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits, int *waits) {
+HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits, int *waits, int threadID) {
 	HI_error_t return_status = HI_success;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const_async(%d, %ld)\n",async, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_memcpy_const_async(async = %d, count = %ld, thread ID = %d)\n",async, count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -2103,7 +2171,7 @@ HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_Memcpy
         exit(1);
 	}
 	if( count > 0 ) {
-    	HostConf_t * tconf = getHostConf();
+    	HostConf_t * tconf = getHostConf(threadID);
     	if( tconf->isOnAccDevice == 0 ) {
         	fprintf(stderr, "[ERROR in HI_memcpy_const_async()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         	exit(1);
@@ -2119,22 +2187,22 @@ HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_Memcpy
         	fprintf(stderr, "[ERROR in HI_memcpy_const_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 			exit(1);
 		}
-    	return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async+tconf->asyncID_offset, num_waits, waitslist);
+    	return_status = tconf->device->HI_memcpy_const_async(hostPtr, constName, kind, count, async+tconf->asyncID_offset, num_waits, waitslist, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const_async(%d, %ld)\n",async, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_memcpy_const_async(async = %d, count = %ld, thread ID = %d)\n",async, count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
 	return return_status;
 }
 
-HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int threadID) {
 	HI_error_t return_status;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_present_or_memcpy_const(%ld)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_present_or_memcpy_const(count = %ld, thread ID = %d)\n", count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -2142,7 +2210,7 @@ HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_M
     	fprintf(stderr, "[ERROR in HI_present_or_memcpy_const()] NULL host pointer; exit!\n");
         exit(1);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf->isOnAccDevice == 0 ) {
         fprintf(stderr, "[ERROR in HI_present_or_memcpy_const()] Not supported operation for the current device type %d; exit!\n", tconf->acc_device_type_var);
         exit(1);
@@ -2151,10 +2219,10 @@ HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_M
         fprintf(stderr, "[ERROR in HI_present_or_memcpy_const()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    return_status = tconf->device->HI_present_or_memcpy_const(hostPtr, constName, kind, count);
+    return_status = tconf->device->HI_present_or_memcpy_const(hostPtr, constName, kind, count, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_present_or_memcpy_const(%ld)\n", count);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_present_or_memcpy_const(count = %ld, thread ID = %d)\n", count, threadID);
 		fprintf(stderr, "                \tMemcpy Type: %s\n", HI_getMemcpyTypeString(kind));
 	}
 #endif
@@ -2162,22 +2230,22 @@ HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_M
 }
 
 //This call ensures that the corresponding queue exists. If not, it is created.
-void HI_set_async(int asyncId) {
+void HI_set_async(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_async(%d)\n", asyncId);
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_async(asyncID = %d, thread ID = %d)\n", asyncId, threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_set_async()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    tconf->device->HI_set_async(asyncId+tconf->asyncID_offset);
+    tconf->device->HI_set_async(asyncId+tconf->asyncID_offset, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_async(%d)\n", asyncId);
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_async(asyncID = %d, thread ID = %d)\n", asyncId, threadID);
 	}
 	tconf->totalKernelSyncTime += (HI_get_localtime() - ltime);
 #endif
@@ -2202,22 +2270,22 @@ const char* HI_get_device_type_string( acc_device_t devtype ) {
 }
 
 //This call ensures that the current host thread has correct device context.
-void HI_set_context() {
+void HI_set_context(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_context()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\tenter HI_set_context(thread ID = %d)\n", threadID);
 	}
 	double ltime = HI_get_localtime();
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	if(tconf->device == NULL) {
         fprintf(stderr, "[ERROR in HI_set_context()] Not supported in the current device type %d; exit!\n", tconf->acc_device_type_var);
 		exit(1);
 	}
-    tconf->device->HI_set_context();
+    tconf->device->HI_set_context(tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 1 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_context()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\texit HI_set_context(thread ID = %d)\n", threadID);
 	}
 	tconf->totalKernelSyncTime += (HI_get_localtime() - ltime);
 #endif

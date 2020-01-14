@@ -93,6 +93,12 @@
 #Base name of the output kernel file, from which target-specific output kernel file name is derived. (Default is openarc_kernel.)
 #
 ########################################
+#Option: SetLogicalThreadID
+########################################
+#SetLogicalThreadID=idexpression
+#Set the logical thread ID expression (integer type), which is needed to support non-OpenMP-based host-side multithreading.
+#
+########################################
 #Option: SkipGPUTranslation
 ########################################
 #SkipGPUTranslation=N
@@ -823,6 +829,7 @@
 #skipKernelLoopBoundChecking
 #SetAccEntryFunction=functionname
 #SetOutputKernelFileNameBase=filename
+#SetLogicalThreadID=idexpression
 addIncludePath=__openarcrt__
 #macro=_N_=__inputSize__
 defaultNumWorkers=64

@@ -166,9 +166,11 @@ void test_fft(int mangle, int inverse, int log_rows, int log_columns) {
 			}
 			twidle_int = !i;
 
-			fetch((flt2 *)(i == 0 ? h_inData : h_tmp), mangle, twidle_int, log_rows_arg, log_columns_arg, rows_arg, columns_arg);
+			//fetch((flt2 *)(i == 0 ? h_inData : h_tmp), mangle, twidle_int, log_rows_arg, log_columns_arg, rows_arg, columns_arg);
+			fetch((flt2 *)(i == 0 ? h_inData : h_tmp), mangle);
 			fft1d_offchip(inverse, log_rows_arg, log_column_arg, rows_arg, columns_arg);
-			transpose((flt2 *)(i == 0 ? h_tmp : h_outData), mangle, twidle_int, inverse, log_rows_arg, log_columns_arg, rows_arg, columns_arg, delta_arg);
+			//transpose((flt2 *)(i == 0 ? h_tmp : h_outData), mangle, twidle_int, inverse, log_rows_arg, log_columns_arg, rows_arg, columns_arg, delta_arg);
+			transpose((flt2 *)(i == 0 ? h_tmp : h_outData), mangle);
 		}
 
 		// Record execution time

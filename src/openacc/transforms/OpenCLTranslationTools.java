@@ -761,7 +761,9 @@ public abstract class OpenCLTranslationTools {
 		}
 
         //Find index symbols for work-sharing loops, which are private to each thread by default.
-        Set<Symbol> loopIndexSymbols = AnalysisTools.getWorkSharingLoopIndexVarSet(region);
+        Set<Symbol> worksharingLoopIndexSymbols = AnalysisTools.getWorkSharingLoopIndexVarSet(region);
+        Set<Symbol> loopIndexSymbols = AnalysisTools.getLoopIndexVarSet(region);
+        //PrintTools.println("Loop Index Symbols = " + worksharingLoopIndexSymbols, 0);
 
         //The local variables defined in a pure gang loop are gang-private,
         //which will be allocated on the GPU shared memory by default.
@@ -1116,7 +1118,14 @@ public abstract class OpenCLTranslationTools {
                         workerPrivCachingOnShared = false;
                         workerPrivOnGlobal = false;
                     } else {
-                        addSpecs = new ArrayList<Specifier>(1);
+                    	if( addSpecs == null ) {
+                    		addSpecs = new ArrayList<Specifier>(1);
+                    		addSpecs.add(OpenCLSpecifier.OPENCL_LOCAL);
+                    	} else {
+                    		if( !addSpecs.contains(OpenCLSpecifier.OPENCL_LOCAL) ) {
+                    			addSpecs.add(OpenCLSpecifier.OPENCL_LOCAL);
+                    		}
+                    	}
                         gangPrivCachingOnShared = true;
                     }
                 }
@@ -1238,6 +1247,7 @@ public abstract class OpenCLTranslationTools {
                         // Add gpuBytes argument to cudaMalloc() call
                         arg_list.add((Identifier)cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_current"));
+                        arg_list.add(new NameID("HI_MEM_READ_WRITE"));
                         if( targetArch == 4 ) {
                         	malloc_call.addArgument(cloned_bytes.clone());
                         	List castspecs = new LinkedList();
@@ -1277,7 +1287,11 @@ public abstract class OpenCLTranslationTools {
                             	accTmpFreeCall = new FunctionCall(new NameID("free"));
                             	accTmpFreeCall.addArgument(gwpriv_var.clone());
                             } else {
-                            	accTmpFreeCall = new FunctionCall(new NameID("HI_tempFree"));
+                            	if( asyncID == null ) {
+                            		accTmpFreeCall = new FunctionCall(new NameID("HI_tempFree"));
+                            	} else {
+                            		accTmpFreeCall = new FunctionCall(new NameID("HI_tempFree_async"));
+                            	}
                             	List<Specifier> freeSpecs = new LinkedList<Specifier>();
                             	freeSpecs.add(Specifier.VOID);
                             	freeSpecs.add(PointerSpecifier.UNQUALIFIED);
@@ -1285,6 +1299,9 @@ public abstract class OpenCLTranslationTools {
                             	accTmpFreeCall.addArgument(new Typecast(freeSpecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
                             			(Identifier) gwpriv_var.clone())));
                             	accTmpFreeCall.addArgument(new NameID("acc_device_current"));
+                            	if( asyncID != null ) {
+                            		accTmpFreeCall.addArgument(asyncID.clone());
+                            	}
                             }
                             ExpressionStatement accTmpFreeStmtstmt = new ExpressionStatement(accTmpFreeCall);
                             //mallocScope.addStatementAfter(confRefStmt, accTmpFreeStmtstmt);
@@ -1465,6 +1482,7 @@ public abstract class OpenCLTranslationTools {
                     // Add gpuBytes argument to cudaMalloc() call
                     arg_list.add((Identifier)cloned_bytes.clone());
                     arg_list.add(new NameID("acc_device_current"));
+                    arg_list.add(new NameID("HI_MEM_READ_WRITE"));
                     if( targetArch == 4 ) {
                     	malloc_call.addArgument(cloned_bytes.clone());
                     	List castspecs = new LinkedList();
@@ -1508,7 +1526,11 @@ public abstract class OpenCLTranslationTools {
                 		HIFree_call = new FunctionCall(new NameID("free"));
                 		HIFree_call.addArgument(ggpriv_var.clone());
                 	} else {
-                		HIFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                		if( asyncID == null ) {
+                			HIFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                		} else {
+                			HIFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+                		}
                 		List<Specifier> freeSpecs = new ArrayList<Specifier>(4);
                 		freeSpecs.add(Specifier.VOID);
                 		freeSpecs.add(PointerSpecifier.UNQUALIFIED);
@@ -1517,6 +1539,9 @@ public abstract class OpenCLTranslationTools {
                 		HIFree_call.addArgument(new Typecast(freeSpecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
                 				(Identifier)ggpriv_var.clone())));
                 		HIFree_call.addArgument(new NameID("acc_device_current"));
+                		if( asyncID != null ) {
+                			HIFree_call.addArgument(asyncID.clone());
+                		}
                 	}
                     ExpressionStatement HIFree_stmt = new ExpressionStatement(HIFree_call);
                     //mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
@@ -1669,6 +1694,7 @@ public abstract class OpenCLTranslationTools {
                         // Add gpuBytes argument to cudaMalloc() call
                         arg_list.add((Identifier)cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_current"));
+                        arg_list.add(new NameID("HI_MEM_READ_WRITE"));
                         if( targetArch == 4 ) {
                         	malloc_call.addArgument(cloned_bytes.clone());
                         	List castspecs = new LinkedList();
@@ -1858,25 +1884,32 @@ public abstract class OpenCLTranslationTools {
                             //	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
                             //}
                             // Insert "cudaFree(gfpriv__x);"
-                        	FunctionCall cudaFree_call = null;
+                        	FunctionCall tempFree_call = null;
                         	if( targetArch == 4 ) {
-                        		cudaFree_call = new FunctionCall(new NameID("free"));
-                        		cudaFree_call.addArgument(gfpriv_var.clone());
+                        		tempFree_call = new FunctionCall(new NameID("free"));
+                        		tempFree_call.addArgument(gfpriv_var.clone());
                         	} else {
-                        		cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                        		if( asyncID == null ) {
+                        			tempFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                        		} else {
+                        			tempFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+                        		}
                         		specs = new ArrayList<Specifier>(4);
                         		specs.add(Specifier.VOID);
                         		specs.add(PointerSpecifier.UNQUALIFIED);
                         		specs.add(PointerSpecifier.UNQUALIFIED);
-                        		cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+                        		tempFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
                         				(Identifier)gfpriv_var.clone())));
-                        		cudaFree_call.addArgument(new NameID("acc_device_current"));
+                        		tempFree_call.addArgument(new NameID("acc_device_current"));
+                        		if( asyncID != null ) {
+                        			tempFree_call.addArgument(asyncID.clone());
+                        		}
                         	}
-                            ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
-                            //mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
+                            ExpressionStatement tempFree_stmt = new ExpressionStatement(tempFree_call);
+                            //mallocScope.addStatementAfter(confRefStmt, tempFree_stmt);
                             //mallocScope.addStatementAfter(confRefStmt, orgGpuBytes_stmt.clone());
                             postscriptStmts.addStatement(orgGpuBytes_stmt.clone());
-                            postscriptStmts.addStatement(cudaFree_stmt);
+                            postscriptStmts.addStatement(tempFree_stmt);
                             if( opt_addSafetyCheckingCode  ) {
                                 postscriptStmts.addStatement(gMemSub_stmt.clone());
                             }
@@ -1921,6 +1954,8 @@ public abstract class OpenCLTranslationTools {
                             arg_list2.add(new IntegerLiteral(0));
                             if( asyncID != null ) {
                                 arg_list2.add(asyncID.clone());
+                                arg_list2.add(new IntegerLiteral(0));
+                                arg_list2.add(new NameID("NULL"));
                             }
                             copyinCall.setArguments(arg_list2);
                             Statement copyin_stmt = new ExpressionStatement(copyinCall);
@@ -1942,7 +1977,7 @@ public abstract class OpenCLTranslationTools {
 
         if( !localGangPrivateSymbolsAll.isEmpty() ) {
         	//PrintTools.println("localGangPrivateSymbolsAll: " + localGangPrivateSymbolsAll, 0);
-        	//PrintTools.println("loopIndexSymbols: " + loopIndexSymbols, 0);
+        	//PrintTools.println("worksharingLoopIndexSymbols: " + worksharingLoopIndexSymbols, 0);
         	//Put any implicit local gang-private variables not included in any OpenACC private clause
         	//in CUDA shared memory; the only exception is when the local symbol is an index variable of gang loop.
         	//[DEBUG] this may not work if the local variable is too big.
@@ -1958,9 +1993,13 @@ public abstract class OpenCLTranslationTools {
         		scope = (CompoundStatement)region;
         	}
             for( Symbol lgSym : localGangPrivateSymbolsAll ) {
-                if( loopIndexSymbols.contains(lgSym) ) {
+                if( worksharingLoopIndexSymbols.contains(lgSym) ) {
                     continue;
                 }
+				if( lgSym.getSymbolName().startsWith("_ti_100_") ) {
+					//Skip the temporary index variables generated by this compiler.
+					continue;
+				}
                 Declaration decl = lgSym.getDeclaration();
                 if( decl != null ) {
                     if( decl instanceof VariableDeclaration ) {
@@ -3044,6 +3083,7 @@ public abstract class OpenCLTranslationTools {
                         // Add gpuBytes argument to cudaMalloc() call
                         arg_list.add((Identifier)cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_current"));
+                        arg_list.add(new NameID("HI_MEM_READ_WRITE"));
                         malloc_call.setArguments(arg_list);
                         ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
                         // Insert malloc statement.
@@ -3070,7 +3110,12 @@ public abstract class OpenCLTranslationTools {
 							 * this function call is added first.
 							 */
                             // Insert "cudaFree(gwred__x);"
-                            FunctionCall HIFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                            FunctionCall HIFree_call;
+                            if( asyncID == null ) {
+                            	HIFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                            } else {
+                            	HIFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+                            }
                             List<Specifier> freeSpecs = new ArrayList<Specifier>(4);
                             freeSpecs.add(Specifier.VOID);
                             freeSpecs.add(PointerSpecifier.UNQUALIFIED);
@@ -3079,6 +3124,9 @@ public abstract class OpenCLTranslationTools {
                             HIFree_call.addArgument(new Typecast(freeSpecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
                                     (Identifier)gwred_var.clone())));
                             HIFree_call.addArgument(new NameID("acc_device_current"));
+                            if( asyncID != null ) {
+                            	HIFree_call.addArgument(asyncID.clone());
+                            }
                             ExpressionStatement cudaFree_stmt = new ExpressionStatement(HIFree_call);
                             if( confRefStmt != region ) {
                                 postscriptStmts.addStatement(gpuBytes_stmt.clone());
@@ -3248,6 +3296,7 @@ public abstract class OpenCLTranslationTools {
                     arg_list.add((Identifier)cloned_bytes.clone());
                     // Add acc_device_nvidia argument to HI_tempMalloc1D() call
                     arg_list.add(new NameID("acc_device_current"));
+                    arg_list.add(new NameID("HI_MEM_READ_WRITE"));
                     malloc_call.setArguments(arg_list);
                     ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
                     if( insertGMalloc ) {
@@ -3275,21 +3324,29 @@ public abstract class OpenCLTranslationTools {
 						}
 */						// Insert "cudaFree(ggred__x);"
                         // Changed to "HI_tempFree((void **)(& ggred__x), acc_device_nvidia)";
-                        FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                        FunctionCall HIFree_call;
+                        if( asyncID == null ) {
+                        	HIFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                        } else {
+                        	HIFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+                        }
                         specs = new ArrayList<Specifier>(4);
                         specs.add(Specifier.VOID);
                         specs.add(PointerSpecifier.UNQUALIFIED);
                         specs.add(PointerSpecifier.UNQUALIFIED);
-                        cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+                        HIFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
                                 (Identifier)ggred_var.clone())));
-                        cudaFree_call.addArgument(new NameID("acc_device_current"));
-                        ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
+                        HIFree_call.addArgument(new NameID("acc_device_current"));
+                        if( asyncID != null ) {
+                        	HIFree_call.addArgument(asyncID.clone());
+                        }
+                        ExpressionStatement HIFree_stmt = new ExpressionStatement(HIFree_call);
                         //postscriptStmts.addStatement(gpuBytes_stmt.clone());
-                        refSt = cudaFree_stmt;
+                        refSt = HIFree_stmt;
                         if( targetArch != 4 ) {
                         	if( asyncID == null ) {
                         		if( confRefStmt != region ) {
-                        			postscriptStmts.addStatement(cudaFree_stmt);
+                        			postscriptStmts.addStatement(HIFree_stmt);
                         			if( opt_addSafetyCheckingCode  ) {
                         				postscriptStmts.addStatement(gMemSub_stmt.clone());
                         			}
@@ -3297,16 +3354,16 @@ public abstract class OpenCLTranslationTools {
                         			if( opt_addSafetyCheckingCode  ) {
                         				regionParent.addStatementAfter(region, gMemSub_stmt.clone());
                         			}
-                        			regionParent.addStatementAfter(region, cudaFree_stmt);
+                        			regionParent.addStatementAfter(region, HIFree_stmt);
                         		}
                         	} else {
                         		if( asyncConfRefChanged ) {
-                        			postRedStmts.add(cudaFree_stmt);
+                        			postRedStmts.add(HIFree_stmt);
                         			if( opt_addSafetyCheckingCode  ) {
                         				postRedStmts.add(gMemSub_stmt.clone());
                         			}
                         		} else {
-                        			postscriptStmts.addStatement(cudaFree_stmt);
+                        			postscriptStmts.addStatement(HIFree_stmt);
                         			if( opt_addSafetyCheckingCode  ) {
                         				postscriptStmts.addStatement(gMemSub_stmt.clone());
                         			}
@@ -3535,6 +3592,7 @@ public abstract class OpenCLTranslationTools {
                     			(Identifier)extended_var.clone())));
                     	arg_list.add(cloned_bytes.clone());
                     	arg_list.add(new NameID("acc_device_host"));
+                    	arg_list.add(new NameID("HI_MEM_READ_WRITE"));
                     	tempMalloc_call.setArguments(arg_list);
                     	eMallocStmt = new ExpressionStatement(tempMalloc_call);
                     }
@@ -3569,6 +3627,7 @@ public abstract class OpenCLTranslationTools {
                                 (Identifier)orgred_var.clone())));
                         arg_list.add(cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_host"));
+                        arg_list.add(new NameID("HI_MEM_READ_WRITE"));
                         tempMalloc_call.setArguments(arg_list);
                         eMallocStmt = new ExpressionStatement(tempMalloc_call);
                         prefixStmts.addStatement(eMallocStmt);
@@ -3650,7 +3709,11 @@ public abstract class OpenCLTranslationTools {
                     	free_call = new FunctionCall(new NameID("free"));
                     	free_call.addArgument(extended_var.clone());
                     } else {
-                    	free_call = new FunctionCall(new NameID("HI_tempFree"));
+                        if( asyncID == null ) {
+                        	free_call = new FunctionCall(new NameID("HI_tempFree"));
+                        } else {
+                        	free_call = new FunctionCall(new NameID("HI_tempFree_async"));
+                        }
                     	castspecs = new ArrayList<Specifier>(4);
                     	castspecs.add(Specifier.VOID);
                     	castspecs.add(PointerSpecifier.UNQUALIFIED);
@@ -3658,6 +3721,9 @@ public abstract class OpenCLTranslationTools {
                     	free_call.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
                     			(Identifier)extended_var.clone())));
                     	free_call.addArgument(new NameID("acc_device_host"));
+                    	if( asyncID != null ) {
+                    		free_call.addArgument(asyncID.clone());
+                    	}
                     }
                     free_stmt = new ExpressionStatement(free_call);
                     ////mallocScope.addStatementAfter(
@@ -3679,7 +3745,11 @@ public abstract class OpenCLTranslationTools {
                         /////////////////////////////////////////////////////////////
                         // HI_tempFree((void **)(& orgred__x), acc_device_host) //
                         /////////////////////////////////////////////////////////////
-                        free_call = new FunctionCall(new NameID("HI_tempFree"));
+                        if( asyncID == null ) {
+                        	free_call = new FunctionCall(new NameID("HI_tempFree"));
+                        } else {
+                        	free_call = new FunctionCall(new NameID("HI_tempFree_async"));
+                        }
                         castspecs = new ArrayList<Specifier>(4);
                         castspecs.add(Specifier.VOID);
                         castspecs.add(PointerSpecifier.UNQUALIFIED);
@@ -3687,6 +3757,9 @@ public abstract class OpenCLTranslationTools {
                         free_call.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
                                 (Identifier)orgred_var.clone())));
                         free_call.addArgument(new NameID("acc_device_host"));
+                    	if( asyncID != null ) {
+                    		free_call.addArgument(asyncID.clone());
+                    	}
                         free_stmt = new ExpressionStatement(free_call);
                         if( asyncID == null ) {
                             if( confRefStmt != region ) {
@@ -5399,6 +5472,7 @@ public abstract class OpenCLTranslationTools {
 	                    arg_list.add((Identifier)cloned_bytes.clone());
 	                    // Add acc_device_nvidia argument to HI_tempMalloc1D() call
 	                    arg_list.add(new NameID("acc_device_current"));
+	                    arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 	                    malloc_call.setArguments(arg_list);
 	                    ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
 	                    if( insertGMalloc ) {
@@ -5424,20 +5498,28 @@ public abstract class OpenCLTranslationTools {
 							}
 	*/						// Insert "cudaFree(ggred__x);"
 	                        // Changed to "HI_tempFree((void **)(& ggred__x), acc_device_nvidia)";
-	                        FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+	                        FunctionCall HIFree_call;
+	                        if( asyncID == null ) {
+	                        	HIFree_call = new FunctionCall(new NameID("HI_tempFree"));
+	                        } else {
+	                        	HIFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+	                        }
 	                        specs = new ArrayList<Specifier>(4);
 	                        specs.add(Specifier.VOID);
 	                        specs.add(PointerSpecifier.UNQUALIFIED);
 	                        specs.add(PointerSpecifier.UNQUALIFIED);
-	                        cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+	                        HIFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 	                                (Identifier)ggred_var.clone())));
-	                        cudaFree_call.addArgument(new NameID("acc_device_current"));
-	                        ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
+	                        HIFree_call.addArgument(new NameID("acc_device_current"));
+	                        if( asyncID != null ) {
+	                        	HIFree_call.addArgument(asyncID.clone());
+	                        }
+	                        ExpressionStatement HIFree_stmt = new ExpressionStatement(HIFree_call);
 	                        //postscriptStmts.addStatement(gpuBytes_stmt.clone());
-	                        refSt = cudaFree_stmt;
+	                        refSt = HIFree_stmt;
 	                        if( asyncID == null ) {
 	                            if( confRefStmt != region ) {
-	                                postscriptStmts.addStatement(cudaFree_stmt);
+	                                postscriptStmts.addStatement(HIFree_stmt);
 	                                if( opt_addSafetyCheckingCode  ) {
 	                                    postscriptStmts.addStatement(gMemSub_stmt.clone());
 	                                }
@@ -5445,16 +5527,16 @@ public abstract class OpenCLTranslationTools {
 	                                if( opt_addSafetyCheckingCode  ) {
 	                                    regionParent.addStatementAfter(region, gMemSub_stmt.clone());
 	                                }
-	                                regionParent.addStatementAfter(region, cudaFree_stmt);
+	                                regionParent.addStatementAfter(region, HIFree_stmt);
 	                            }
 	                        } else {
 	                            if( asyncConfRefChanged ) {
-	                                postRedStmts.add(cudaFree_stmt);
+	                                postRedStmts.add(HIFree_stmt);
 	                                if( opt_addSafetyCheckingCode  ) {
 	                                    postRedStmts.add(gMemSub_stmt.clone());
 	                                }
 	                            } else {
-	                                postscriptStmts.addStatement(cudaFree_stmt);
+	                                postscriptStmts.addStatement(HIFree_stmt);
 	                                if( opt_addSafetyCheckingCode  ) {
 	                                    postscriptStmts.addStatement(gMemSub_stmt.clone());
 	                                }
@@ -5611,6 +5693,7 @@ public abstract class OpenCLTranslationTools {
 	                			(Identifier)extended_var.clone())));
 	                	arg_list.add(cloned_bytes.clone());
 	                	arg_list.add(new NameID("acc_device_host"));
+	                	arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 	                	tempMalloc_call.setArguments(arg_list);
 	                	ExpressionStatement eMallocStmt = new ExpressionStatement(tempMalloc_call);
 	                	prefixStmts.addStatement(eMallocStmt);
@@ -5630,6 +5713,7 @@ public abstract class OpenCLTranslationTools {
 	                				(Identifier)orgred_var.clone())));
 	                		arg_list.add(cloned_bytes.clone());
 	                		arg_list.add(new NameID("acc_device_host"));
+	                		arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 	                		tempMalloc_call.setArguments(arg_list);
 	                		eMallocStmt = new ExpressionStatement(tempMalloc_call);
 	                		prefixStmts.addStatement(eMallocStmt);
@@ -5705,7 +5789,12 @@ public abstract class OpenCLTranslationTools {
 	                	/////////////////////////////////////////////////////////////////////////////////////////
 	                	// Insert free(extred__x); ==> HI_tempFree((void **)(& extred__x), acc_device_host) //
 	                	/////////////////////////////////////////////////////////////////////////////////////////
-	                	FunctionCall free_call = new FunctionCall(new NameID("HI_tempFree"));
+	                	FunctionCall free_call;
+	                	if( asyncID == null ) {
+	                		free_call = new FunctionCall(new NameID("HI_tempFree"));
+	                	} else {
+	                		free_call = new FunctionCall(new NameID("HI_tempFree_async"));
+	                	}
 	                	castspecs = new ArrayList<Specifier>(4);
 	                	castspecs.add(Specifier.VOID);
 	                	castspecs.add(PointerSpecifier.UNQUALIFIED);
@@ -5713,6 +5802,9 @@ public abstract class OpenCLTranslationTools {
 	                	free_call.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 	                			(Identifier)extended_var.clone())));
 	                	free_call.addArgument(new NameID("acc_device_host"));
+	                	if( asyncID != null ) {
+	                		free_call.addArgument(asyncID.clone());
+	                	}
 	                	Statement free_stmt = new ExpressionStatement(free_call);
 	                	////mallocScope.addStatementAfter(
 	                	////	confRefStmt, free_stmt);
@@ -5733,7 +5825,11 @@ public abstract class OpenCLTranslationTools {
 	                		/////////////////////////////////////////////////////////////
 	                		// HI_tempFree((void **)(& orgred__x), acc_device_host) //
 	                		/////////////////////////////////////////////////////////////
-	                		free_call = new FunctionCall(new NameID("HI_tempFree"));
+	                		if( asyncID == null ) {
+	                			free_call = new FunctionCall(new NameID("HI_tempFree"));
+	                		} else {
+	                			free_call = new FunctionCall(new NameID("HI_tempFree_async"));
+	                		}
 	                		castspecs = new ArrayList<Specifier>(4);
 	                		castspecs.add(Specifier.VOID);
 	                		castspecs.add(PointerSpecifier.UNQUALIFIED);
@@ -5741,6 +5837,9 @@ public abstract class OpenCLTranslationTools {
 	                		free_call.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 	                				(Identifier)orgred_var.clone())));
 	                		free_call.addArgument(new NameID("acc_device_host"));
+	                		if( asyncID != null ) {
+	                			free_call.addArgument(asyncID.clone());
+	                		}
 	                		free_stmt = new ExpressionStatement(free_call);
 	                		if( asyncID == null ) {
 	                			if( confRefStmt != region ) {

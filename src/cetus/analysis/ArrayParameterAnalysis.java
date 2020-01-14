@@ -4,6 +4,8 @@ import cetus.hir.*;
 
 import java.util.*;
 
+import openacc.analysis.AnalysisTools;
+
 /**
  * This analysis detects array- or pointer-type formal parameters that can be
  * safely expressed in terms of the argument arrays. The result of analysis
@@ -483,6 +485,11 @@ public class ArrayParameterAnalysis extends AnalysisPass {
                     calling_site.getFunctionCall());
             List<Symbol> params = node.getParameters();
             List<Expression> args = calling_site.getArguments();
+            if( params.size() != args.size() ) {
+            	Tools.exit("[ERROR in ArrayParameterAnalysis.processCallee()] parameter list does not match argument list in the following calling site:\n"
+            +"Procedure: " + node.getProcedure().getSymbolName() + "\nCalling Function: " + calling_site.getFunctionCall() 
+            + AnalysisTools.getEnclosingContext(calling_site.getFunctionCall()) + "exit!\n");
+            }
             for (int i=0; i<params.size(); i++) {
                 Expression equiv_expr =
                         processExpression(params.get(i), args.get(i));

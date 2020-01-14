@@ -101,7 +101,7 @@ do
 				benchmarks=( `${searchCMD} | grep -v bin | grep -v cetus_output | grep -v cetus_input | grep -v Docs | grep -v Spec | grep -v data` )
 				for example in ${benchmarks[@]}
 				do
-					if [ -f "$targetDir/$example/Makefile" ]; then
+					if [ -f "$targetDir/$example/Makefile" ] && [ -f "$targetDir/$example/O2GBuild.script" ]; then
 						echo $example | grep -e "_tuning" -e "_task" -e "_cash" -e "_manualdeepcopy" > /dev/null
 						if [ $? -eq 0 ]; then
 							echo "" | tee -a $translog
@@ -122,7 +122,7 @@ do
 						fi
 						./O2GBuild.script 2>&1 | tee $templog
 						cat $templog >> $translog
-						echo $example | grep -e "Undeclared symbol" -e "fatal error" -e ERROR -e Error > /dev/null
+						cat $templog | grep -e "Undeclared symbol" -e "fatal error" -e ERROR -e Error -e "exit on error" > /dev/null
 						if [ $? -eq 0 ]; then
 							echo "Translation Failed!" | tee -a $translog
 							echo "" | tee -a $faillog
@@ -183,7 +183,7 @@ do
 						echo "" | tee -a $compilelog
 						if [ "$makeCMD" != "" ]; then
 							$makeCMD 2>&1 | tee $templog
-							cat $templog | grep -i error > /dev/null
+							cat $templog | grep -v -e "error.cpp" | grep -i error > /dev/null
 							if [ $? -eq 0 ]; then
 								echo "Compile Failed!" | tee -a $compilelog
 								echo "" | tee -a $faillog

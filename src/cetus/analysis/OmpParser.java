@@ -947,6 +947,7 @@ public class OmpParser {
                     case token_device       : parse_omp_device();       break;
                     case token_map          : parse_omp_map();          break;
                     case token_if           : parse_omp_if();           break;
+                    case token_num_threads  : parse_omp_num_threads();  break;
                     case token_num_teams    : parse_omp_num_teams();    break;
                     case token_thread_limit : parse_omp_thread_limit(); break;
                     case token_default      : parse_omp_default();      break;
@@ -978,6 +979,7 @@ public class OmpParser {
                 case token_device       : parse_omp_device();       break;
                 case token_map          : parse_omp_map();          break;
                 case token_if           : parse_omp_if();           break;
+                case token_num_threads  : parse_omp_num_threads();  break;
                 case token_num_teams    : parse_omp_num_teams();    break;
                 case token_thread_limit : parse_omp_thread_limit(); break;
                 case token_default      : parse_omp_default();      break;
@@ -1328,6 +1330,8 @@ public class OmpParser {
         }
     }
 
+    // [JL] Clang seems to ignore directives other than distribute after teams 
+    // warning: extra tokens at the end of '#pragma omp teams' are ignored [-Wextra-tokens]
     private static void parse_omp_teams_parallel_for() {
         PrintTools.println("OmpParser is parsing [parallel for] clause", 2);
         addToMap("parallel", "true");
@@ -1356,6 +1360,8 @@ public class OmpParser {
         }
     }
 
+    // [JL] Clang seems to ignore directives other than distribute after teams 
+    // warning: extra tokens at the end of '#pragma omp teams' are ignored [-Wextra-tokens]
     private static void parse_omp_teams_parallel_for_simd() {
         PrintTools.println("OmpParser is parsing [simd] clause", 2);
         addToMap("simd", "true");
@@ -1394,6 +1400,7 @@ public class OmpParser {
                 String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
                     case token_num_teams    : parse_omp_num_teams();    break;
+                    case token_num_threads  : parse_omp_num_threads();  break;
                     case token_thread_limit : parse_omp_thread_limit(); break;
                     case token_default      : parse_omp_default();      break;
                     case token_private      : parse_omp_private();      break;
@@ -1419,6 +1426,7 @@ public class OmpParser {
             String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
                 case token_num_teams    : parse_omp_num_teams();    break;
+                case token_num_threads  : parse_omp_num_threads();  break;
                 case token_thread_limit : parse_omp_thread_limit(); break;
                 case token_default      : parse_omp_default();      break;
                 case token_private      : parse_omp_private();      break;
@@ -1510,6 +1518,7 @@ public class OmpParser {
             	if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
                 String clause = "token_" + tok;
                 switch (omp_clause.valueOf(clause)) {
+                    // [JL] parse num_threads clause here?
                     case token_private          : parse_omp_private();          break;
                     case token_firstprivate     : parse_omp_firstprivate();     break;
                     case token_collapse         : parse_omp_collapse();         break;
@@ -1530,6 +1539,7 @@ public class OmpParser {
             if( tok.equals(",") ) continue; //Skip comma between clauses, if existing.
             String clause = "token_" + tok;
             switch (omp_clause.valueOf(clause)) {
+                // [JL] parse num_threads clause here?
                 case token_private          : parse_omp_private();          break;
                 case token_firstprivate     : parse_omp_firstprivate();     break;
                 case token_collapse         : parse_omp_collapse();         break;

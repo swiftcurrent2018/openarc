@@ -393,7 +393,8 @@ public abstract class AnalysisTools {
 					else
 						ret.add(ivar);
 				}
-				ret.addAll(getLoopIndexVarSet(loop.getBody()));
+				//[DEBUG on Dec. 19, 2019] adding below can include loops without loop directives; disabled.
+				//ret.addAll(getLoopIndexVarSet(loop.getBody()));
 			}
 		}
 		return ret;
@@ -3363,6 +3364,25 @@ public abstract class AnalysisTools {
 		}
 		
 		return false;
+	}
+
+	/**
+	 * Returns a symbol if the symbol set contains a symbol whose name is the specified string.
+	 * @param sset		Symbol set being searched
+	 * @param symName	symbol name being searched for
+	 */
+	public static Symbol getSymbol(Set<Symbol> sset, String symName)
+	{
+		if ( sset == null )
+			return null;
+	
+		for( Symbol sym : sset ) {
+			if( sym.getSymbolName().equals(symName) ) {
+				return sym;
+			}
+		}
+		
+		return null;
 	}
 	
 	/**

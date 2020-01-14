@@ -6,6 +6,7 @@ import java.util.*;
 
 import cetus.exec.Driver;
 import cetus.hir.*;
+import openacc.analysis.ACCParser;
 import openacc.analysis.AnalysisTools;
 
 /**
@@ -100,6 +101,7 @@ public class KernelFunctionCall extends FunctionCall
   {
 	  int targetArch = 0;
 	  int forcedSyncCall = 0;
+	  Expression logicalThreadID = null;
 	  String value = Driver.getOptionValue("targetArch");
 	  if( value != null ) {
 		  targetArch = Integer.valueOf(value).intValue();
@@ -113,6 +115,10 @@ public class KernelFunctionCall extends FunctionCall
 	  value = Driver.getOptionValue("forceSyncKernelCall");
 	  if( value != null ) {
 		  forcedSyncCall = Integer.valueOf(value).intValue();
+	  }
+	  value = Driver.getOptionValue("SetLogicalThreadID");
+	  if( value != null ) {
+		  logicalThreadID = ACCParser.ExpressionParser.parse(value);
 	  }
 
 	  List conflist = call.getConfArguments();
@@ -147,7 +153,16 @@ public class KernelFunctionCall extends FunctionCall
 			  p.print("HI_register_kernel_numargs(");
 		  }
 		  p.print("\"" + call.getName() + "\",");
-		  p.println(call.getNumArguments() + ");");
+		  p.print(call.getNumArguments());
+		  if( targetArch == 4 ) {
+			  //FIXME: What should be passed to this parameter?
+			  p.print(",\"\"");
+		  } else {
+			  if( logicalThreadID != null ) {
+				  p.print("," + logicalThreadID.toString());
+			  }
+		  }
+		  p.println(");");
 	  }
 	for(int i = 0; i < call.getNumArguments(); i++)
 	{
@@ -277,6 +292,9 @@ public class KernelFunctionCall extends FunctionCall
 			}
 		}
 		if (targetArch >= 0) {
+			if( (logicalThreadID != null) && (targetArch != 4) ) {
+				p.print("," + logicalThreadID.toString());
+			}
 			p.println(");");
 		}
 	}
@@ -331,16 +349,27 @@ public class KernelFunctionCall extends FunctionCall
 				p.print(num_waits.toString());
 				p.print(",");
 				p.print("openarc_waits");
+			} else {
+				p.print(",0,NULL");
 			}
+		} else {
+			p.print(",0,NULL");
+		}
+		if( logicalThreadID != null ) {
+			p.print("," + logicalThreadID.toString());
 		}
 		p.println(");");
 		if(conflist.get(3) == null)
 		{
 			if( forcedSyncCall == 0) {
-				p.print("HI_synchronize(0)");
+				p.print("HI_synchronize(0");
 			} else {
-				p.print("HI_synchronize(1)");
+				p.print("HI_synchronize(1");
 			}
+			if( logicalThreadID != null ) {
+				p.print("," + logicalThreadID.toString());
+			}
+			p.print(")");
 		}
 	}
     if (call.needs_parens)

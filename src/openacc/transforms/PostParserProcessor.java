@@ -207,8 +207,53 @@ public class PostParserProcessor extends TransformPass {
             			} else {
             				CompoundStatement cpStmt = (CompoundStatement)p;
             				Set<Symbol> symbols = cpStmt.getSymbols();
-            				if( !AnalysisTools.containsSymbol(symbols, indexVar.toString()) ) {
+            				Symbol tSym = AnalysisTools.getSymbol(symbols, indexVar.toString());
+            				if( tSym == null ) {
             					cpStmt.addDeclaration(lastDecl);
+            				} else {
+            					Traversable tt = tSym.getDeclaration();
+            					while ( (tt!= null) && !(tt instanceof Statement) ) {
+            						tt = tt.getParent();
+            					}
+            					if( tt instanceof Statement ) {
+            						Statement symStmt = (Statement)tt;
+            						Statement loopStmt = (Statement)t;
+            						Declaration lastDeclBeforeTheLoop = null;
+            						List<Traversable> children = cpStmt.getChildren();
+            						boolean foundCurrentLoop = false;
+            						boolean foundCurrentSymbol = false;
+            						boolean moveDeclaration = false;
+            						for( Traversable tChild : children ) {
+            							if( !foundCurrentLoop ) {
+            								if( tChild instanceof DeclarationStatement ) {
+            									lastDeclBeforeTheLoop = ((DeclarationStatement)tChild).getDeclaration();
+            								}
+            								if( tChild.equals(t) ) {
+            									foundCurrentLoop = true;
+            									if( foundCurrentSymbol ) {
+            										break;
+            									}
+            								}
+            							}
+            							if( tChild.equals(tt) ) {
+            								if( foundCurrentLoop ) {
+            									//Move the current symbol definition before the current loop.
+            									moveDeclaration = true;
+            								}
+            								break;
+            							}
+            						}
+            						if( moveDeclaration ) {
+            							cpStmt.removeStatement(symStmt);
+            							Declaration symDecl = ((DeclarationStatement)symStmt).getDeclaration();
+            							symDecl.setParent(null);
+            							if( lastDeclBeforeTheLoop != null ) {
+            								cpStmt.addDeclarationAfter(lastDeclBeforeTheLoop, symDecl);
+            							} else {
+            								cpStmt.addDeclaration(symDecl);
+            							}
+            						}
+            					}
             				}
             			}
             		}

@@ -33,6 +33,7 @@ typedef enum {
 ///////////////////////////////////////////
 // OpenACC V1.0 Runtime Library Routines //
 ///////////////////////////////////////////
+extern void acc_init( acc_device_t devtype );
 extern int acc_get_num_devices( acc_device_t devtype );
 extern void acc_set_device_type( acc_device_t devtype );
 extern acc_device_t acc_get_device_type(void);
@@ -42,7 +43,6 @@ extern int acc_async_test( int asyncID );
 extern int acc_async_test_all();
 extern void acc_async_wait( int asyncID ); //renamed to acc_wait()
 extern void acc_async_wait_all(); //renamed to acc_wait_all()
-extern void acc_init( acc_device_t devtype );
 extern void acc_shutdown( acc_device_t devtype );
 extern int acc_on_device( acc_device_t devtype );
 extern d_void* acc_malloc(size_t);
@@ -134,5 +134,6 @@ extern void acc_delete_async_wait(h_void* hostPtr, size_t size, int async, int a
 // Internal OpenARC Runtime Library Routines //
 ///////////////////////////////////////////////
 extern int get_thread_id();
+extern void HI_set_context();
 
 #endif

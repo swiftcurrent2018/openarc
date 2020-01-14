@@ -1463,6 +1463,7 @@ public abstract class ACC2GPUTranslationTools {
 					// Add gpuBytes argument to cudaMalloc() call
 					arg_list.add((Identifier)cloned_bytes.clone());
                     arg_list.add(new NameID("acc_device_current"));
+                    arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 					malloc_call.setArguments(arg_list);
 					ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
 					// Insert malloc statement.
@@ -1487,7 +1488,12 @@ public abstract class ACC2GPUTranslationTools {
 						//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 						//}
 						// Insert "cudaFree(gwpriv__x);"
-                        FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+                        FunctionCall cudaFree_call;
+						if( asyncID == null ) {
+							cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+						} else {
+							cudaFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+						}
 						specs = new ArrayList<Specifier>(4);
                         specs.add(Specifier.VOID);
                         specs.add(PointerSpecifier.UNQUALIFIED);
@@ -1495,6 +1501,9 @@ public abstract class ACC2GPUTranslationTools {
                         cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 							(Identifier)gwpriv_var.clone())));
                         cudaFree_call.addArgument(new NameID("acc_device_current"));
+                        if( asyncID != null ) {
+                        	cudaFree_call.addArgument(asyncID.clone());
+                        }
 						ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 						//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
 						//mallocScope.addStatementAfter(confRefStmt, gpuBytes_stmt.clone());
@@ -1701,6 +1710,7 @@ public abstract class ACC2GPUTranslationTools {
 							// Add gpuBytes argument to cudaMalloc() call
 							arg_list.add((Identifier)cloned_bytes.clone());
                             arg_list.add(new NameID("acc_device_current"));
+                            arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 							malloc_call.setArguments(arg_list);
 							ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
 
@@ -1798,7 +1808,12 @@ public abstract class ACC2GPUTranslationTools {
 							//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 							//}
 							// Insert "cudaFree(gfpriv__x);"
-                            FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							FunctionCall cudaFree_call;
+							if( asyncID == null ) {
+								cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							} else {
+								cudaFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+							}
 							specs = new ArrayList<Specifier>(4);
                         	specs.add(Specifier.VOID);
                         	specs.add(PointerSpecifier.UNQUALIFIED);
@@ -1806,6 +1821,9 @@ public abstract class ACC2GPUTranslationTools {
                         	cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 (Identifier)gfpriv_var.clone())));
                             cudaFree_call.addArgument(new NameID("acc_device_current"));
+                            if( asyncID != null ) {
+                            	cudaFree_call.addArgument(asyncID.clone());
+                            }
 							ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 							//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
 							//mallocScope.addStatementAfter(confRefStmt, orgGpuBytes_stmt.clone());
@@ -1855,6 +1873,8 @@ public abstract class ACC2GPUTranslationTools {
 						arg_list2.add(new IntegerLiteral(0));
 						if( asyncID != null ) {
 							arg_list2.add(asyncID.clone());
+							arg_list2.add(new IntegerLiteral(0));
+							arg_list2.add(new NameID("NULL"));
 						}
 						copyinCall.setArguments(arg_list2);
 						Statement copyin_stmt = new ExpressionStatement(copyinCall);
@@ -1922,14 +1942,22 @@ public abstract class ACC2GPUTranslationTools {
 					//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 					//}
 					// Insert "cudaFree(gwpriv__x);"
-                    FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
-						ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
-                        specs.add(Specifier.VOID);
-                        specs.add(PointerSpecifier.UNQUALIFIED);
-                        specs.add(PointerSpecifier.UNQUALIFIED);
-                        cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
-(Identifier)gwpriv_var.clone())));
-                    cudaFree_call.addArgument(new NameID("acc_device_current"));
+					FunctionCall cudaFree_call;
+					if( asyncID == null ) {
+						cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+					} else {
+						cudaFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+					}
+					ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
+					specs.add(Specifier.VOID);
+					specs.add(PointerSpecifier.UNQUALIFIED);
+					specs.add(PointerSpecifier.UNQUALIFIED);
+					cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
+							(Identifier)gwpriv_var.clone())));
+					cudaFree_call.addArgument(new NameID("acc_device_current"));
+					if( asyncID != null ) {
+						cudaFree_call.addArgument(asyncID.clone());
+					}
 					ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 /*					//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
 					//mallocScope.addStatementAfter(confRefStmt, gpuBytes_stmt.clone());
@@ -2001,6 +2029,8 @@ public abstract class ACC2GPUTranslationTools {
 					arg_list2.add(new IntegerLiteral(0));
 					if( asyncID != null ) {
 						arg_list2.add(asyncID.clone());
+						arg_list2.add(new IntegerLiteral(0));
+						arg_list2.add(new NameID("NULL"));
 					}
 					copyinCall.setArguments(arg_list2);
 					Statement copyin_stmt = new ExpressionStatement(copyinCall);

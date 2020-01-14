@@ -394,6 +394,10 @@ public class ACC2GPUDriver extends Driver
             + "   foronly\n"
             + "      =0 try to inline all function calls depending on other options (default)\n"
             + "      =1 try to inline function calls inside for loops only \n");
+
+		options.add(options.UTILITY, "SetLogicalThreadID", "idexpression",
+				"Set the logical thread ID expression (integer type), which is needed to support non-OpenMP-based " +
+				"host-side multithreading.");
 		
 		
 		////////////////////////////////////////////
@@ -446,12 +450,12 @@ public class ACC2GPUDriver extends Driver
 		"Cache R/O shared array variables onto GPU constant memory");
 
 		options.add(options.TRANSFORM, "disableDefaultCachingOpts",
-		"Disable default caching optimizations so that they are applied only if explicitly requested");
+				"Disable default caching optimizations so that they are applied only if explicitly requested");
 
-    options.add(options.TRANSFORM, "loopUnrollFactor", "N",
-            "Unroll loops inside OpenACC compute regions\n" +
-                    "        N Specifies the unroll factor");
-    optionsWithIntArgument.add("AccAnalysisOnly");
+		options.add(options.TRANSFORM, "loopUnrollFactor", "N",
+				"Unroll loops inside OpenACC compute regions\n" +
+				"        N Specifies the unroll factor");
+		optionsWithIntArgument.add("AccAnalysisOnly");
 
     // Specify "cc -E" not "cpp" as the preprocessor because, if it's clang
     // (3.5.1), "cpp" implies "-traditional-cpp", which is not compatible with

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Stack;
 
+import openacc.analysis.ACCParser;
 import openacc.analysis.AnalysisTools;
 import openacc.analysis.SubArray;
 import openacc.hir.*;
@@ -48,7 +49,9 @@ public abstract class ACC2GPUTranslator {
 	protected AnnotationDeclaration accHeaderDecl = null;
 	protected String mainEntryFunc = null;
 	protected boolean kernelContainsStdioCalls = false;
+	protected boolean kernelContainsStdintTypes = false;
 	protected boolean kernelContainsStdlibCalls = false;
+	protected Expression logicalThreadID = null;
 	
 	protected boolean opt_MallocPitch = false;
 	protected boolean opt_MatrixTranspose = false;
@@ -429,6 +432,20 @@ public abstract class ACC2GPUTranslator {
 				}
 			}
 		}
+
+		//Check whether Stdint types are used in the kernel functions or not.
+		Set<Symbol> accessedSymbols = AnalysisTools.getAccessedVariables(kernelsTranslationUnit, false);
+		for( Symbol tSym : accessedSymbols ) {
+			List typeList = tSym.getTypeSpecifiers();
+			if( typeList.contains(Specifier.INT8_T) || typeList.contains(Specifier.INT16_T) ||
+					typeList.contains(Specifier.INT32_T) || typeList.contains(Specifier.INT64_T) ||
+					typeList.contains(Specifier.UINT8_T) || typeList.contains(Specifier.UINT16_T) ||
+					typeList.contains(Specifier.UINT32_T) || typeList.contains(Specifier.UINT64_T) ) {
+				kernelContainsStdintTypes = true;
+				break;
+			}
+		
+		}
 		addStandardHeadersToKernelsTranlationUnit();
 
 		if( targetArch == 4 ) {
@@ -497,6 +514,8 @@ public abstract class ACC2GPUTranslator {
 		handleWaitDirectives(waitAnnots);
 		if( targetArch == 4 ) {
 			MCLRuntimeTransformation();
+		} else if( logicalThreadID != null ) {
+			RuntimeTransformationforMultithreading();
 		}
 	}
 
@@ -790,6 +809,11 @@ public abstract class ACC2GPUTranslator {
 		value = Driver.getOptionValue("SetOutputKernelFileNameBase");
 		if( value != null ) {
 			kernelFileNameBase = value;
+		}
+
+		value = Driver.getOptionValue("SetLogicalThreadID");
+		if( value != null ) {
+			logicalThreadID = ACCParser.ExpressionParser.parse(value);
 		}
 		
 		OpenACCHeaderEndMap = new HashMap<TranslationUnit, Declaration>();
@@ -1172,9 +1196,9 @@ public abstract class ACC2GPUTranslator {
 					Expression arg = fCall.getArgument(0).clone();
 					mclCall.addArgument(arg);
 					mclCall.swapWith(fCall);
-				} else if( fCallName.equals("acc_free") ) {
+/*				} else if( fCallName.equals("acc_free") ) {
 					FunctionCall mclCall = new FunctionCall(new NameID("free"));
-					mclCall.swapWith(fCall);
+					mclCall.swapWith(fCall);*/
 				} else if( fCallName.equals("acc_deviceptr") || fCallName.equals("acc_hostptr") ) {
 					Expression arg = fCall.getArgument(0).clone();
 					arg.swapWith(fCall);
@@ -1374,6 +1398,29 @@ public abstract class ACC2GPUTranslator {
 					fCall.addArgument(addExp);
 				}
 				break;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Extend existing OpenACC runtime API calls with extra logical thread ID argument,
+	 * which is needed to support non-OpenMP-based host-side multithreading.
+	 */
+	protected void RuntimeTransformationforMultithreading() {
+		List<FunctionCall> fCallList = IRTools.getFunctionCalls(program);
+		for( FunctionCall fCall : fCallList ) {
+			if( OpenACCRuntimeLibrary.contains(fCall) ) {
+				fCall.addArgument(logicalThreadID.clone());
+			} else {
+				String fCallName = fCall.getName().toString();
+				if( fCallName.startsWith("HI_") ) {
+					if( !fCallName.equals("HI_get_localtime") && !fCallName.equals("HI_get_device_type_string") ) {
+						//[DEBUG] we should exclude resilience API, but the current resilience API implementation
+						//does not support multithreading, and thus it is OK not to exclude for now.
+						fCall.addArgument(logicalThreadID.clone());
+					}
+					
 				}
 			}
 		}
@@ -1890,6 +1937,26 @@ public abstract class ACC2GPUTranslator {
 					kernelStr = new StringBuilder(64);
 				}
 				kernelStr.append("#include <stdlib.h>\n");
+			} 
+			if( kernelContainsStdintTypes ) {
+				if( kernelStr == null ) {
+					kernelStr = new StringBuilder(64);
+				}
+				kernelStr.append("#include <stdint.h>\n");
+			} 
+		} else {
+			if( kernelContainsStdintTypes ) {
+				if( kernelStr == null ) {
+					kernelStr = new StringBuilder(256);
+				}
+				kernelStr.append("typedef uchar uint8_t;\n");
+				kernelStr.append("typedef char int8_t;\n");
+				kernelStr.append("typedef ushort uint16_t;\n");
+				kernelStr.append("typedef short int16_t;\n");
+				kernelStr.append("typedef uint uint32_t;\n");
+				kernelStr.append("typedef int int32_t;\n");
+				kernelStr.append("typedef ulong uint64_t;\n");
+				kernelStr.append("typedef long int64_t;\n");
 			} 
 		}
 		if( kernelStr != null ) {

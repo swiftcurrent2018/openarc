@@ -247,13 +247,13 @@ public class AccPrivatization extends AnalysisPass {
 										if( sArry == null ) {
 											PrintTools.println("[INFO] AccPrivatization found the following symbol can be privatized, " +
 													"but it conflicts with user's annotation; privatization of this symbol is skipped!\n" +
-													"Symbol: " + pSym.getSymbolName() + "\nACCAnnotation: " + cAnnot + "\nTo enforce privatization, put the " +
+													"Symbol: " + pSym.getSymbolName() + "\nACCAnnotation: " + cAnnot + AnalysisTools.getEnclosingAnnotationContext(cAnnot) + "To enforce privatization, put the " +
 															"symbol into the pcopy clause.", 0);
 											continue;
 										} else if( sArry.getArrayDimension() < 0 ) {
 											PrintTools.println("[INFO] AccPrivatization found the following symbol can be privatized, " +
 													"but necessary dimension information is missing; privatization of this symbol is skipped!\n" +
-													"Symbol: " + pSym.getSymbolName() + "\nACCAnnotation: " + cAnnot + "\n", 0);
+													"Symbol: " + pSym.getSymbolName() + "\nACCAnnotation: " + cAnnot + AnalysisTools.getEnclosingAnnotationContext(cAnnot), 0);
 										} else {
 											targetSet.remove(sArry);
 											if( targetSet.isEmpty() ) {

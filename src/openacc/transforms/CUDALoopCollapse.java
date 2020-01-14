@@ -792,7 +792,7 @@ public class CUDALoopCollapse extends LoopCollapse {
 				str.append("}    \n");
 				str.append("gpuBytes = (__blkcnt+1) * sizeof(int);\n");
 				str.append("gpuGmemSize += gpuBytes;\n");
-				str.append("HI_tempMalloc1D((void**) &"+gpu_rowid+", gpuBytes, acc_device_nvidia);\n");
+				str.append("HI_tempMalloc1D((void**) &"+gpu_rowid+", gpuBytes, acc_device_nvidia, HI_MEM_READ_WRITE);\n");
 				str.append("cudaMemcpy( "+gpu_rowid+", "+rowid+", gpuBytes, cudaMemcpyHostToDevice);\n");
 				str.append("#endif \n");
 				CodeAnnotation rowid_init = new CodeAnnotation(str.toString());

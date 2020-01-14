@@ -115,7 +115,7 @@ CudaDriver::CudaDriver(acc_device_t devType, int devNum, std::set<std::string>ke
 #endif
 }
 
-HI_error_t CudaDriver::init() {
+HI_error_t CudaDriver::init(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::init()\n");
@@ -133,11 +133,11 @@ HI_error_t CudaDriver::init() {
     char name[256];
     cuDeviceGetName(name, sizeof(name), cuDevice);
 
-    int thread_id = get_thread_id();
+    HostConf_t * tconf = getHostConf(threadID);
+    int thread_id = tconf->threadID;
 #ifdef _OPENARC_PROFILE_
     fprintf(stderr, "CUDA : Host Thread %d initializes device %d: %s\n", thread_id, device_num, name);
 #endif
-    HostConf_t * tconf = getHostConf();
     cuDeviceGet(&cuDevice, device_num);
 
 #if CUDA_VERSION >= 5000
@@ -182,7 +182,10 @@ HI_error_t CudaDriver::init() {
     if( access( ptxName.c_str(), F_OK ) == -1 ) {
         std::string command = std::string("nvcc $OPENARC_JITOPTION -arch=sm_") + version + std::string(" ") + fileNameBase + std::string(".cu -ptx -o ") + ptxName;
         //fprintf(stderr, "Version no. %s\n", version.c_str());
-        system(command.c_str());
+        if( system(command.c_str()) == -1) {
+        	fprintf(stderr, "[ERROR in CudaDriver::init()] failed to compile the input CUDA kernel file (%s%s); exit!\n", fileNameBase.c_str(), ".cu");
+			exit(1);
+		}
     }
 
 	//[INFO] If a context is created by the CUDA runtime API, instead of CUDA driver 
@@ -273,7 +276,7 @@ HI_error_t CudaDriver::init() {
 	// CU_STREAM_NON_BLOCKING => create a non-blocking stream that may run 
 	// concurrently with the NULL stream (no implicit synchronization with 
 	// the NULL stream).
-	for( int i=0; i<HI_num_hostthreads; i++ ) {
+	//for( int i=0; i<HI_num_hostthreads; i++ ) {
 #ifdef USE_BLOCKING_STREAMS
     	err = cuStreamCreate(&s0, CU_STREAM_DEFAULT);
 #ifdef _OPENARC_PROFILE_
@@ -305,8 +308,8 @@ HI_error_t CudaDriver::init() {
     	}
 #endif
 #endif
-    	queueMap[0+i*MAX_NUM_QUEUES_PER_THREAD] = s0;
-    	queueMap[1+i*MAX_NUM_QUEUES_PER_THREAD] = s1;
+    	queueMap[0+thread_id*MAX_NUM_QUEUES_PER_THREAD] = s0;
+    	queueMap[1+thread_id*MAX_NUM_QUEUES_PER_THREAD] = s1;
 #ifdef INIT_DEBUG
     	fprintf(stderr, "[DEBUG] CUDA Streams are created.\n");
 		fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
@@ -319,7 +322,7 @@ HI_error_t CudaDriver::init() {
     	}
 #endif
     	std::map<int, CUevent> eventMap;
-    	eventMap[0+i*MAX_NUM_QUEUES_PER_THREAD]= e0;
+    	eventMap[0+thread_id*MAX_NUM_QUEUES_PER_THREAD]= e0;
     	err = cuEventCreate(&e1, CU_EVENT_DEFAULT);
 #ifdef _OPENARC_PROFILE_
     	if (err != CUDA_SUCCESS) {
@@ -327,21 +330,23 @@ HI_error_t CudaDriver::init() {
 			exit(1);
     	}
 #endif
-    	eventMap[1+i*MAX_NUM_QUEUES_PER_THREAD]= e1;
-    	threadQueueEventMap[i] = eventMap;
-		masterAddressTableMap[i] = new addresstable_t();
-		masterHandleTable[i] = new addressmap_t();
-		postponedFreeTableMap[i] = new asyncfreetable_t();
-		memPoolMap[i] = new memPool_t();
-		tempMallocSizeMap[i] = new sizemap_t();
+    	eventMap[1+thread_id*MAX_NUM_QUEUES_PER_THREAD]= e1;
+    	threadQueueEventMap[thread_id] = eventMap;
+		masterAddressTableMap[thread_id] = new addresstable_t();
+		masterHandleTable[thread_id] = new addressmap_t();
+		postponedFreeTableMap[thread_id] = new asyncfreetable_t();
+		postponedTempFreeTableMap[thread_id] = new asynctempfreetable_t();
+		postponedTempFreeTableMap2[thread_id] = new asynctempfreetable2_t();
+		memPoolMap[thread_id] = new memPool_t();
+		tempMallocSizeMap[thread_id] = new sizemap_t();
 #ifdef INIT_DEBUG
     	fprintf(stderr, "[DEBUG] CUDA events are created.\n");
 		fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
-	}
+	//}
 
 
-    createKernelArgMap();
+    createKernelArgMap(thread_id);
 
     init_done = 1;
 #ifdef _OPENARC_PROFILE_
@@ -352,12 +357,13 @@ HI_error_t CudaDriver::init() {
     return HI_success;
 }
 
-HI_error_t CudaDriver::createKernelArgMap() {
+HI_error_t CudaDriver::createKernelArgMap(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::createKernelArgMap()\n");
 	}
 #endif
+    HostConf_t * tconf = getHostConf(threadID);
     CUresult err;
     err = cuCtxSetCurrent(cuContext);
     if (err != CUDA_SUCCESS) {
@@ -382,9 +388,84 @@ HI_error_t CudaDriver::createKernelArgMap() {
         kernelMap[*it] = cuFunc;
     }
 
-    HostConf_t * tconf = getHostConf();
     tconf->kernelArgsMap[this] = kernelArgs;
     tconf->kernelsMap[this]=kernelMap;
+
+	int thread_id = tconf->threadID;
+	if( queueMap.count(0+thread_id*MAX_NUM_QUEUES_PER_THREAD) == 0 ) {
+    	CUstream s0, s1;
+#ifdef USE_BLOCKING_STREAMS
+    	err = cuStreamCreate(&s0, CU_STREAM_DEFAULT);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Stream Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
+    	err = cuStreamCreate(&s1, CU_STREAM_DEFAULT);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Stream Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
+#else
+    	err = cuStreamCreate(&s0, CU_STREAM_NON_BLOCKING);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Stream Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
+    	err = cuStreamCreate(&s1, CU_STREAM_NON_BLOCKING);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Stream Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
+#endif
+    	queueMap[0+thread_id*MAX_NUM_QUEUES_PER_THREAD] = s0;
+    	queueMap[1+thread_id*MAX_NUM_QUEUES_PER_THREAD] = s1;
+#ifdef INIT_DEBUG
+    	fprintf(stderr, "[DEBUG] CUDA Streams are created.\n");
+		fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
+#endif
+	}
+
+	if( (threadQueueEventMap.count(thread_id) == 0) || (threadQueueEventMap.at(thread_id).count(thread_id*MAX_NUM_QUEUES_PER_THREAD) == 0) ) {
+    	CUevent e0, e1;
+    	err = cuEventCreate(&e0, CU_EVENT_DEFAULT);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Event Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
+    	std::map<int, CUevent> eventMap;
+    	eventMap[0+thread_id*MAX_NUM_QUEUES_PER_THREAD]= e0;
+    	err = cuEventCreate(&e1, CU_EVENT_DEFAULT);
+#ifdef _OPENARC_PROFILE_
+    	if (err != CUDA_SUCCESS) {
+        	fprintf(stderr, "[ERROR in CudaDriver::createKernelArgMap()] Event Create FAIL with error = %d (%s)\n", err, cuda_error_code(err));
+			exit(1);
+    	}
+#endif
+    	eventMap[1+thread_id*MAX_NUM_QUEUES_PER_THREAD]= e1;
+    	threadQueueEventMap[thread_id] = eventMap;
+		masterAddressTableMap[thread_id] = new addresstable_t();
+		masterHandleTable[thread_id] = new addressmap_t();
+		postponedFreeTableMap[thread_id] = new asyncfreetable_t();
+		postponedTempFreeTableMap[thread_id] = new asynctempfreetable_t();
+		postponedTempFreeTableMap2[thread_id] = new asynctempfreetable2_t();
+		memPoolMap[thread_id] = new memPool_t();
+		tempMallocSizeMap[thread_id] = new sizemap_t();
+#ifdef INIT_DEBUG
+    	fprintf(stderr, "[DEBUG] CUDA events are created.\n");
+		fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
+#endif
+	}
+
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::createKernelArgMap()\n");
@@ -393,7 +474,7 @@ HI_error_t CudaDriver::createKernelArgMap() {
     return HI_success;
 }
 
-HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames) {
+HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_register_kernels()\n");
@@ -403,12 +484,10 @@ HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames) {
     fprintf(stderr, "[DEBUG] call HI_register_kernel().\n");
 	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     CUresult err;
     for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
 		if( kernelNameSet.count(*it) == 0 ) {
-			//Add a new kernel to add.
-        	kernelNameSet.insert(*it);
         	// Create argument mapping for the kernel
         	const char *kernelName = (*it).c_str();
         	CUfunction cuFunc;
@@ -423,6 +502,22 @@ HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames) {
         	(tconf->kernelsMap[this])[*it] = cuFunc;
 		}
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_set_device_num);
+#else
+#ifdef _OPENMP
+        #pragma omp critical(acc_set_device_num_critical)
+#endif
+#endif
+    for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
+		if( kernelNameSet.count(*it) == 0 ) {
+			//Add a new kernel name.
+        	kernelNameSet.insert(*it);
+		}
+	}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_set_device_num);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_register_kernels()\n");
@@ -431,7 +526,7 @@ HI_error_t CudaDriver::HI_register_kernels(std::set<std::string> kernelNames) {
     return HI_success;
 }
 
-int CudaDriver::HI_get_num_devices(acc_device_t devType) {
+int CudaDriver::HI_get_num_devices(acc_device_t devType, int threadID) {
     int numDevices;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -454,7 +549,7 @@ int CudaDriver::HI_get_num_devices(acc_device_t devType) {
 }
 
 
-HI_error_t CudaDriver::destroy() {
+HI_error_t CudaDriver::destroy(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::destroy()\n");
@@ -474,7 +569,7 @@ HI_error_t CudaDriver::destroy() {
 }
 
 // Pin host memory
-HI_error_t CudaDriver::HI_pin_host_memory(const void* hostPtr, size_t size)
+HI_error_t CudaDriver::HI_pin_host_memory(const void* hostPtr, size_t size, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -482,8 +577,12 @@ HI_error_t CudaDriver::HI_pin_host_memory(const void* hostPtr, size_t size)
 	}
 #endif
     HI_error_t result = HI_success;
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_pin_host_memory);
+#else
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
+#endif
 #endif
     {
         CUdeviceptr host = (CUdeviceptr)hostPtr;
@@ -495,7 +594,7 @@ HI_error_t CudaDriver::HI_pin_host_memory(const void* hostPtr, size_t size)
             if(cuResult == CUDA_SUCCESS) {
                 CudaDriver::pinnedHostMemCounter[host] = 1;
 #ifdef _OPENARC_PROFILE_
-    			HostConf_t * tconf = getHostConf();
+    			HostConf_t * tconf = getHostConf(threadID);
 				tconf->IPMallocCnt++;
 				tconf->IPMallocSize += size;
 #endif
@@ -505,6 +604,9 @@ HI_error_t CudaDriver::HI_pin_host_memory(const void* hostPtr, size_t size)
 
         }
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_pin_host_memory);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_pin_host_memory()\n");
@@ -517,7 +619,7 @@ HI_error_t CudaDriver::HI_pin_host_memory(const void* hostPtr, size_t size)
 // If the memory is already pinned, it does not increase pinnedHostMemCounter.
 // [CAUTION] this will work only if hostPtr refers to the base address of allocated
 // memory.
-HI_error_t CudaDriver::pin_host_memory_if_unpinned(const void* hostPtr, size_t size)
+HI_error_t CudaDriver::pin_host_memory_if_unpinned(const void* hostPtr, size_t size, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -525,8 +627,12 @@ HI_error_t CudaDriver::pin_host_memory_if_unpinned(const void* hostPtr, size_t s
 	}
 #endif
     HI_error_t result = HI_success;
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_pin_host_memory);
+#else
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
+#endif
 #endif
     {
         CUdeviceptr host = (CUdeviceptr)hostPtr;
@@ -536,7 +642,7 @@ HI_error_t CudaDriver::pin_host_memory_if_unpinned(const void* hostPtr, size_t s
             if(cuResult == CUDA_SUCCESS) {
                 CudaDriver::pinnedHostMemCounter[host] = 1;
 #ifdef _OPENARC_PROFILE_
-    			HostConf_t * tconf = getHostConf();
+    			HostConf_t * tconf = getHostConf(threadID);
 				tconf->IPMallocCnt++;
 				tconf->IPMallocSize += size;
 #endif
@@ -545,6 +651,9 @@ HI_error_t CudaDriver::pin_host_memory_if_unpinned(const void* hostPtr, size_t s
             }
         }
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_pin_host_memory);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::pin_host_memory_if_unpinned()\n");
@@ -553,15 +662,19 @@ HI_error_t CudaDriver::pin_host_memory_if_unpinned(const void* hostPtr, size_t s
 	return result;
 }
 
-void CudaDriver::HI_unpin_host_memory(const void* hostPtr)
+void CudaDriver::HI_unpin_host_memory(const void* hostPtr, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_unpin_host_memory()\n");
 	}
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_pin_host_memory);
+#else
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
+#endif
 #endif
     {
         CUdeviceptr host = (CUdeviceptr)hostPtr;
@@ -576,7 +689,7 @@ void CudaDriver::HI_unpin_host_memory(const void* hostPtr)
                 	//CudaDriver::pinnedHostMemCounter[host] = 0;
                 	CudaDriver::pinnedHostMemCounter.erase(host);
 #ifdef _OPENARC_PROFILE_
-					HostConf_t * tconf = getHostConf();
+					HostConf_t * tconf = getHostConf(threadID);
 					tconf->IPFreeCnt++;
 #endif
                 } else {
@@ -586,6 +699,9 @@ void CudaDriver::HI_unpin_host_memory(const void* hostPtr)
             }
         }
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_pin_host_memory);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_unpin_host_memory()\n");
@@ -600,8 +716,12 @@ void CudaDriver::dec_pinned_host_memory_counter(const void* hostPtr)
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::dec_pinned_host_memory_counter()\n");
 	}
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_pin_host_memory);
+#else
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
+#endif
 #endif
     {
         CUdeviceptr host = (CUdeviceptr)hostPtr;
@@ -612,6 +732,9 @@ void CudaDriver::dec_pinned_host_memory_counter(const void* hostPtr)
 			fprintf(stderr, "[ERROR in CudaDriver::dec_pinned_host_memory_counter()] \n");
 		}
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_pin_host_memory);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::dec_pinned_host_memory_counter()\n");
@@ -626,8 +749,12 @@ void CudaDriver::inc_pinned_host_memory_counter(const void* hostPtr)
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::inc_pinned_host_memory_counter()\n");
 	}
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_pin_host_memory);
+#else
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
+#endif
 #endif
     {
         CUdeviceptr host = (CUdeviceptr)hostPtr;
@@ -639,6 +766,9 @@ void CudaDriver::inc_pinned_host_memory_counter(const void* hostPtr)
 			exit(1);
 		}
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_pin_host_memory);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::inc_pinned_host_memory_counter()\n");
@@ -648,18 +778,30 @@ void CudaDriver::inc_pinned_host_memory_counter(const void* hostPtr)
 
 //Unpin host memories whose counters are less than 1.
 //This also frees corresponding device memory.
-void CudaDriver::unpin_host_memory_all(int asyncID)
+void CudaDriver::unpin_host_memory_all(int asyncID, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::unpin_host_memory_all(%d)\n", asyncID);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_pin_host_memory);
+#else
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
 #endif
+#endif
     {
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
+		{
 		addresstable_t::iterator it = CudaDriver::auxAddressTable.find(asyncID);
 		if(it != CudaDriver::auxAddressTable.end()) {
 			CudaDriver::hostMemToUnpin.clear();
@@ -694,7 +836,14 @@ void CudaDriver::unpin_host_memory_all(int asyncID)
 				CudaDriver::hostMemToUnpin.pop_back();
 			}
 		}
+		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_pin_host_memory);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::unpin_host_memory_all(%d)\n", asyncID);
@@ -703,18 +852,29 @@ void CudaDriver::unpin_host_memory_all(int asyncID)
 }
 
 //Unpin host memories whose counters are less than 1.
-void CudaDriver::unpin_host_memory_all()
+void CudaDriver::unpin_host_memory_all(int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::unpin_host_memory_all()\n");
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_pin_host_memory);
+#else
 #ifdef _OPENMP
     #pragma omp critical (pin_host_memory_critical)
 #endif
+#endif
     {
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
 		for( addresstable_t::iterator it = CudaDriver::auxAddressTable.begin(); it != CudaDriver::auxAddressTable.end(); ++it) {
 			CudaDriver::hostMemToUnpin.clear();
 			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
@@ -747,7 +907,13 @@ void CudaDriver::unpin_host_memory_all()
 				CudaDriver::hostMemToUnpin.pop_back();
 			}
 		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_pin_host_memory);
+#endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::unpin_host_memory_all()\n");
@@ -755,15 +921,23 @@ void CudaDriver::unpin_host_memory_all()
 #endif
 }
 
-void CudaDriver::release_freed_device_memory(int asyncID)
+void CudaDriver::release_freed_device_memory(int asyncID, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::release_freed_device_memory(%d)\n", asyncID);
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #endif
     {
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
+		{
 		addresstable_t::iterator it = CudaDriver::auxAddressTable.find(asyncID);
 		if(it != CudaDriver::auxAddressTable.end()) {
 			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
@@ -775,6 +949,10 @@ void CudaDriver::release_freed_device_memory(int asyncID)
 #endif
 			}
 		}
+		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -783,15 +961,22 @@ void CudaDriver::release_freed_device_memory(int asyncID)
 #endif
 }
 
-void CudaDriver::release_freed_device_memory()
+void CudaDriver::release_freed_device_memory(int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::release_freed_device_memory()\n");
 	}
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #endif
     {
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
 		for( addresstable_t::iterator it = CudaDriver::auxAddressTable.begin(); it != CudaDriver::auxAddressTable.end(); ++it ) {
 			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
 				//Free corresponding device memory.
@@ -802,6 +987,9 @@ void CudaDriver::release_freed_device_memory()
 #endif
 			}
 		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
     }
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -810,24 +998,20 @@ void CudaDriver::release_freed_device_memory()
 #endif
 }
 
-HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
+HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D(hostPtr = %lx, asyncID = %d, size = %lu)\n",(long unsigned int)hostPtr, asyncID, count);
 	}
 #endif
 #ifdef INIT_DEBUG
     fprintf(stderr, "[DEBUG] call HI_malloc1D().\n");
 	fprintf(stderr, "[DEBUG] Current host thread: %ld\n", syscall(__NR_gettid));
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf == NULL ) {
-#ifdef _OPENMP
-        int thread_id = omp_get_thread_num();
-#else
-        int thread_id = 0;
-#endif
-        fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] No host configuration exists for the current host thread (thread ID: %d); please set an environment variable, OMP_NUM_THREADS, to the maximum number of OpenMP threads used for your application; exit!\n", thread_id);
+        //fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] No host configuration exists for the current host thread (thread ID: %d); please set an environment variable, OMP_NUM_THREADS, to the maximum number of OpenMP threads used for your application; exit!\n", tconf->threadID);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] No host configuration exists for the current host thread (thread ID: %d); exit!\n", tconf->threadID);
         exit(1);
     }
     if( tconf->device->init_done == 0 ) {
@@ -842,7 +1026,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 		if( unifiedMemSupported ) {
         	result = HI_success;
         } else {
-			fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data by thread %d is not allowed; exit!\n", tconf->threadID);
+			fprintf(stderr, "[ERROR in CudaDriver::HI_malloc1D()] Duplicate device memory allocation for the same host data (%lx) by thread %d is not allowed; exit!\n",(long unsigned int)hostPtr, tconf->threadID);
 			exit(1);
 		}
     } else {
@@ -887,12 +1071,12 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
         if( cuResult == CUDA_SUCCESS ) {
           	//Pin host memory
             if( tconf->prepin_host_memory == 1 ) {
-            	if( HI_pin_host_memory(hostPtr, (size_t) count) == HI_error ) {
+            	if( HI_pin_host_memory(hostPtr, (size_t) count, tconf->threadID) == HI_error ) {
 #ifdef _OPENMP
                 	fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", omp_get_thread_num());
 					exit(1);
 #else
-                	fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", 0);
+                	fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", tconf->threadID);
 					exit(1);
 #endif
 				}
@@ -923,7 +1107,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
             	if( tconf->prepin_host_memory == 1 ) {
 					unpin_host_memory_all(asyncID);
 				} else {
-					release_freed_device_memory(asyncID);
+					release_freed_device_memory(asyncID, tconf->threadID);
 					HI_reset_victim_cache(asyncID);
 				}
 				//Try to allocate device memory again.
@@ -932,7 +1116,7 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
             		if( tconf->prepin_host_memory == 1 ) {
 						unpin_host_memory_all();
 					} else {
-						release_freed_device_memory();
+						release_freed_device_memory(tconf->threadID);
 						HI_reset_victim_cache_all();
 					}
 					//Try to allocate device memory again.
@@ -942,21 +1126,21 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
         	if( cuResult == CUDA_SUCCESS ) {
           		//Pin host memory
             	if( tconf->prepin_host_memory == 1 ) {
-            		result = HI_pin_host_memory(hostPtr, (size_t) count);
+            		result = HI_pin_host_memory(hostPtr, (size_t) count, tconf->threadID);
 					if( result != HI_success ) {
 						unpin_host_memory_all(asyncID);
-            			result = HI_pin_host_memory(hostPtr, (size_t) count);
+            			result = HI_pin_host_memory(hostPtr, (size_t) count, tconf->threadID);
 					}
 					if( result != HI_success ) {
 						unpin_host_memory_all();
-            			result = HI_pin_host_memory(hostPtr, (size_t) count);
+            			result = HI_pin_host_memory(hostPtr, (size_t) count, tconf->threadID);
 					}
 					if( result != HI_success ) {
 #ifdef _OPENMP
                 		fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", omp_get_thread_num());
 						exit(1);
 #else
-						fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", 0);
+						fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", tconf->threadID);
 						exit(1);
 #endif
 					}
@@ -979,19 +1163,19 @@ HI_error_t  CudaDriver::HI_malloc1D(const void *hostPtr, void **devPtr, size_t c
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		HI_print_device_address_mapping_summary(tconf->threadID);
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_malloc1D(%d, %lu)\n", asyncID, count);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_malloc1D(hostPtr = %lx, asyncID = %d, size = %lu)\n",(long unsigned int)hostPtr, asyncID, count);
 	}
 #endif
     return result;
 }
 
-HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags) {
+HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc1D_unified(%d, %lu)\n", asyncID, count);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if( tconf == NULL ) {
 #ifdef _OPENMP
         int thread_id = omp_get_thread_num();
@@ -1066,13 +1250,13 @@ HI_error_t  CudaDriver::HI_malloc1D_unified(const void *hostPtr, void **devPtr, 
 }
 
 //the ElementSizeBytes in cuMemAllocPitch is currently set to 16.
-HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags) {
+HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc2D(%d)\n", asyncID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     if( tconf->device->init_done == 0 ) {
         tconf->HI_init(DEVICE_NUM_UNDEFINED);
@@ -1098,12 +1282,12 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
         if( cuResult == CUDA_SUCCESS ) {
             //Pin host memory
             if( tconf->prepin_host_memory == 1 ) {
-            	if( HI_pin_host_memory(hostPtr, (size_t) widthInBytes*height) == HI_error ) {
+            	if( HI_pin_host_memory(hostPtr, (size_t) widthInBytes*height, tconf->threadID) == HI_error ) {
 #ifdef _OPENMP
                 	fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", omp_get_thread_num());
 					exit(1);
 #else
-                	fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", 0);
+                	fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", tconf->threadID);
 					exit(1);
 #endif
 				}
@@ -1129,13 +1313,13 @@ HI_error_t CudaDriver::HI_malloc2D( const void *hostPtr, void** devPtr, size_t* 
 }
 
 
-HI_error_t CudaDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags) {
+HI_error_t CudaDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc3D(%d)\n", asyncID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
@@ -1158,13 +1342,13 @@ HI_error_t CudaDriver::HI_malloc3D( const void *hostPtr, void** devPtr, size_t* 
 
 
 
-HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
+HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_free(%d)\n", asyncID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
@@ -1187,7 +1371,7 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
             memPool->insert(std::pair<size_t, void *>(size, devPtr));
 			HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
 			// Unpin host memory
-			HI_unpin_host_memory(hostPtr);
+			HI_unpin_host_memory(hostPtr, tconf->threadID);
 #else
 			///////////////////////////
 			// VICTIM_CACHE_MODE = 2 //
@@ -1198,7 +1382,7 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
             if( tconf->prepin_host_memory == 1 ) {
             	dec_pinned_host_memory_counter(hostPtr);
 			} else {
-				HI_unpin_host_memory(hostPtr);
+				HI_unpin_host_memory(hostPtr, tconf->threadID);
 			}
 #endif
 /*
@@ -1207,7 +1391,7 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
             	HI_remove_device_address(hostPtr, asyncID, tconf->threadID);
             	// Unpin host memory
             	if( tconf->prepin_host_memory == 1 ) {
-            		HI_unpin_host_memory(hostPtr);
+            		HI_unpin_host_memory(hostPtr, tconf->threadID);
 				}
 
         	} else {
@@ -1229,13 +1413,13 @@ HI_error_t CudaDriver::HI_free( const void *hostPtr, int asyncID) {
     return result;
 }
 
-HI_error_t CudaDriver::HI_free_unified( const void *hostPtr, int asyncID) {
+HI_error_t CudaDriver::HI_free_unified( const void *hostPtr, int asyncID, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_free_unified(%d)\n", asyncID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
@@ -1282,17 +1466,25 @@ HI_error_t CudaDriver::HI_free_unified( const void *hostPtr, int asyncID) {
 //malloc used for allocating temporary data.
 //If the method is called for a pointer to existing memory, the existing memory
 //will be freed before allocating new memory.
-void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
+void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempMalloc1D()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_tempMalloc);
+#else
+#ifdef _OPENMP
+    #pragma omp critical (tempMalloc_critical)
+#endif
+#endif
+	{
     if( devType == acc_device_gpu || devType == acc_device_nvidia || 
 		devType == acc_device_radeon || devType == acc_device_current) {
 		if( tempMallocSet.count(*tempPtr) > 0 ) {
@@ -1331,6 +1523,10 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
         tconf->IHMallocSize += count;
 #endif
     }
+	}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_tempMalloc);
+#endif
 #ifdef _OPENARC_PROFILE_
     tconf->totalMallocTime += HI_get_localtime() - ltime;
 #endif
@@ -1342,17 +1538,25 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
 }
 
 //Used for de-allocating temporary data.
-void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
+void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempFree()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempFree(tempPtr = %lx, devType = %d, thread ID = %d)\n",  (long unsigned int)(*tempPtr), devType, threadID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_tempMalloc);
+#else
+#ifdef _OPENMP
+    #pragma omp critical (tempMalloc_critical)
+#endif
+#endif
+	{
     if( devType == acc_device_gpu || devType == acc_device_nvidia 
     || devType == acc_device_radeon || devType == acc_device_current ) {
         if( *tempPtr != 0 ) {
@@ -1373,20 +1577,24 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
             free(*tempPtr);
             if( tconf->prepin_host_memory == 1 ) {
     			// Unpin host memory if already pinned.
-    			HI_unpin_host_memory(*tempPtr);
+    			HI_unpin_host_memory(*tempPtr, tconf->threadID);
 			}
 #ifdef _OPENARC_PROFILE_
             tconf->IHFreeCnt++;
 #endif
         }
     }
+	}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_tempMalloc);
+#endif
     *tempPtr = 0;
 #ifdef _OPENARC_PROFILE_
     tconf->totalFreeTime += HI_get_localtime() - ltime;
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_tempFree()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_tempFree(tempPtr = %lx, devType = %d, thread ID = %d)\n",  (long unsigned int)(*tempPtr), devType, threadID);
 	}
 #endif
 }
@@ -1398,17 +1606,25 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 ///////////////////////////
 
 //malloc used for allocating temporary data.
-void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags) {
+void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempMalloc1D()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_tempMalloc);
+#else
+#ifdef _OPENMP
+    #pragma omp critical (tempMalloc_critical)
+#endif
+#endif
+	{
     if( devType == acc_device_gpu || devType == acc_device_nvidia || 
 		devType == acc_device_radeon || devType == acc_device_current) {
     	CUresult cuResult = CUDA_SUCCESS;
@@ -1472,6 +1688,10 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
         tconf->IHMallocSize += count;
 #endif
     }
+	}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_tempMalloc);
+#endif
 #ifdef _OPENARC_PROFILE_
     tconf->totalMallocTime += HI_get_localtime() - ltime;
 #endif
@@ -1483,17 +1703,25 @@ void CudaDriver::HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t dev
 }
 
 //Used for de-allocating temporary data.
-void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
+void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempFree()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_tempFree(tempPtr = %lx, devType = %d, thread ID = %d)\n",  (long unsigned int)(*tempPtr), devType, threadID);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_tempMalloc);
+#else
+#ifdef _OPENMP
+    #pragma omp critical (tempMalloc_critical)
+#endif
+#endif
+	{
     if( devType == acc_device_gpu || devType == acc_device_nvidia 
     || devType == acc_device_radeon || devType == acc_device_current ) {
         if( *tempPtr != 0 ) {
@@ -1501,9 +1729,22 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
             //and remove host-pointer-to-device-pointer mapping.
             memPool_t *memPool = memPoolMap[tconf->threadID];
 			sizemap_t *tempMallocSize = tempMallocSizeMap[tconf->threadID];
-			size_t size = tempMallocSize->at((const void *)*tempPtr);
-            memPool->insert(std::pair<size_t, void *>(size, *tempPtr));
-			tempMallocSize->erase((const void *)*tempPtr);
+			if( tempMallocSize->count((const void *)*tempPtr) == 0 ) {
+				if( tempMallocSet.count(*tempPtr) > 0 ) {
+					tempMallocSet.erase(*tempPtr);	
+            		free(*tempPtr);
+            		if( tconf->prepin_host_memory == 1 ) {
+    					// Unpin host memory if already pinned.
+    					HI_unpin_host_memory(*tempPtr, tconf->threadID);
+					}
+				} else {
+					fprintf(stderr, "[OPENARCRT-WARNING in CudaDriver::HI_tempFree(devType = %d, thread ID = %d)] no tempMallocSize mapping found for tempPtr (%lx)\n", devType, threadID, (long unsigned int)(*tempPtr));
+				}
+			} else {
+				size_t size = tempMallocSize->at((const void *)*tempPtr);
+            	memPool->insert(std::pair<size_t, void *>(size, *tempPtr));
+				tempMallocSize->erase((const void *)*tempPtr);
+			}
         }
     } else {
         if( *tempPtr != 0 ) {
@@ -1511,20 +1752,24 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
             free(*tempPtr);
             if( tconf->prepin_host_memory == 1 ) {
     			// Unpin host memory if already pinned.
-    			HI_unpin_host_memory(*tempPtr);
+    			HI_unpin_host_memory(*tempPtr, tconf->threadID);
 			}
 #ifdef _OPENARC_PROFILE_
             tconf->IHFreeCnt++;
 #endif
         }
     }
+	}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_tempMalloc);
+#endif
     *tempPtr = 0;
 #ifdef _OPENARC_PROFILE_
     tconf->totalFreeTime += HI_get_localtime() - ltime;
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_tempFree()\n");
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_tempFree(tempPtr = %lx, devType = %d, thread ID = %d)\n",  (long unsigned int)(*tempPtr), devType, threadID);
 	}
 #endif
 }
@@ -1538,13 +1783,13 @@ void CudaDriver::HI_tempFree( void** tempPtr, acc_device_t devType) {
 
 
 //In the driver API, copying into a constant memory (symbol) does not require a different API call
-HI_error_t  CudaDriver::HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType) {
+HI_error_t  CudaDriver::HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy(%lu)\n", count);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     CUresult cuResult = CUDA_SUCCESS;
 #ifdef _OPENARC_PROFILE_
@@ -1613,13 +1858,13 @@ HI_error_t  CudaDriver::HI_memcpy(void *dst, const void *src, size_t count, HI_M
     }
 }
 
-HI_error_t  CudaDriver::HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType) {
+HI_error_t  CudaDriver::HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_unified(%lu)\n", count);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
     CUresult cuResult = CUDA_SUCCESS;
 #ifdef _OPENARC_PROFILE_
@@ -1691,14 +1936,14 @@ HI_error_t  CudaDriver::HI_memcpy_unified(void *dst, const void *src, size_t cou
     }
 }
 
-HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int threadID) {
 	void *devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_const(%lu)\n", count);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     CUresult cuResult;
     HI_error_t result = HI_success;
     CUdeviceptr dptr;
@@ -1742,16 +1987,16 @@ HI_error_t CudaDriver::HI_memcpy_const(void *hostPtr, std::string constName, HI_
 
 //[DEBUG] CUDA driver does not offer asynchronous version of cuModuleGetGlobal(), 
 //and thus HI_memcpy_const_async() is the same as HI_memcpy_const().
-HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits, int *waits) {
+HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits, int *waits, int threadID) {
 	void *devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_const_async(%d, %lu)\n", async, count);
 	}
 #endif
-    HI_wait_for_events(async, num_waits, waits);
+    HostConf_t * tconf = getHostConf(threadID);
+    HI_wait_for_events(async, num_waits, waits, tconf->threadID);
 
-    HostConf_t * tconf = getHostConf();
     CUresult cuResult;
     HI_error_t result = HI_success;
     CUdeviceptr dptr;
@@ -1792,14 +2037,14 @@ HI_error_t CudaDriver::HI_memcpy_const_async(void *hostPtr, std::string constNam
     return result;
 }
 
-HI_error_t CudaDriver::HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+HI_error_t CudaDriver::HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int threadID) {
 	void *devPtr;
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_const(%lu)\n", count);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     CUresult cuResult;
     HI_error_t result = HI_success;
     CUdeviceptr dptr;
@@ -1843,8 +2088,8 @@ HI_error_t CudaDriver::HI_present_or_memcpy_const(void *hostPtr, std::string con
 
 
 HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
-        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
-    HostConf_t * tconf = getHostConf();
+        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID) {
+    HostConf_t * tconf = getHostConf(threadID);
 
 /*
 	if( tconf->prepin_host_memory == 0 ) {
@@ -1861,11 +2106,11 @@ HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
-    HI_wait_for_events(async, num_waits, waits);
+    HI_wait_for_events(async, num_waits, waits, tconf->threadID);
 
     CUresult cuResult = CUDA_SUCCESS;
-    CUstream stream = getQueue(async);
-    CUevent event = getEvent(async);
+    CUstream stream = getQueue(async, tconf->threadID);
+    CUevent event = getEvent(async, tconf->threadID);
 	const void * baseHostPtr = 0;
 
 	if( dst != src ) {
@@ -1945,22 +2190,22 @@ HI_error_t CudaDriver::HI_memcpy_async(void *dst, const void *src, size_t count,
 
 //Used for kernel verification.
 HI_error_t CudaDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count,
-        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits) {
+        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy_asyncS(%d)\n", async);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
-    HI_wait_for_events(async, num_waits, waits);
+    HI_wait_for_events(async, num_waits, waits, tconf->threadID);
 
     CUresult cuResult;
-    CUstream stream = getQueue(async);
-    CUevent event = getEvent(async);
+    CUstream stream = getQueue(async, tconf->threadID);
+    CUevent event = getEvent(async, tconf->threadID);
 
     switch( kind ) {
     case HI_MemcpyHostToHost: {
@@ -1969,7 +2214,22 @@ HI_error_t CudaDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count
         break;
     }
     case HI_MemcpyHostToDevice: {
-        cuResult = cuMemcpyHtoDAsync((CUdeviceptr) dst, src, count, stream);
+		void *tSrc = 0;
+		HI_tempMalloc1D(&tSrc, count, acc_device_host, HI_MEM_READ_WRITE);
+		if( tconf->prepin_host_memory == 1 ) {
+        	//Pin host memory
+        	if( HI_pin_host_memory(tSrc, (size_t) count, tconf->threadID) == HI_error ) {
+#ifdef _OPENMP
+                fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", omp_get_thread_num());
+				exit(1);
+#else
+				fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", tconf->threadID);
+				exit(1);
+#endif
+			}
+		}
+        cuResult = cuMemcpy((CUdeviceptr) tSrc, (CUdeviceptr) src, count);
+        cuResult = cuMemcpyHtoDAsync((CUdeviceptr) dst, tSrc, count, stream);
         break;
     }
     case HI_MemcpyDeviceToHost: {
@@ -1977,12 +2237,12 @@ HI_error_t CudaDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count
 		HI_tempMalloc1D(&tDst, count, acc_device_host, HI_MEM_READ_WRITE);
 		if( tconf->prepin_host_memory == 1 ) {
         	//Pin host memory
-        	if( HI_pin_host_memory(tDst, (size_t) count) == HI_error ) {
+        	if( HI_pin_host_memory(tDst, (size_t) count, tconf->threadID) == HI_error ) {
 #ifdef _OPENMP
                 fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", omp_get_thread_num());
 				exit(1);
 #else
-				fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", 0);
+				fprintf(stderr, "[ERROR in CudaDriver::HI_pin_host_memory()] Cannot pin host memory by tid: %d\n", tconf->threadID);
 				exit(1);
 #endif
 			}
@@ -2040,14 +2300,14 @@ HI_error_t CudaDriver::HI_memcpy_asyncS(void *dst, const void *src, size_t count
 
 
 HI_error_t CudaDriver::HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
-        size_t widthInBytes, size_t height, HI_MemcpyKind_t kind) {
+        size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy2D()\n");
 	}
 	
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
@@ -2132,19 +2392,19 @@ HI_error_t CudaDriver::HI_memcpy2D(void *dst, size_t dpitch, const void *src, si
 }
 
 HI_error_t CudaDriver::HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
-        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits) {
+        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_memcpy2D_async(%d)\n", async);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     /*
     #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
     #endif
     CUresult cuResult;
-    //acc_device_t devType = acc_get_device_type();
+    //acc_device_t devType = acc_get_device_type(tconf->threadID);
     acc_device_t devType = tconf->acc_device_type_var;
     int devNum = acc_get_device_num(devType);
     cudaStream_t stream;
@@ -2271,16 +2531,25 @@ HI_error_t CudaDriver::HI_memcpy2D_async(void *dst, size_t dpitch, const void *s
     return HI_success;
 }
 
-HI_error_t CudaDriver::HI_register_kernel_numargs(std::string kernel_name, int num_args)
+HI_error_t CudaDriver::HI_register_kernel_numargs(std::string kernel_name, int num_args, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_register_kernel_numargs()\n");
 	}
 #endif
-    HostConf_t *tconf = getHostConf();
+    HostConf_t *tconf = getHostConf(threadID);
 	//fprintf(stderr, "find kernelargs map for the current device\n");
     //(tconf->kernelArgsMap.at(this).at(kernel_name))->insert(std::pair<int, argument_t>(arg_index, arg));
+/*
+	if( tconf->kernelArgsMap.count(this) == 0 ) {
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_register_kernel_numargs(%s, %d)] kernelArgsMap does not exist for the current device.\n",kernel_name.c_str(), num_args);
+			exit(1);
+	} else if( tconf->kernelArgsMap.at(this).count(kernel_name) == 0 ) {
+        	fprintf(stderr, "[ERROR in CudaDriver::HI_register_kernel_numargs(%s, %d)] kernelArgsMap does not have an entry for the current kernel.\n",kernel_name.c_str(), num_args);
+			exit(1);
+	}
+*/
 	kernelParams_t *kernelParams = tconf->kernelArgsMap.at(this).at(kernel_name);
 	if( kernelParams->num_args == 0 ) {
 		if( num_args > 0 ) {
@@ -2300,14 +2569,14 @@ HI_error_t CudaDriver::HI_register_kernel_numargs(std::string kernel_name, int n
 }
 
 
-HI_error_t CudaDriver::HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type)
+HI_error_t CudaDriver::HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type, int threadID)
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_register_kernel_arg()\n");
 	}
 #endif
-    HostConf_t *tconf = getHostConf();
+    HostConf_t *tconf = getHostConf(threadID);
 	//fprintf(stderr, "find kernelargs map for the current device\n");
 
 	kernelParams_t * kernelParams = tconf->kernelArgsMap.at(this).at(kernel_name);
@@ -2331,32 +2600,33 @@ HI_error_t CudaDriver::HI_register_kernel_arg(std::string kernel_name, int arg_i
 
 
 
-HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async, int num_waits, int *waits)
+HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async, int num_waits, int *waits, int threadID)
 {
+	const char* c_kernel_name = kernel_name.c_str();
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_kernel_call(%d)\n", async);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_kernel_call(%s, %d)\n",c_kernel_name, async);
 	}
 #endif
 	if( (gridSize[0] > maxGridX) || (gridSize[1] > maxGridY) || (gridSize[2] > maxGridZ) ) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL due to too large Grid configuration (%lu, %lu, %lu); exit!\n", kernel_name.c_str(), gridSize[2], gridSize[1], gridSize[0]);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL due to too large Grid configuration (%lu, %lu, %lu); exit!\n", c_kernel_name, gridSize[2], gridSize[1], gridSize[0]);
 		exit(1);
 	}
 	if( (blockSize[0] > maxBlockX) || (blockSize[1] > maxBlockY) || (blockSize[2] > maxBlockZ) || (blockSize[0]*blockSize[1]*blockSize[2] > maxNumThreadsPerBlock) ) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL due to too large threadBlock configuration (%lu, %lu, %lu); exit!\n",kernel_name.c_str(), blockSize[2], blockSize[1], blockSize[0]);
+        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL due to too large threadBlock configuration (%lu, %lu, %lu); exit!\n",c_kernel_name, blockSize[2], blockSize[1], blockSize[0]);
 		exit(1);
 	}
-    HostConf_t *tconf = getHostConf();
+    HostConf_t *tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
 
-    HI_wait_for_events(async, num_waits, waits);
+    HI_wait_for_events(async, num_waits, waits, tconf->threadID);
 
     CUresult err;
     //fprintf(stderr, "[HI_kernel_call()] GRIDSIZE %d %d %d\n", gridSize[2], gridSize[1], gridSize[0]);
-    CUstream stream = getQueue(async);
-    CUevent event = getEvent(async);
+    CUstream stream = getQueue(async, tconf->threadID);
+    CUevent event = getEvent(async, tconf->threadID);
     if(async != DEFAULT_QUEUE+tconf->asyncID_offset) {
         err = cuLaunchKernel(tconf->kernelsMap.at(this).at(kernel_name), gridSize[0], gridSize[1], gridSize[2], blockSize[0], blockSize[1], blockSize[2], 0, stream, (tconf->kernelArgsMap.at(this).at(kernel_name))->kernelParams, NULL);
 
@@ -2366,7 +2636,9 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3
         err = cuLaunchKernel(tconf->kernelsMap.at(this).at(kernel_name), gridSize[0], gridSize[1], gridSize[2], blockSize[0], blockSize[1], blockSize[2], 0, 0, (tconf->kernelArgsMap.at(this).at(kernel_name))->kernelParams, NULL);
     }
     if (err != CUDA_SUCCESS) {
-        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call()] Kernel [%s] Launch FAIL with error %d (%s)\n",kernel_name.c_str(), err, cuda_error_code(err));
+        fprintf(stderr, "[ERROR in CudaDriver::HI_kernel_call(%s)] Kernel Launch FAIL with error %d (%s)\n",c_kernel_name, err, cuda_error_code(err));
+	fprintf(stderr, "\tgrid configuration: %d %d %d\n", gridSize[2], gridSize[1], gridSize[0]);
+	fprintf(stderr, "\tthread block configuration: %d %d %d\n", blockSize[2], blockSize[1], blockSize[0]);
 		exit(1);
         return HI_error;
     }
@@ -2385,7 +2657,7 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3
 #endif
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
-		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_kernel_call(%d)\n", async);
+		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_kernel_call(%s, %d)\n",c_kernel_name, async);
 	}
 #endif
     return HI_success;
@@ -2401,7 +2673,7 @@ HI_error_t CudaDriver::HI_kernel_call(std::string kernel_name, size_t gridSize[3
 //     streams wait on the NULL stream. Therefore, we don't need any explicit
 //     synchronization for any blocking stream. (a blocking stream
 //     is created when cuStreamCreate() is called with a default flag.)
-HI_error_t CudaDriver::HI_synchronize( int forcedSync )
+HI_error_t CudaDriver::HI_synchronize( int forcedSync, int threadID )
 {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -2417,10 +2689,8 @@ HI_error_t CudaDriver::HI_synchronize( int forcedSync )
 		//	exit(1);
         //	return HI_error;
     	//}
-    	HostConf_t * tconf = getHostConf();
-    	//CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
-    	//err = cuStreamSynchronize(0);
-    	CUstream stream = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset);
+    	HostConf_t * tconf = getHostConf(threadID);
+    	CUstream stream = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID);
     	CUresult err = cuStreamSynchronize(stream);
     	if (err != CUDA_SUCCESS) {
         	fprintf(stderr, "[ERROR in CudaDriver::HI_synchronize()] DEFAULT_QUEUE Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
@@ -2511,17 +2781,22 @@ HI_error_t CudaDriver::HI_bind_tex(std::string texName,  HI_datatype_t type, con
     return result;
 }
 
-void CudaDriver::HI_set_async(int asyncId) {
+void CudaDriver::HI_set_async(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_set_async(%d)\n", asyncId);
 	}
 #endif
+    HostConf_t * tconf = getHostConf(threadID);
+    int thread_id = tconf->threadID;
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_set_async);
+#else
 #ifdef _OPENMP
     #pragma omp critical (HI_set_async_critical)
 #endif
+#endif
     {
-        int thread_id = get_thread_id();
         asyncId += 2;
         std::map<int, CUstream >::iterator it= queueMap.find(asyncId);
 
@@ -2561,16 +2836,18 @@ void CudaDriver::HI_set_async(int asyncId) {
             }
         }
     }
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_set_async);
+#endif
 #ifndef USE_BLOCKING_STREAMS
 	if( unifiedMemSupported == 0 ) {
 		//We need explicit synchronization here for the default queue 
 		//since HI_synchronize() does not explicitly synchronize if 
 		//unified memory is not used.
     	//CUresult err = cuCtxSynchronize();
-    	HostConf_t * tconf = getHostConf();
-    	//CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset));
+    	//CUresult err = cuStreamSynchronize(getQueue(DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID));
     	//err = cuStreamSynchronize(0);
-    	CUstream stream = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset);
+    	CUstream stream = getQueue(DEFAULT_QUEUE+tconf->asyncID_offset, tconf->threadID);
     	CUresult err = cuStreamSynchronize(stream);
     	if (err != CUDA_SUCCESS) {
         	fprintf(stderr, "[ERROR in CudaDriver::HI_set_async()] DEFAULT_QUEUE Context Synchronization FAIL with error %d (%s)\n", err, cuda_error_code(err));
@@ -2592,13 +2869,13 @@ void CudaDriver::HI_set_async(int asyncId) {
 #endif
 }
 
-void CudaDriver::HI_set_context() {
+void CudaDriver::HI_set_context(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_set_context()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 	CUcontext tContext;
 	//Check whether the current host thread has a CUDA context.
     CUresult err = cuCtxGetCurrent(&tContext);
@@ -2619,14 +2896,14 @@ void CudaDriver::HI_set_context() {
 #endif
 }
 
-void CudaDriver::HI_wait(int arg) {
+void CudaDriver::HI_wait(int arg, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait(%d)\n", arg);
 	}
 #endif
-    CUevent event = getEvent(arg);
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
+    CUevent event = getEvent(arg, tconf->threadID);
 
     CUresult cuResult = cuEventSynchronize(event);
 
@@ -2636,6 +2913,7 @@ void CudaDriver::HI_wait(int arg) {
     }
 
     HI_postponed_free(arg, tconf->threadID);
+    HI_postponed_tempFree(arg, tconf->acc_device_type_var, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_wait(%d)\n", arg);
@@ -2643,15 +2921,15 @@ void CudaDriver::HI_wait(int arg) {
 #endif
 }
 
-void CudaDriver::HI_wait_ifpresent(int arg) {
+void CudaDriver::HI_wait_ifpresent(int arg, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_ifpresent(%d)\n", arg);
 	}
 #endif
-    CUevent event = getEvent_ifpresent(arg);
+    HostConf_t * tconf = getHostConf(threadID);
+    CUevent event = getEvent_ifpresent(arg, tconf->threadID);
 	if( event != NULL ) {
-    	HostConf_t * tconf = getHostConf();
 
     	CUresult cuResult = cuEventSynchronize(event);
 
@@ -2661,6 +2939,7 @@ void CudaDriver::HI_wait_ifpresent(int arg) {
     	}
 
     	HI_postponed_free(arg, tconf->threadID);
+    	HI_postponed_tempFree(arg, tconf->acc_device_type_var, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -2670,15 +2949,15 @@ void CudaDriver::HI_wait_ifpresent(int arg) {
 }
 
 //[DEBUG] Below implementation is inefficient.
-void CudaDriver::HI_wait_async(int arg, int async) {
+void CudaDriver::HI_wait_async(int arg, int async, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_async(%d, %d)\n", arg, async);
 	}
 #endif
-    CUevent event = getEvent(arg);
-    CUevent event2 = getEvent(async);
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
+    CUevent event = getEvent(arg, tconf->threadID);
+    CUevent event2 = getEvent(async, tconf->threadID);
 
     CUresult cuResult = cuEventSynchronize(event);
 
@@ -2688,6 +2967,7 @@ void CudaDriver::HI_wait_async(int arg, int async) {
     }
 
     HI_postponed_free(arg, tconf->threadID);
+    HI_postponed_tempFree(arg, tconf->acc_device_type_var, tconf->threadID);
 
     cuResult = cuEventSynchronize(event2);
 
@@ -2703,16 +2983,16 @@ void CudaDriver::HI_wait_async(int arg, int async) {
 #endif
 }
 
-void CudaDriver::HI_wait_async_ifpresent(int arg, int async) {
+void CudaDriver::HI_wait_async_ifpresent(int arg, int async, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_async_ifpresent(%d, %d)\n", arg, async);
 	}
 #endif
-    CUevent event = getEvent_ifpresent(arg);
-    CUevent event2 = getEvent_ifpresent(async);
+    HostConf_t * tconf = getHostConf(threadID);
+    CUevent event = getEvent_ifpresent(arg, tconf->threadID);
+    CUevent event2 = getEvent_ifpresent(async, tconf->threadID);
 	if( (event != NULL) && (event2 != NULL) ) {
-    	HostConf_t * tconf = getHostConf();
 
     	CUresult cuResult = cuEventSynchronize(event);
 
@@ -2722,6 +3002,7 @@ void CudaDriver::HI_wait_async_ifpresent(int arg, int async) {
     	}
 
     	HI_postponed_free(arg, tconf->threadID);
+    	HI_postponed_tempFree(arg, tconf->acc_device_type_var, tconf->threadID);
 
     	cuResult = cuEventSynchronize(event2);
 
@@ -2738,14 +3019,14 @@ void CudaDriver::HI_wait_async_ifpresent(int arg, int async) {
 #endif
 }
 
-void CudaDriver::HI_waitS1(int asyncId) {
+void CudaDriver::HI_waitS1(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_waitS1(%d)\n", asyncId);
 	}
 #endif
-    CUevent event = getEvent(asyncId);
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
+    CUevent event = getEvent(asyncId, tconf->threadID);
 
     CUresult cuResult = cuEventSynchronize(event);
 
@@ -2761,14 +3042,16 @@ void CudaDriver::HI_waitS1(int asyncId) {
 #endif
 }
 
-void CudaDriver::HI_waitS2(int asyncId) {
+void CudaDriver::HI_waitS2(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_waitS2(%d)\n", asyncId);
 	}
 #endif
+    HostConf_t * tconf = getHostConf(threadID);
 	HI_free_temphosts(asyncId);
-    HI_postponed_free(asyncId, get_thread_id());
+    HI_postponed_free(asyncId, tconf->threadID);
+    HI_postponed_tempFree(asyncId, tconf->acc_device_type_var, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_waitS2(%d)\n", asyncId);
@@ -2776,13 +3059,13 @@ void CudaDriver::HI_waitS2(int asyncId) {
 #endif
 }
 
-void CudaDriver::HI_wait_all() {
+void CudaDriver::HI_wait_all(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_all()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     eventmap_cuda_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     CUresult cuResult;
 
@@ -2793,6 +3076,7 @@ void CudaDriver::HI_wait_all() {
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);
+    	HI_postponed_tempFree(it->first-2, tconf->acc_device_type_var, tconf->threadID);
     }
 
 #ifdef _OPENARC_PROFILE_
@@ -2803,13 +3087,13 @@ void CudaDriver::HI_wait_all() {
 }
 
 //[DEBUG] Below implementation is inefficient.
-void CudaDriver::HI_wait_all_async(int async) {
+void CudaDriver::HI_wait_all_async(int async, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_all_async(%d)\n", async);
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     eventmap_cuda_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     CUresult cuResult;
 
@@ -2820,9 +3104,10 @@ void CudaDriver::HI_wait_all_async(int async) {
 			exit(1);
         }
 		HI_postponed_free(it->first-2, tconf->threadID);
+    	HI_postponed_tempFree(it->first-2, tconf->acc_device_type_var, tconf->threadID);
     }
 
-    CUevent event2 = getEvent(async);
+    CUevent event2 = getEvent(async, tconf->threadID);
     cuResult = cuEventSynchronize(event2);
 
     if(cuResult != CUDA_SUCCESS) {
@@ -2836,14 +3121,14 @@ void CudaDriver::HI_wait_all_async(int async) {
 #endif
 }
 
-int CudaDriver::HI_async_test(int asyncId) {
+int CudaDriver::HI_async_test(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_async_test(%d)\n", asyncId);
 	}
 #endif
-    CUevent event = getEvent(asyncId);
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
+    CUevent event = getEvent(asyncId, tconf->threadID);
 
     CUresult cuResult = cuEventQuery(event);
 
@@ -2858,6 +3143,7 @@ int CudaDriver::HI_async_test(int asyncId) {
     }
 
     HI_postponed_free(asyncId, tconf->threadID);
+    HI_postponed_tempFree(asyncId, tconf->acc_device_type_var, tconf->threadID);
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\texit CudaDriver::HI_async_test(%d)\n", asyncId);
@@ -2866,15 +3152,15 @@ int CudaDriver::HI_async_test(int asyncId) {
     return 1;
 }
 
-int CudaDriver::HI_async_test_ifpresent(int asyncId) {
+int CudaDriver::HI_async_test_ifpresent(int asyncId, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_async_test_ifpresent(%d)\n", asyncId);
 	}
 #endif
-    CUevent event = getEvent_ifpresent(asyncId);
+    HostConf_t * tconf = getHostConf(threadID);
+    CUevent event = getEvent_ifpresent(asyncId, tconf->threadID);
 	if( event != NULL ) {
-    	HostConf_t * tconf = getHostConf();
 
     	CUresult cuResult = cuEventQuery(event);
 
@@ -2889,6 +3175,7 @@ int CudaDriver::HI_async_test_ifpresent(int asyncId) {
     	}
 
     	HI_postponed_free(asyncId, tconf->threadID);
+    	HI_postponed_tempFree(asyncId, tconf->acc_device_type_var, tconf->threadID);
 	}
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
@@ -2898,13 +3185,13 @@ int CudaDriver::HI_async_test_ifpresent(int asyncId) {
     return 1;
 }
 
-int CudaDriver::HI_async_test_all() {
+int CudaDriver::HI_async_test_all(int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_async_test_all()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     eventmap_cuda_t *eventMap = &threadQueueEventMap.at(tconf->threadID);
     CUresult cuResult;
 
@@ -2922,6 +3209,7 @@ int CudaDriver::HI_async_test_all() {
     std::set<int>::iterator it;
     for (it=queuesChecked.begin(); it!=queuesChecked.end(); ++it) {
         HI_postponed_free(*it, tconf->threadID);
+    	HI_postponed_tempFree(*it, tconf->acc_device_type_var, tconf->threadID);
     }
 
 #ifdef _OPENARC_PROFILE_
@@ -2932,19 +3220,19 @@ int CudaDriver::HI_async_test_all() {
     return 1;
 }
 
-void CudaDriver::HI_wait_for_events(int async, int num_waits, int* waits) {
+void CudaDriver::HI_wait_for_events(int async, int num_waits, int* waits, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_wait_for_events()\n");
 	}
 #endif
     CUresult cuResult = CUDA_SUCCESS;
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
     if (num_waits > 0 && async != DEFAULT_QUEUE+tconf->asyncID_offset) {
-        CUstream stream = getQueue(async);
+        CUstream stream = getQueue(async, tconf->threadID);
         for (int i = 0; i < num_waits; i++) {
             if (waits[i] == async) continue;
-            CUevent event = getEvent(waits[i]);
+            CUevent event = getEvent(waits[i], tconf->threadID);
             cuResult = cuStreamWaitEvent(stream, event, 0);
             if(cuResult != CUDA_SUCCESS) {
                 fprintf(stderr, "[ERROR in CudaDriver::HI_wait_for_events()] failed to call cuStreamWaitEvent %d (%s)\n", cuResult, cuda_error_code(cuResult));
@@ -2959,13 +3247,13 @@ void CudaDriver::HI_wait_for_events(int async, int num_waits, int* waits) {
 #endif
 }
 
-void CudaDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {
+void CudaDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_malloc()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif
@@ -2987,13 +3275,13 @@ void CudaDriver::HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags) {
 }
 
 
-void CudaDriver::HI_free(void *devPtr) {
+void CudaDriver::HI_free(void *devPtr, int threadID) {
 #ifdef _OPENARC_PROFILE_
 	if( HI_openarcrt_verbosity > 2 ) {
 		fprintf(stderr, "[OPENARCRT-INFO]\t\tenter CudaDriver::HI_free()\n");
 	}
 #endif
-    HostConf_t * tconf = getHostConf();
+    HostConf_t * tconf = getHostConf(threadID);
 #ifdef _OPENARC_PROFILE_
     double ltime = HI_get_localtime();
 #endif

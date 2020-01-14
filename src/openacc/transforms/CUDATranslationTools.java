@@ -623,6 +623,7 @@ public abstract class CUDATranslationTools {
 						// Add gpuBytes argument to cudaMalloc() call
 						arg_list.add((Identifier)cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_current"));
+                        arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 						malloc_call.setArguments(arg_list);
 						ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
 						// Insert malloc statement.
@@ -648,7 +649,12 @@ public abstract class CUDATranslationTools {
 							 * this function call is added first.
 							 */
 							// Insert "cudaFree(gwred__x);"
-							FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							FunctionCall cudaFree_call;
+							if( asyncID == null ) {
+								cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							} else {
+								cudaFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+							}
 							specs = new ArrayList<Specifier>(4);
 							specs.add(Specifier.VOID);
 							specs.add(PointerSpecifier.UNQUALIFIED);
@@ -656,6 +662,9 @@ public abstract class CUDATranslationTools {
 							cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 									(Identifier)gwred_var.clone())));
 							cudaFree_call.addArgument(new NameID("acc_device_current"));
+							if( asyncID != null ) {
+								cudaFree_call.addArgument(asyncID.clone());
+							}
 							ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 							if( confRefStmt != region ) {
 								postscriptStmts.addStatement(gpuBytes_stmt.clone());
@@ -803,6 +812,7 @@ public abstract class CUDATranslationTools {
 					arg_list.add((Identifier)cloned_bytes.clone());
 					// Add acc_device_nvidia argument to HI_tempMalloc1D() call
 					arg_list.add(new NameID("acc_device_current"));
+					arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 					malloc_call.setArguments(arg_list);
 					ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
 					if( insertGMalloc ) {
@@ -828,7 +838,12 @@ public abstract class CUDATranslationTools {
 						}
 */						// Insert "cudaFree(ggred__x);"
 						// Changed to "HI_tempFree((void **)(& ggred__x), acc_device_nvidia)";
-						FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+						FunctionCall cudaFree_call;
+						if( asyncID == null ) {
+							cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+						} else {
+							cudaFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+						}
 						specs = new ArrayList<Specifier>(4);
 						specs.add(Specifier.VOID);
 						specs.add(PointerSpecifier.UNQUALIFIED);
@@ -836,6 +851,9 @@ public abstract class CUDATranslationTools {
 						cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF, 
 								(Identifier)ggred_var.clone())));
 						cudaFree_call.addArgument(new NameID("acc_device_current"));
+						if( asyncID != null ) {
+							cudaFree_call.addArgument(asyncID.clone());
+						}
 						ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 						//postscriptStmts.addStatement(gpuBytes_stmt.clone());
 						refSt = cudaFree_stmt;
@@ -1073,6 +1091,7 @@ public abstract class CUDATranslationTools {
 							(Identifier)extended_var.clone())));
 					arg_list.add(cloned_bytes.clone());
 					arg_list.add(new NameID("acc_device_host"));
+					arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 					tempMalloc_call.setArguments(arg_list);
 					ExpressionStatement eMallocStmt = new ExpressionStatement(tempMalloc_call);
 					prefixStmts.addStatement(eMallocStmt);
@@ -1106,6 +1125,7 @@ public abstract class CUDATranslationTools {
 								(Identifier)orgred_var.clone())));
 						arg_list.add(cloned_bytes.clone());
 						arg_list.add(new NameID("acc_device_host"));
+						arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 						tempMalloc_call.setArguments(arg_list);
 						eMallocStmt = new ExpressionStatement(tempMalloc_call);
 						prefixStmts.addStatement(eMallocStmt);
@@ -1181,7 +1201,12 @@ public abstract class CUDATranslationTools {
 					/////////////////////////////////////////////////////////////////////////////////////////
 					// Insert free(extred__x); ==> HI_tempFree((void **)(& extred__x), acc_device_host) //
 					/////////////////////////////////////////////////////////////////////////////////////////
-					FunctionCall free_call = new FunctionCall(new NameID("HI_tempFree"));
+					FunctionCall free_call;
+					if( asyncID == null ) {
+						free_call = new FunctionCall(new NameID("HI_tempFree"));
+					} else {
+						free_call = new FunctionCall(new NameID("HI_tempFree_async"));
+					}
 					castspecs = new ArrayList<Specifier>(4);
 					castspecs.add(Specifier.VOID);
 					castspecs.add(PointerSpecifier.UNQUALIFIED);
@@ -1189,6 +1214,9 @@ public abstract class CUDATranslationTools {
 					free_call.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF, 
 							(Identifier)extended_var.clone())));
 					free_call.addArgument(new NameID("acc_device_host"));
+					if( asyncID != null ) {
+						free_call.addArgument(asyncID.clone());
+					}
 					Statement free_stmt = new ExpressionStatement(free_call);
 					////mallocScope.addStatementAfter(
 					////	confRefStmt, free_stmt);
@@ -1209,7 +1237,11 @@ public abstract class CUDATranslationTools {
 						/////////////////////////////////////////////////////////////
 						// HI_tempFree((void **)(& orgred__x), acc_device_host) //
 						/////////////////////////////////////////////////////////////
-						free_call = new FunctionCall(new NameID("HI_tempFree"));
+						if( asyncID == null ) {
+							free_call = new FunctionCall(new NameID("HI_tempFree"));
+						} else {
+							free_call = new FunctionCall(new NameID("HI_tempFree_async"));
+						}
 						castspecs = new ArrayList<Specifier>(4);
 						castspecs.add(Specifier.VOID);
 						castspecs.add(PointerSpecifier.UNQUALIFIED);
@@ -1217,6 +1249,9 @@ public abstract class CUDATranslationTools {
 						free_call.addArgument(new Typecast(castspecs, new UnaryExpression(UnaryOperator.ADDRESS_OF, 
 								(Identifier)orgred_var.clone())));
 						free_call.addArgument(new NameID("acc_device_host"));
+						if( asyncID != null ) {
+							free_call.addArgument(asyncID.clone());
+						}
 						free_stmt = new ExpressionStatement(free_call);
 						if( asyncID == null ) {
 							if( confRefStmt != region ) {
@@ -3113,7 +3148,9 @@ public abstract class CUDATranslationTools {
 		}
 		
 		//Find index symbols for work-sharing loops, which are private to each thread by default.
-		Set<Symbol> loopIndexSymbols = AnalysisTools.getWorkSharingLoopIndexVarSet(region);
+		Set<Symbol> worksharingLoopIndexSymbols = AnalysisTools.getWorkSharingLoopIndexVarSet(region);
+		Set<Symbol> loopIndexSymbols = AnalysisTools.getLoopIndexVarSet(region);
+		//PrintTools.println("Loop Index Symbols = " + worksharingLoopIndexSymbols, 0);
 		
 		//The local variables defined in a pure gang loop are gang-private, 
 		//which will be allocated on the GPU shared memory by default.
@@ -3468,8 +3505,14 @@ public abstract class CUDATranslationTools {
 						workerPrivCachingOnShared = false;
 						workerPrivOnGlobal = false;
 					} else {
-						addSpecs = new ArrayList<Specifier>(1);
-						//addSpecs.add(CUDASpecifier.CUDA_SHARED);
+						if( addSpecs == null ) {
+							addSpecs = new ArrayList<Specifier>(1);
+							addSpecs.add(CUDASpecifier.CUDA_SHARED);
+						} else {
+							if( !addSpecs.contains(CUDASpecifier.CUDA_SHARED) ) {
+								addSpecs.add(CUDASpecifier.CUDA_SHARED);
+							}
+						}
 						gangPrivCachingOnShared = true;
 					}
 				}
@@ -3576,6 +3619,7 @@ public abstract class CUDATranslationTools {
 						// Add gpuBytes argument to cudaMalloc() call
 						arg_list.add((Identifier)cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_current"));
+                        arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 						malloc_call.setArguments(arg_list);
 						ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
 						// Insert malloc statement.
@@ -3600,7 +3644,12 @@ public abstract class CUDATranslationTools {
 							//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 							//}
 							// Insert "cudaFree(gwpriv__x);"
-							FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							FunctionCall cudaFree_call;
+							if( asyncID == null ) {
+								cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							} else {
+								cudaFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+							}
 							specs = new ArrayList<Specifier>(4);
 							specs.add(Specifier.VOID);
 							specs.add(PointerSpecifier.UNQUALIFIED);
@@ -3608,6 +3657,9 @@ public abstract class CUDATranslationTools {
 							cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 									(Identifier)gwpriv_var.clone())));
 							cudaFree_call.addArgument(new NameID("acc_device_current"));
+							if( asyncID != null ) {
+								cudaFree_call.addArgument(asyncID.clone());
+							}
 							ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 							//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
 							//mallocScope.addStatementAfter(confRefStmt, gpuBytes_stmt.clone());
@@ -3773,6 +3825,7 @@ public abstract class CUDATranslationTools {
 					// Add gpuBytes argument to cudaMalloc() call
 					arg_list.add((Identifier)cloned_bytes.clone());
                     arg_list.add(new NameID("acc_device_current"));
+                    arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 					malloc_call.setArguments(arg_list);
 					ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
 					// Insert malloc statement.
@@ -3801,7 +3854,12 @@ public abstract class CUDATranslationTools {
 					//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 					//}
 					// Insert "cudaFree(ggpriv__x);"
-					FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+					FunctionCall cudaFree_call;
+					if( asyncID == null ) {
+						cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+					} else {
+						cudaFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+					}
 					ArrayList<Specifier> specs = new ArrayList<Specifier>(4);
 					specs.add(Specifier.VOID);
 					specs.add(PointerSpecifier.UNQUALIFIED);
@@ -3809,6 +3867,9 @@ public abstract class CUDATranslationTools {
 					cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 							(Identifier)ggpriv_var.clone())));
 					cudaFree_call.addArgument(new NameID("acc_device_current"));
+					if( asyncID != null ) {
+						cudaFree_call.addArgument(asyncID.clone());
+					}
 					ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 					//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
 					//mallocScope.addStatementAfter(confRefStmt, gpuBytes_stmt.clone());
@@ -3949,6 +4010,7 @@ public abstract class CUDATranslationTools {
 						// Add gpuBytes argument to cudaMalloc() call
 						arg_list.add((Identifier)cloned_bytes.clone());
                         arg_list.add(new NameID("acc_device_current"));
+                        arg_list.add(new NameID("HI_MEM_READ_WRITE"));
 						malloc_call.setArguments(arg_list);
 						ExpressionStatement malloc_stmt = new ExpressionStatement(malloc_call);
 						if( insertMalloc ) {
@@ -4113,7 +4175,12 @@ public abstract class CUDATranslationTools {
 							//	mallocScope.addStatementAfter(confRefStmt, gMemSub_stmt.clone());
 							//}
 							// Insert "cudaFree(gfpriv__x);"
-							FunctionCall cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							FunctionCall cudaFree_call;
+							if( asyncID == null ) {
+								cudaFree_call = new FunctionCall(new NameID("HI_tempFree"));
+							} else {
+								cudaFree_call = new FunctionCall(new NameID("HI_tempFree_async"));
+							}
 							specs = new ArrayList<Specifier>(4);
 							specs.add(Specifier.VOID);
 							specs.add(PointerSpecifier.UNQUALIFIED);
@@ -4121,6 +4188,9 @@ public abstract class CUDATranslationTools {
 							cudaFree_call.addArgument(new Typecast(specs, new UnaryExpression(UnaryOperator.ADDRESS_OF,
 									(Identifier)gfpriv_var.clone())));
                             cudaFree_call.addArgument(new NameID("acc_device_current"));
+							if( asyncID != null ) {
+								cudaFree_call.addArgument(asyncID.clone());
+							}
 							ExpressionStatement cudaFree_stmt = new ExpressionStatement(cudaFree_call);
 							//mallocScope.addStatementAfter(confRefStmt, cudaFree_stmt);
 							//mallocScope.addStatementAfter(confRefStmt, orgGpuBytes_stmt.clone());
@@ -4170,6 +4240,8 @@ public abstract class CUDATranslationTools {
 							arg_list2.add(new IntegerLiteral(0));
 							if( asyncID != null ) {
 								arg_list2.add(asyncID.clone());
+								arg_list2.add(new IntegerLiteral(0));
+								arg_list2.add(new NameID("NULL"));
 							}
 							copyinCall.setArguments(arg_list2);
 							Statement copyin_stmt = new ExpressionStatement(copyinCall);
@@ -4205,7 +4277,11 @@ public abstract class CUDATranslationTools {
 				scope = (CompoundStatement)region;
 			}
 			for( Symbol lgSym : localGangPrivateSymbolsAll ) {
-				if( loopIndexSymbols.contains(lgSym) ) {
+				if( worksharingLoopIndexSymbols.contains(lgSym) ) {
+					continue;
+				}
+				if( lgSym.getSymbolName().startsWith("_ti_100_") ) {
+					//Skip the temporary index variables generated by this compiler.
 					continue;
 				}
 				Declaration decl = lgSym.getDeclaration();

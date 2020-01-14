@@ -11,6 +11,8 @@
 #   - Modify target-specific compilation configuration.            #
 #       GOMP_FLAGS : compiler flag to enable OpenMP                #
 #       GOMP_LIBS  : library to add for OpenMP                     #
+#       GPTHREADS_FLAGS : compiler flag to enable Pthreads         #
+#       GPTHREADS_LIBS  : library to add for Pthreads              #
 #       CC         : frontend C compiler                           # 
 #       CXX        : frontend C++ compiler, used to compile        #
 #                    OpenARC-generated output program              #
@@ -145,6 +147,8 @@ ifeq ($(TARGET_SYSTEM),LCUDA)
 OPENARC_ARCH = 0
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 CPP = $(CC) -E
@@ -175,6 +179,8 @@ ifeq ($(TARGET_SYSTEM),NEURON)
 OPENARC_ARCH = 0
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 #CC = mpicc
@@ -218,6 +224,8 @@ ifeq ($(TARGET_SYSTEM),AMDHIP)
 OPENARC_ARCH = 5
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = hipcc
 CXX = hipcc
 CPP = cpp -E
@@ -249,6 +257,8 @@ ifeq ($(TARGET_SYSTEM),XAVIER)
 OPENARC_ARCH = 4
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 CPP = $(CC) -E
@@ -289,18 +299,24 @@ OPENARC_ARCH = 0
 #option for IBM compiler (xl)
 #GOMP_FLAGS = -qsmp=omp
 #GOMP_LIBS =
+#GPTHREADS_FLAGS = 
+#GPTHREADS_LIBS = -lpthread
 #CC = xl
 #CXX = xlc++
 #CPP = xl -E
 #option for PGI compiler (pgi)
 #GOMP_FLAGS = -mp
 #GOMP_LIBS =
+#GPTHREADS_FLAGS = 
+#GPTHREADS_LIBS = -lpthread
 #CC = pgcc
 #CXX = pgc++
 #CPP = pgcc -E
 #option for GNU compiler (gcc)
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 CPP = cpp -E
@@ -358,18 +374,24 @@ OPENARC_ARCH = 0
 #option for IBM compiler (xl)
 #GOMP_FLAGS = -qsmp=omp
 #GOMP_LIBS =
+#GPTHREADS_FLAGS = 
+#GPTHREADS_LIBS = -lpthread
 #CC = xl
 #CXX = xlc++
 #CPP = xl -E
 #option for PGI compiler (pgi)
 #GOMP_FLAGS = -mp
 #GOMP_LIBS =
+#GPTHREADS_FLAGS = 
+#GPTHREADS_LIBS = -lpthread
 #CC = pgcc
 #CXX = pgc++
 #CPP = pgcc -E
 #option for GNU compiler (gcc)
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 CPP = cpp -E
@@ -490,6 +512,8 @@ ifeq ($(TARGET_SYSTEM),Newark)
 OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 CPP = $(CC) -E
@@ -570,6 +594,8 @@ ifeq ($(TARGET_SYSTEM),Oswald)
 OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 CPP = $(CC) -E
@@ -649,6 +675,8 @@ ifeq ($(TARGET_SYSTEM),Kold)
 OPENARC_ARCH = 0
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = mpicc
 CXX = mpic++
 CPP = $(CC) -E
@@ -705,6 +733,8 @@ ifeq ($(TARGET_SYSTEM),Atlanta)
 OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 CPP = $(CC) -E
@@ -747,6 +777,8 @@ ifeq ($(TARGET_SYSTEM),MacBookPro)
 OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 #CC = gcc
 #CXX = g++
 #CPP = $(CC) -E -std=c99
@@ -801,6 +833,8 @@ ifeq ($(TARGET_SYSTEM),MacBookPro_LLVM)
 OPENARC_ARCH = 1
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = /opt/local/bin/gcc-mp-6
 CXX = /opt/local/bin/g++-mp-6
 CPP = $(CC) -E -std=c99
@@ -843,6 +877,8 @@ ifeq ($(TARGET_SYSTEM),Megatron_LLVM)
 OPENARC_ARCH = 0
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = gcc
 CXX = g++
 CPP = $(CC) -E
@@ -885,6 +921,8 @@ ifeq ($(TARGET_SYSTEM),Beacon)
 OPENARC_ARCH = 2
 GOMP_FLAGS = -qopenmp
 GOMP_LIBS =
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = icc
 CXX = icpc
 #CPP = $(CC) -E
@@ -928,6 +966,8 @@ ifeq ($(TARGET_SYSTEM),Cooley)
 OPENARC_ARCH = 0
 GOMP_FLAGS = -fopenmp
 GOMP_LIBS = -lgomp
+GPTHREADS_FLAGS = 
+GPTHREADS_LIBS = -lpthread
 CC = mpicc
 CXX = mpic++
 CPP = $(CC) -E

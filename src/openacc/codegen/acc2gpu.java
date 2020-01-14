@@ -335,6 +335,8 @@ public class acc2gpu extends CodeGenPass
 		/*****************************************************************/
 		TransformPass.run(new ACCAnnotationParser(program));
 
+		TransformPass.run(new PostParserProcessor(program));
+
 		if(convertOpenMP3toOpenACC)
 		{
 			OMP3toACCTranslator omp2ACCTranslator = new OMP3toACCTranslator(program, defaultNumAsyncQueues);
@@ -352,7 +354,8 @@ public class acc2gpu extends CodeGenPass
 			return;
 		}
 		
-		TransformPass.run(new PostParserProcessor(program));
+		//[DEBUG on Nov. 6, 2019] below pass is moved before the OpenMP to OpenACC translation pass.
+		//TransformPass.run(new PostParserProcessor(program));
 		
 		/* "int x, y,z;" becomes "int x; int y; int z;" */
 		TransformPass.run(new SingleDeclarator(program));

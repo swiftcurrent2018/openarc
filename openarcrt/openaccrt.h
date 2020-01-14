@@ -12,14 +12,24 @@
 #include <string>
 #include <unistd.h>
 
+//Comment out below to disable pthread-based thread safety.
+#define _THREAD_SAFETY
 #ifdef _OPENMP
 #include <omp.h>
+//#ifndef _THREAD_SAFETY
+//#define _THREAD_SAFETY
+//#endif
+#endif
+
+#ifdef _THREAD_SAFETY
+#include <pthread.h>
 #endif
 
 #define DEFAULT_QUEUE -2
 #define DEFAULT_ASYNC_QUEUE -1
 #define DEVICE_NUM_UNDEFINED -1
 #define MAX_NUM_QUEUES_PER_THREAD 1048576
+#define NO_THREAD_ID -1
 
 //VICTIM_CACHE_MODE = 0 
 //  - Victim cache is not used
@@ -49,6 +59,18 @@
 //	- base pointer search time: O(logn)
 //	- intermediate pointer search time: O(logn)
 #define PRESENT_TABLE_SEARCH_MODE 1
+
+#ifdef _THREAD_SAFETY
+extern pthread_mutex_t mutex_HI_init;
+extern pthread_mutex_t mutex_HI_hostinit;
+extern pthread_mutex_t mutex_HI_kernelnames;
+extern pthread_mutex_t mutex_pin_host_memory;
+extern pthread_mutex_t mutex_victim_cache;
+extern pthread_mutex_t mutex_tempMalloc;
+extern pthread_mutex_t mutex_set_async;
+extern pthread_mutex_t mutex_set_device_num;
+extern pthread_mutex_t mutex_clContext;
+#endif
 
 typedef enum {
     HI_success = 0,
@@ -94,6 +116,10 @@ typedef std::map<const void *, void *> addressmap_t;
 typedef std::map<int, addressmap_t *> addresstable_t;
 typedef std::multimap<int, const void *> asyncfreetable_t;
 typedef std::map<int, asyncfreetable_t *> asyncfreetablemap_t;
+typedef std::multimap<int, void **> asynctempfreetable_t;
+typedef std::map<int, asynctempfreetable_t *> asynctempfreetablemap_t;
+typedef std::multimap<int, acc_device_t> asynctempfreetable2_t;
+typedef std::map<int, asynctempfreetable2_t *> asynctempfreetablemap2_t;
 typedef std::set<const void *> pointerset_t;
 typedef std::map<int, addresstable_t *> addresstablemap_t;
 typedef std::multimap<size_t, void *> memPool_t;
@@ -130,6 +156,9 @@ public:
     int maxNumThreadsPerBlock;
 	int max1DTexRefWidth4LM;
 
+	//kernel names that will be offloaded to this device.
+	std::set<std::string> kernelNameSet;
+
 	//Output kernel file name base. (Default value: "openarc_kernel")
 	std::string fileNameBase;
 
@@ -157,6 +186,8 @@ public:
     //pair, no free operation is performed
     //asyncfreetable_t postponedFreeTable;
 	asyncfreetablemap_t postponedFreeTableMap;
+	asynctempfreetablemap_t postponedTempFreeTableMap;
+	asynctempfreetablemap2_t postponedTempFreeTableMap2;
 	//memPool_t memPool;
 	memPoolmap_t memPoolMap;
 	memPoolSizemap_t tempMallocSizeMap;
@@ -168,72 +199,80 @@ public:
 	virtual ~Accelerator() {};
 
     // Kernel Initialization
-    virtual HI_error_t init() = 0;
-    virtual HI_error_t destroy()=0;
+    virtual HI_error_t init(int threadID=NO_THREAD_ID) = 0;
+    virtual HI_error_t destroy(int threadID=NO_THREAD_ID)=0;
 
     // Kernel Execution
-    virtual HI_error_t HI_register_kernels(std::set<std::string>kernelNames) = 0;
-    virtual HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args) = 0;
-    virtual HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type) = 0;
-    virtual HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL) = 0;
-    virtual HI_error_t HI_synchronize( int forcedSync = 0 )=0;
+    virtual HI_error_t HI_register_kernels(std::set<std::string>kernelNames, int threadID=NO_THREAD_ID) = 0;
+    virtual HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args, int threadID=NO_THREAD_ID) = 0;
+    virtual HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type, int threadID=NO_THREAD_ID) = 0;
+    virtual HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL, int threadID=NO_THREAD_ID) = 0;
+    virtual HI_error_t HI_synchronize( int forcedSync = 0, int threadID=NO_THREAD_ID )=0;
+    void updateKernelNameSet(std::set<std::string>kernelNames) {
+    	for (std::set<std::string>::iterator it = kernelNames.begin() ; it != kernelNames.end(); ++it) {
+        	if( kernelNameSet.count(*it) == 0 ) {
+            	//Add a new kernel.
+            	kernelNameSet.insert(*it);
+        	}    
+    	}    
+	};
 
     // Memory Allocation
-    virtual HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE)= 0;
-    virtual HI_error_t HI_malloc2D( const void *host_ptr, void** dev_ptr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE)=0;
-    virtual HI_error_t HI_malloc3D( const void *host_ptr, void** dev_ptr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE)=0;
-    virtual HI_error_t HI_free( const void *host_ptr, int asyncID)=0;
-	virtual HI_error_t HI_pin_host_memory(const void * hostPtr, size_t size)=0;
-	virtual void HI_unpin_host_memory(const void* hostPtr)=0;
+    virtual HI_error_t HI_malloc1D(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE, int threadID=NO_THREAD_ID)= 0;
+    virtual HI_error_t HI_malloc2D( const void *host_ptr, void** dev_ptr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE, int threadID=NO_THREAD_ID)=0;
+    virtual HI_error_t HI_malloc3D( const void *host_ptr, void** dev_ptr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE, int threadID=NO_THREAD_ID)=0;
+    virtual HI_error_t HI_free( const void *host_ptr, int asyncID, int threadID=NO_THREAD_ID)=0;
+	virtual HI_error_t HI_pin_host_memory(const void * hostPtr, size_t size, int threadID=NO_THREAD_ID)=0;
+	virtual void HI_unpin_host_memory(const void* hostPtr, int threadID=NO_THREAD_ID)=0;
 
     // Memory Transfer
-    virtual HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType)=0;
+    virtual HI_error_t HI_memcpy(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int threadID=NO_THREAD_ID)=0;
 
-    virtual HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL)=0;
-    virtual HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL)=0;
-    virtual HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind)=0;
-    virtual HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL)=0;
+    virtual HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID=NO_THREAD_ID)=0;
+    virtual HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID=NO_THREAD_ID)=0;
+    virtual HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int threadID=NO_THREAD_ID)=0;
+    virtual HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src, size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits, int threadID=NO_THREAD_ID)=0;
 
-    virtual void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags=HI_MEM_READ_WRITE)=0;
-    virtual void HI_tempFree( void** tempPtr, acc_device_t devType)=0;
+    virtual void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags, int threadID=NO_THREAD_ID)=0;
+    virtual void HI_tempFree( void** tempPtr, acc_device_t devType, int threadID=NO_THREAD_ID)=0;
 	
 	// Experimental API to support unified memory //
-    virtual HI_error_t  HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE)= 0;
-    virtual HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType)=0;
-    virtual HI_error_t HI_free_unified( const void *host_ptr, int asyncID)=0;
+    virtual HI_error_t  HI_malloc1D_unified(const void *hostPtr, void **devPtr, size_t count, int asyncID, HI_MallocKind_t flags, int threadID=NO_THREAD_ID)= 0;
+    virtual HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count, HI_MemcpyKind_t kind, int trType, int threadID=NO_THREAD_ID)=0;
+    virtual HI_error_t HI_free_unified( const void *host_ptr, int asyncID, int threadID=NO_THREAD_ID)=0;
 
-    virtual HI_error_t createKernelArgMap() {
+    virtual HI_error_t createKernelArgMap(int threadID=NO_THREAD_ID) {
         return HI_success;
     }
     virtual HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size) {
         return HI_success;
     }
-    virtual HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+    virtual HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int threadID=NO_THREAD_ID) {
         return HI_success;
     }
-    virtual HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits=0, int *waits=NULL) {
+    virtual HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits, int *waits, int threadID=NO_THREAD_ID) {
         return HI_success;
     }
-    virtual HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count) {
+    virtual HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int threadID=NO_THREAD_ID) {
         return HI_success;
     }
-    virtual void HI_set_async(int asyncId)=0;
-    virtual void HI_set_context(){}
-    virtual void HI_wait(int arg) {}
-    virtual void HI_wait_ifpresent(int arg) {}
-    virtual void HI_wait_async(int arg, int async) {}
-    virtual void HI_wait_async_ifpresent(int arg, int async) {}
-    virtual void HI_waitS1(int arg) {}
-    virtual void HI_waitS2(int arg) {}
-    virtual void HI_wait_all() {}
-    virtual void HI_wait_all_async(int async) {}
-    virtual int HI_async_test(int asyncId)=0;
-    virtual int HI_async_test_ifpresent(int asyncId)=0;
-    virtual int HI_async_test_all()=0;
-    virtual void HI_wait_for_events(int async, int num_waits, int* waits)=0;
+    virtual void HI_set_async(int asyncId, int threadID=NO_THREAD_ID)=0;
+    virtual void HI_set_context(int threadID=NO_THREAD_ID){}
+    virtual void HI_wait(int arg, int threadID=NO_THREAD_ID) {}
+    virtual void HI_wait_ifpresent(int arg, int threadID=NO_THREAD_ID) {}
+    virtual void HI_wait_async(int arg, int async, int threadID=NO_THREAD_ID) {}
+    virtual void HI_wait_async_ifpresent(int arg, int async, int threadID=NO_THREAD_ID) {}
+    virtual void HI_waitS1(int arg, int threadID=NO_THREAD_ID) {}
+    virtual void HI_waitS2(int arg, int threadID=NO_THREAD_ID) {}
+    virtual void HI_wait_all(int threadID=NO_THREAD_ID) {}
+    virtual void HI_wait_all_async(int async, int threadID=NO_THREAD_ID) {}
+    virtual int HI_async_test(int asyncId, int threadID=NO_THREAD_ID)=0;
+    virtual int HI_async_test_ifpresent(int asyncId, int threadID=NO_THREAD_ID)=0;
+    virtual int HI_async_test_all(int threadID=NO_THREAD_ID)=0;
+    virtual void HI_wait_for_events(int async, int num_waits, int* waits, int threadID=NO_THREAD_ID)=0;
 
-    virtual void HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags=HI_MEM_READ_WRITE) = 0;
-    virtual void HI_free(void *devPtr) = 0;
+    virtual void HI_malloc(void **devPtr, size_t size, HI_MallocKind_t flags, int threadID=NO_THREAD_ID) = 0;
+    virtual void HI_free(void *devPtr, int threadID=NO_THREAD_ID) = 0;
 
     HI_error_t HI_get_device_address(const void *hostPtr, void **devPtr, int asyncID, int tid) {
 		size_t offset;
@@ -809,6 +848,15 @@ public:
     }
 
     HI_error_t HI_get_device_address_from_victim_cache(const void *hostPtr, void **devPtrBase, size_t *offset, size_t *size, int asyncID, int tid) {
+		HI_error_t ret = HI_error;
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
+		{
 		addresstable_t::iterator it = auxAddressTable.find(asyncID);
 		//Check whether hostPtr exists as an entry to addressTable (it->second), 
 		//which will be true if hostPtr is a base address of the pointed memory.
@@ -828,7 +876,7 @@ public:
 			if( size ) *size = aet->size;
 			if( offset ) *offset = 0;
             //*devPtrBase = it2->second;
-            return  HI_success;
+            ret = HI_success;
         } else {
             //check on the default stream
             it = auxAddressTable.find(DEFAULT_QUEUE+tid*MAX_NUM_QUEUES_PER_THREAD);
@@ -839,14 +887,25 @@ public:
 				if( size ) *size = aet->size;
 				if( offset ) *offset = 0;
             //	*devPtrBase = it2->second;
-            	return  HI_success;
+            	ret = HI_success;
             }
 		}
-
-        return HI_error;
+		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
+        return ret;
     }
 
     HI_error_t HI_set_device_address_in_victim_cache (const void *hostPtr, void * devPtr, size_t size, int asyncID) {
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
+		{
         addresstable_t::iterator it = auxAddressTable.find(asyncID);
         if(it == auxAddressTable.end() ) {
             addressmap_t *emptyMap = new addressmap_t();
@@ -859,10 +918,23 @@ public:
         	addresstable_entity_t *aet = new addresstable_entity_t(devPtr, size);
         	(*(it->second))[hostPtr] = (void*) aet;
 		}
+		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
         return  HI_success;
     }
 
     HI_error_t HI_remove_device_address_from_victim_cache (const void *hostPtr, int asyncID) {
+		HI_error_t ret;
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
+		{
         addresstable_t::iterator it = auxAddressTable.find(asyncID);
         addressmap_t::iterator it2 =	(it->second)->find(hostPtr);
 
@@ -870,14 +942,27 @@ public:
             addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
             delete aet;
             (it->second)->erase(it2);
-            return  HI_success;
+            ret =  HI_success;
         } else {
             fprintf(stderr, "[ERROR in remove_device_address_from_victim_cache()] No mapping found for the host pointer on async ID %d\n", asyncID);
-            return HI_error;
+            ret = HI_error;
         }
+		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
+		return ret;
     }
 
     HI_error_t HI_reset_victim_cache ( int asyncID ) {
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
+		{
         addresstable_t::iterator it = auxAddressTable.find(asyncID);
         while(it != auxAddressTable.end()) {
 			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
@@ -887,10 +972,21 @@ public:
 			(it->second)->clear();
             it++;
         }
+		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
 		return  HI_success;
     }
 
     HI_error_t HI_reset_victim_cache_all ( ) {
+#ifdef _THREAD_SAFETY
+        pthread_mutex_lock(&mutex_victim_cache);
+#else
+#ifdef _OPENMP
+    	#pragma omp critical (victim_cache_critical)
+#endif
+#endif
 		for( addresstable_t::iterator it = auxAddressTable.begin(); it != auxAddressTable.end(); ++it ) {
 			for( addressmap_t::iterator it2 = (it->second)->begin(); it2 != (it->second)->end(); ++it2 ) {
             	addresstable_entity_t *aet = (addresstable_entity_t*) it2->second;
@@ -898,6 +994,9 @@ public:
 			}
 			(it->second)->clear();
 		}
+#ifdef _THREAD_SAFETY
+        pthread_mutex_unlock(&mutex_victim_cache);
+#endif
 		return  HI_success;
     }
 
@@ -1080,7 +1179,7 @@ public:
 
         while(hostPtrIter != postponedFreeTable->end()) {
             //fprintf(stderr, "[in HI_postponed_free()] Freeing on stream %d, address %x\n", asyncID, hostPtrIter->second);
-            HI_free(hostPtrIter->second, asyncID);
+            HI_free(hostPtrIter->second, asyncID, tid);
             hostPtrIter++;
         }
 
@@ -1088,6 +1187,57 @@ public:
 #ifdef _OPENARC_PROFILE_
     if( HI_openarcrt_verbosity > 3 ) {
         fprintf(stderr, "[OPENARCRT-INFO]\t\t\texit HI_postponed_free()\n");
+    }    
+#endif
+        return HI_success;
+    }
+
+    HI_error_t HI_tempFree_async( void **tempPtr, acc_device_t devType, int asyncID, int tid) {
+        //fprintf(stderr, "[in HI_tempFree_async()] with asyncID %d\n", asyncID);
+		if( postponedTempFreeTableMap.count(tid) == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_tempFree_async()] No mapping found for thread ID = %d\n", tid);
+		} else {
+    		asynctempfreetable_t *postponedTempFreeTable = postponedTempFreeTableMap[tid];
+        	postponedTempFreeTable->insert(std::pair<int, void **>(asyncID, tempPtr));
+    		asynctempfreetable2_t *postponedTempFreeTable2 = postponedTempFreeTableMap2[tid];
+        	postponedTempFreeTable2->insert(std::pair<int, acc_device_t>(asyncID, devType));
+		}
+        return HI_success;
+    }
+
+    HI_error_t HI_postponed_tempFree(int asyncID, acc_device_t devType, int tid) {
+#ifdef _OPENARC_PROFILE_
+    if( HI_openarcrt_verbosity > 3 ) {
+        fprintf(stderr, "[OPENARCRT-INFO]\t\t\tenter HI_postponed_tempFree(devType = %d, thread ID = %d)\n", devType, tid);
+    }    
+#endif
+		if( postponedTempFreeTableMap.count(tid) == 0 ) {
+        	fprintf(stderr, "[ERROR in HI_postponed_tempFree()] No mapping found for thread ID = %d\n", tid);
+		} else {
+    		asynctempfreetable_t *postponedTempFreeTable = postponedTempFreeTableMap[tid];
+        	std::multimap<int, void**>::iterator tempPtrIter = postponedTempFreeTable->find(asyncID);
+    		asynctempfreetable2_t *postponedTempFreeTable2 = postponedTempFreeTableMap2[tid];
+        	std::multimap<int, acc_device_t>::iterator tempPtrIter2 = postponedTempFreeTable2->find(asyncID);
+
+        	while((tempPtrIter != postponedTempFreeTable->end()) && (tempPtrIter2 != postponedTempFreeTable2->end())) {
+            	//fprintf(stderr, "[in HI_postponed_TempFree()] Freeing on stream %d, address %x\n", asyncID, tempPtrIter->second);
+            	HI_tempFree(tempPtrIter->second, tempPtrIter2->second, tid);
+            	tempPtrIter++;
+            	tempPtrIter2++;
+        	}
+        	if(tempPtrIter != postponedTempFreeTable->end()) {
+        		fprintf(stderr, "[ERROR in HI_postponed_tempFree()] postponedTempFreeTable has more entries for thread ID = %d\n", tid);
+			}
+        	if(tempPtrIter2 != postponedTempFreeTable2->end()) {
+        		fprintf(stderr, "[ERROR in HI_postponed_tempFree()] postponedTempFreeTable2 has more entries for thread ID = %d\n", tid);
+			}
+
+        	postponedTempFreeTable->erase(asyncID);
+        	postponedTempFreeTable2->erase(asyncID);
+		}
+#ifdef _OPENARC_PROFILE_
+    if( HI_openarcrt_verbosity > 3 ) {
+        fprintf(stderr, "[OPENARCRT-INFO]\t\t\texit HI_postponed_tempFree(devType = %d, thread ID = %d)\n", devType, tid);
     }    
 #endif
         return HI_success;
@@ -1177,107 +1327,206 @@ public:
 
 } Accelerator_t;
 
-//////////////////////////
-// Moved from openacc.h //
-//////////////////////////
-extern void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[], const char *fileNameBase = "openarc_kernel");
+///////////////////////////////////////////////////
+// Overloaded OpenACC runtime API from openacc.h //
+///////////////////////////////////////////////////
+///////////////////////////////////////////
+// OpenACC V1.0 Runtime Library Routines //
+///////////////////////////////////////////
+extern void acc_init( acc_device_t devtype, int kernels, std::string kernelNames[], const char *fileNameBase = "openarc_kernel", int threadID=NO_THREAD_ID);
+extern int acc_get_num_devices( acc_device_t devtype, int threadID );
+extern void acc_set_device_type( acc_device_t devtype, int threadID );
+extern acc_device_t acc_get_device_type(int threadID);
+extern void acc_set_device_num( int devnum, acc_device_t devtype, int threadID );
+extern int acc_get_device_num( acc_device_t devtype, int threadID );
+extern int acc_async_test( int asyncID, int threadID );
+extern int acc_async_test_all(int threadID);
+extern void acc_async_wait( int asyncID, int threadID ); //renamed to acc_wait()
+extern void acc_async_wait_all(int threadID); //renamed to acc_wait_all()
+extern void acc_shutdown( acc_device_t devtype, int threadID );
+extern int acc_on_device( acc_device_t devtype, int threadID );
+extern d_void* acc_malloc(size_t size, int threadID);
+extern void acc_free(d_void* devPtr, int threadID);
+
+/////////////////////////////////////////////////////////// 
+// OpenACC Runtime Library Routines added in Version 2.0 //
+/////////////////////////////////////////////////////////// 
+//acc_async_wait() and acc_async_wait_all() are renamed to acc_wait() and
+//acc_wait_all() in V2.0.
+extern void acc_wait( int arg, int threadID );
+extern void acc_wait_all(int threadID);
+extern void acc_wait_async(int arg, int async, int threadID);
+extern void acc_wait_all_async(int async, int threadID);
+extern void* acc_copyin(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_copyin_async(h_void* hostPtr, size_t size, int async, int threadID);
+extern void* acc_pcopyin(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_present_or_copyin(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_create(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_create_async(h_void* hostPtr, size_t size, int async, int threadID);
+extern void* acc_pcreate(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_present_or_create(h_void* hostPtr, size_t size, int threadID);
+extern void acc_copyout(h_void* hostPtr, size_t size, int threadID);
+extern void acc_copyout_async(h_void* hostPtr, size_t size, int async, int threadID);
+extern void acc_delete(h_void* hostPtr, size_t size, int threadID);
+extern void acc_delete_async(h_void* hostPtr, size_t size, int async, int threadID);
+extern void acc_update_device(h_void* hostPtr, size_t size, int threadID);
+extern void acc_update_device_async(h_void* hostPtr, size_t size, int async, int threadID);
+extern void acc_update_self(h_void* hostPtr, size_t size, int threadID);
+extern void acc_update_self_async(h_void* hostPtr, size_t size, int async, int threadID);
+extern void acc_map_data(h_void* hostPtr, d_void* devPtr, size_t size, int threadID);
+extern void acc_unmap_data(h_void* hostPtr, int threadID);
+extern d_void* acc_deviceptr(h_void* hostPtr, int threadID);
+extern h_void* acc_hostptr(d_void* devPtr, int threadID);
+extern int acc_is_present(h_void* hostPtr, size_t size, int threadID);
+extern void acc_memcpy_to_device(d_void* dest, h_void* src, size_t bytes, int threadID);
+extern void acc_memcpy_from_device(h_void* dest, d_void* src, size_t bytes, int threadID);
+
+/////////////////////////////////////////////////////////// 
+// OpenACC Runtime Library Routines added in Version 2.5 //
+/////////////////////////////////////////////////////////// 
+extern void acc_memcpy_device(d_void* dest, d_void* src, size_t bytes, int threadID);
+extern void acc_memcpy_device_async(d_void* dest, d_void* src, size_t bytes, int async, int threadID);
+
+/////////////////////////////////////////////////////////// 
+// OpenACC Runtime Library Routines added in Version 2.6 //
+/////////////////////////////////////////////////////////// 
+extern void acc_attach(h_void** hostPtr, int threadID);
+extern void acc_attach_async(h_void** hostPtr, int async, int threadID);
+extern void acc_detach(h_void** hostPtr, int threadID);
+extern void acc_detach_async(h_void** hostPtr, int async, int threadID);
+extern void acc_detach_finalize(h_void** hostPtr, int threadID);
+extern void acc_detach_finalize_async(h_void** hostPtr, int async, int threadID);
+//extern size_t acc_get_property(int devicenum, acc_device_t devicetype, acc_device_property_t property, int threadID);
+//extern const char* acc_get_property_string(int devicenum, acc_device_t devicetype, acc_device_property_t property, int threadID);
+
+//////////////////////////////////////////////////////////////////////
+// Experimental OpenACC Runtime Library Routines for Unified Memory //
+// (Currently, these work only for specific versions of CUDA GPUs.) //
+//////////////////////////////////////////////////////////////////////
+extern void* acc_copyin_unified(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_pcopyin_unified(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_present_or_copyin_unified(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_create_unified(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_pcreate_unified(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_present_or_create_unified(h_void* hostPtr, size_t size, int threadID);
+extern void acc_copyout_unified(h_void* hostPtr, size_t size, int threadID);
+extern void acc_delete_unified(h_void* hostPtr, size_t size, int threadID);
+
+/////////////////////////////////////////////////////////////////
+// Additional OpenACC Runtime Library Routines Used by OpenARC //
+/////////////////////////////////////////////////////////////////
+extern void* acc_copyin_const(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_pcopyin_const(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_present_or_copyin_const(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_create_const(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_pcreate_const(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_present_or_create_const(h_void* hostPtr, size_t size, int threadID);
+extern void* acc_copyin_async_wait(h_void* hostPtr, size_t size, int async, int arg, int threadID);
+extern void* acc_pcopyin_async_wait(h_void* hostPtr, size_t size, int async, int arg, int threadID);
+extern void* acc_present_or_copyin_async_wait(h_void* hostPtr, size_t size, int async, int arg, int threadID);
+extern void* acc_create_async_wait(h_void* hostPtr, size_t size, int async, int arg, int threadID);
+extern void* acc_pcreate_async_wait(h_void* hostPtr, size_t size, int async, int arg, int threadID);
+extern void* acc_present_or_create_async_wait(h_void* hostPtr, size_t size, int async, int arg, int threadID);
+extern void acc_copyout_async_wait(h_void* hostPtr, size_t size, int async, int arg, int threadID);
+extern void acc_delete_async_wait(h_void* hostPtr, size_t size, int async, int arg, int threadID);
 
 ////////////////////////
 // Runtime init/reset //
 ////////////////////////
-extern void HI_hostinit(int numhostthreads);
+extern void HI_hostinit(int threadID);
 
 //////////////////////
 // Kernel Execution //
 //////////////////////
 //Set the number of arguments to be passed to a kernel.
-extern HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args);
+extern HI_error_t HI_register_kernel_numargs(std::string kernel_name, int num_args, int threadID=NO_THREAD_ID);
 //Register an argument to be passed to a kernel.
-extern HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type);
+extern HI_error_t HI_register_kernel_arg(std::string kernel_name, int arg_index, size_t arg_size, void *arg_value, int arg_type, int threadID=NO_THREAD_ID);
 //Launch a kernel.
-extern HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL);
-extern HI_error_t HI_synchronize( int forcedSync = 0);
+extern HI_error_t HI_kernel_call(std::string kernel_name, size_t gridSize[3], size_t blockSize[3], int async=DEFAULT_QUEUE, int num_waits=0, int *waits=NULL, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_synchronize( int forcedSync = 0, int threadID=NO_THREAD_ID);
 
 /////////////////////////////
 //Device Memory Allocation //
 /////////////////////////////
-extern HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-extern HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-extern HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-extern HI_error_t HI_free( const void *hostPtr, int asyncID);
-extern HI_error_t HI_free_async( const void *hostPtr, int asyncID);
-extern void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
-extern void HI_tempFree( void** tempPtr, acc_device_t devType);
+extern HI_error_t HI_malloc1D( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_malloc2D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_malloc3D( const void *hostPtr, void** devPtr, size_t* pitch, size_t widthInBytes, size_t height, size_t depth, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_free( const void *hostPtr, int asyncID, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_free_async( const void *hostPtr, int asyncID, int threadID=NO_THREAD_ID);
+extern void HI_tempMalloc1D( void** tempPtr, size_t count, acc_device_t devType, HI_MallocKind_t flags, int threadID=NO_THREAD_ID);
+extern void HI_tempFree( void** tempPtr, acc_device_t devType, int threadID=NO_THREAD_ID);
+extern void HI_tempFree_async( void** tempPtr, acc_device_t devType, int asyncID, int threadID=NO_THREAD_ID);
 
 /////////////////////////////////////////////////
 //Memory transfers between a host and a device //
 /////////////////////////////////////////////////
 extern HI_error_t HI_memcpy(void *dst, const void *src, size_t count,
-                                  HI_MemcpyKind_t kind, int trType);
+                                  HI_MemcpyKind_t kind, int trType, int threadID=NO_THREAD_ID);
 extern HI_error_t HI_memcpy_async(void *dst, const void *src, size_t count,
-                                        HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
+                                        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID=NO_THREAD_ID);
 extern HI_error_t HI_memcpy_asyncS(void *dst, const void *src, size_t count,
-                                        HI_MemcpyKind_t kind, int trType, int async, int num_waits=0, int *waits=NULL);
+                                        HI_MemcpyKind_t kind, int trType, int async, int num_waits, int *waits, int threadID=NO_THREAD_ID);
 extern HI_error_t HI_memcpy2D(void *dst, size_t dpitch, const void *src, size_t spitch,
-                                    size_t widthInBytes, size_t height, HI_MemcpyKind_t kind);
+                                    size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int threadID=NO_THREAD_ID);
 extern HI_error_t HI_memcpy2D_async(void *dst, size_t dpitch, const void *src,
-        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
+        size_t spitch, size_t widthInBytes, size_t height, HI_MemcpyKind_t kind, int async, int num_waits, int *waits, int threadID=NO_THREAD_ID);
 //extern HI_error_t HI_memcpy3D(void *dst, size_t dpitch, const void *src, size_t spitch,
-//	size_t widthInBytes, size_t height, size_t depth, HI_MemcpyKind_t kind);
+//	size_t widthInBytes, size_t height, size_t depth, HI_MemcpyKind_t kind, int threadID=NO_THREAD_ID);
 //extern HI_error_t HI_memcpy3D_async(void *dst, size_t dpitch, const void *src,
 //	size_t spitch, size_t widthInBytes, size_t height, size_t depth,
-//	HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL);
-extern HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
-extern HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits=0, int *waits=NULL);
-extern HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count);
+//	HI_MemcpyKind_t kind, int async, int num_waits=0, int *waits=NULL, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_memcpy_const_async(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int async, int num_waits, int *waits, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_present_or_memcpy_const(void *hostPtr, std::string constName, HI_MemcpyKind_t kind, size_t count, int threadID=NO_THREAD_ID);
 
 ////////////////////////////////////////////////
 // Experimental API to support unified memory //
 ////////////////////////////////////////////////
-extern HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags=HI_MEM_READ_WRITE);
+extern HI_error_t HI_malloc1D_unified( const void *hostPtr, void** devPtr, size_t count, int asyncID, HI_MallocKind_t flags, int threadID=NO_THREAD_ID);
 extern HI_error_t HI_memcpy_unified(void *dst, const void *src, size_t count,
-                                  HI_MemcpyKind_t kind, int trType);
-extern HI_error_t HI_free_unified( const void *hostPtr, int asyncID);
+                                  HI_MemcpyKind_t kind, int trType, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_free_unified( const void *hostPtr, int asyncID, int threadID=NO_THREAD_ID);
 
 ////////////////////////////
 //Internal mapping tables //
 ////////////////////////////
-extern HI_error_t HI_get_device_address(const void * hostPtr, void ** devPtr, int asyncID);
-extern HI_error_t HI_get_device_address(const void * hostPtr, void ** devPtrBase, size_t * offset, int asyncID);
-extern HI_error_t HI_get_device_address(const void * hostPtr, void ** devPtrBase, size_t * offset, size_t * size, int asyncID);
-extern HI_error_t HI_set_device_address(const void * hostPtr, void * devPtr, size_t size, int asyncID);
-extern HI_error_t HI_remove_device_address(const void * hostPtr, int asyncID);
-extern HI_error_t HI_get_host_address(const void *devPtr, void** hostPtr, int asyncID);
-extern HI_error_t HI_get_temphost_address(const void * hostPtr, void ** temphostPtr, int asyncID);
-//extern HI_error_t HI_set_temphost_address(const void * hostPtr, void * temphostPtr, int asyncID);
-//extern HI_error_t HI_remove_temphost_address(const void * hostPtr);
+extern HI_error_t HI_get_device_address(const void * hostPtr, void ** devPtr, int asyncID, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_get_device_address(const void * hostPtr, void ** devPtrBase, size_t * offset, int asyncID, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_get_device_address(const void * hostPtr, void ** devPtrBase, size_t * offset, size_t * size, int asyncID, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_set_device_address(const void * hostPtr, void * devPtr, size_t size, int asyncID, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_remove_device_address(const void * hostPtr, int asyncID, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_get_host_address(const void *devPtr, void** hostPtr, int asyncID, int threadID=NO_THREAD_ID);
+extern HI_error_t HI_get_temphost_address(const void * hostPtr, void ** temphostPtr, int asyncID, int threadID=NO_THREAD_ID);
+//extern HI_error_t HI_set_temphost_address(const void * hostPtr, void * temphostPtr, int asyncID, int threadID=NO_THREAD_ID);
+//extern HI_error_t HI_remove_temphost_address(const void * hostPtr, int threadID=NO_THREAD_ID);
 //Get and increase an internal reference counter of the present table mapping for the host variable. (It also returns the corresponding device pointer.)
-extern int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID);
+extern int HI_getninc_prtcounter(const void * hostPtr, void **devPtr, int asyncID, int threadID=NO_THREAD_ID);
 //Decrease and get an internal reference counter of the present table mapping for the host variable. (It also returns the corresponding device pointer.)
-extern int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID);
+extern int HI_decnget_prtcounter(const void * hostPtr, void **devPtr, int asyncID, int threadID=NO_THREAD_ID);
 
 /////////////////////////////////////////////////////////////////////////
 //async integer argument => internal handler (ex: CUDA stream) mapping //
 /////////////////////////////////////////////////////////////////////////
-//extern HI_error_t HI_create_async_handle( int async);
-//extern int HI_contain_async_handle( int async );
-//extern HI_error_t HI_delete_async_handle( int async );
-extern void HI_set_async(int asyncId);
-extern void HI_set_context();
+//extern HI_error_t HI_create_async_handle( int async, int threadID=NO_THREAD_ID);
+//extern int HI_contain_async_handle( int async , int threadID=NO_THREAD_ID);
+//extern HI_error_t HI_delete_async_handle( int async , int threadID=NO_THREAD_ID);
+extern void HI_set_async(int asyncId, int threadID=NO_THREAD_ID);
+extern void HI_set_context(int threadID=NO_THREAD_ID);
 ////////////////////////////////
 //Memory management functions //
 ////////////////////////////////
-extern void HI_check_read(const void * hostPtr, acc_device_t dtype, const char *varName, const char *refName, int loopIndex);
-extern void HI_check_write(const void * hostPtr, acc_device_t dtype, const char *varName, const char *refName, int loopIndex);
-extern void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, const char * varName, const char * refName, int loopIndex);
-extern void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, int asyncID);
+extern void HI_check_read(const void * hostPtr, acc_device_t dtype, const char *varName, const char *refName, int loopIndex, int threadID=NO_THREAD_ID);
+extern void HI_check_write(const void * hostPtr, acc_device_t dtype, const char *varName, const char *refName, int loopIndex, int threadID=NO_THREAD_ID);
+extern void HI_set_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, const char * varName, const char * refName, int loopIndex, int threadID=NO_THREAD_ID);
+extern void HI_reset_status(const void * hostPtr, acc_device_t dtype, HI_memstatus_t status, int asyncID, int threadID=NO_THREAD_ID);
 //Below is deprecated
-extern void HI_init_status(const void * hostPtr);
+extern void HI_init_status(const void * hostPtr, int threadID=NO_THREAD_ID);
 
 ////////////////////
 //Texture function //
 ////////////////////
-extern HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size);
+extern HI_error_t HI_bind_tex(std::string texName,  HI_datatype_t type, const void *devPtr, size_t size, int threadID=NO_THREAD_ID);
 
 ////////////////////
 //Misc. functions //
@@ -1289,8 +1538,8 @@ extern const char* HI_get_device_type_string( acc_device_t devtype );
 ////////////////////////////////////////////
 //Functions used for program verification //
 ////////////////////////////////////////////
-extern void HI_waitS1(int asyncId);
-extern void HI_waitS2(int asyncId);
+extern void HI_waitS1(int asyncId, int threadID=NO_THREAD_ID);
+extern void HI_waitS2(int asyncId, int threadID=NO_THREAD_ID);
 
 ///////////////////////////////////////////
 //Functions used for OpenMP4 translation //
